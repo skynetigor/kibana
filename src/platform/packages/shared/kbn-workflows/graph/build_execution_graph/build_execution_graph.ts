@@ -792,7 +792,10 @@ function createForeachGraphForStepWithForeach(
   return createForeachGraph(generatedStepId, foreachStep, context);
 }
 
-function wrapWithWorkflowNodes(innerGraph: WorkflowGraphType): WorkflowGraphType {
+function wrapWithWorkflowNodes(
+  innerGraph: WorkflowGraphType,
+  timeout?: string
+): WorkflowGraphType {
   const graph = createTypedGraph({ directed: true });
   const enterWorkflowNodeId = 'enterWorkflow';
   const exitWorkflowNodeId = 'exitWorkflow';
@@ -802,6 +805,7 @@ function wrapWithWorkflowNodes(innerGraph: WorkflowGraphType): WorkflowGraphType
     stepId: 'workflow',
     stepType: 'workflow',
     exitNodeId: exitWorkflowNodeId,
+    ...(timeout ? { timeout } : {}),
   };
   const exitWorkflowNode: ExitWorkflowNode = {
     id: exitWorkflowNodeId,
@@ -827,21 +831,9 @@ export function convertToWorkflowGraph(
     parentKey: '',
   };
 
-  let finalGraph = createStepsSequence(workflowSchema.steps, context);
+  const finalGraph = createStepsSequence(workflowSchema.steps, context);
 
-  if (resolvedSettings?.timeout) {
-    finalGraph = handleTimeout(
-      'workflow_level_timeout',
-      'workflow_level_timeout',
-      resolvedSettings.timeout,
-      finalGraph,
-      context
-    );
-  }
-
-  finalGraph = wrapWithWorkflowNodes(finalGraph);
-
-  return finalGraph;
+  return wrapWithWorkflowNodes(finalGraph, resolvedSettings?.timeout);
 }
 
 function resolveWorklfowSettings(

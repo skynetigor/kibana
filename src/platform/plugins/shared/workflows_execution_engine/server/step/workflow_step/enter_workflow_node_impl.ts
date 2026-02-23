@@ -8,16 +8,59 @@
  */
 
 import type { EnterWorkflowNode } from '@kbn/workflows/graph';
+import { parseDuration } from '../../utils';
+import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
+import type { StepExecutionRuntimeFactory } from '../../workflow_context_manager/step_execution_runtime_factory';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
-import type { NodeImplementation } from '../node_implementation';
+import type { MonitorableNode, NodeImplementation } from '../node_implementation';
 
-export class EnterWorkflowNodeImpl implements NodeImplementation {
+export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNode {
   constructor(
     private node: EnterWorkflowNode,
-    private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager
+    private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
+    private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory
   ) {}
 
   public run(): void {
     this.wfExecutionRuntimeManager.navigateToNextNode();
+  }
+
+  public monitor(monitoredStepExecutionRuntime: StepExecutionRuntime): void {
+    if (!this.node.timeout) {
+      return;
+    }
+
+    const timeoutMs = parseDuration(this.node.timeout);
+    const whenStepStartedTime = new Date(
+      this.wfExecutionRuntimeManager.getWorkflowExecution().startedAt
+    ).getTime();
+    const currentTimeMs = new Date().getTime();
+    const currentStepDuration = currentTimeMs - whenStepStartedTime;
+
+    if (currentStepDuration > timeoutMs) {
+      const timeoutError = new Error('Failed due to workflow timeout');
+      monitoredStepExecutionRuntime.abortController.abort();
+      monitoredStepExecutionRuntime.failStep(timeoutError);
+
+      let stack = monitoredStepExecutionRuntime.scopeStack;
+
+      while (!stack.isEmpty()) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const currentScope = stack.getCurrentScope()!;
+        stack = stack.exitScope();
+        const scopeStepExecutionRuntime =
+          this.stepExecutionRuntimeFactory.createStepExecutionRuntime({
+            nodeId: currentScope.nodeId,
+            stackFrames: stack.stackFrames,
+          });
+
+        if (scopeStepExecutionRuntime.stepExecution) {
+          scopeStepExecutionRuntime.failStep(timeoutError);
+        }
+      }
+
+      this.wfExecutionRuntimeManager.setWorkflowError(undefined);
+      this.wfExecutionRuntimeManager.markWorkflowTimeouted();
+    }
   }
 }

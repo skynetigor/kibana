@@ -592,11 +592,9 @@ const generateLargeForeachStepExecutions = (): any[] => {
   let globalIndex = 0;
   const baseTime = new Date('2025-09-02T20:43:57.441Z').getTime();
 
-  const timeoutScope = {
-    stepId: 'workflow_level_timeout',
-    nestedScopes: [
-      { nodeId: 'enterTimeoutZone_workflow_level_timeout', nodeType: 'enter-timeout-zone' },
-    ],
+  const workflowScope = {
+    stepId: 'workflow',
+    nestedScopes: [{ nodeId: 'enterWorkflow', nodeType: 'enter-workflow' }],
   };
 
   stepExecutions.push({
@@ -614,7 +612,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
     input: { message: 'preparing' },
     finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
     executionTimeMs: 54,
-    scopeStack: [timeoutScope],
+    scopeStack: [workflowScope],
   });
 
   stepExecutions.push({
@@ -632,7 +630,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
     input: {},
     finishedAt: new Date(baseTime + (globalIndex + ITERATION_COUNT * 4) * 100).toISOString(),
     executionTimeMs: 2000,
-    scopeStack: [timeoutScope],
+    scopeStack: [workflowScope],
     state: {
       total: ITERATION_COUNT,
       index: ITERATION_COUNT - 1,
@@ -666,7 +664,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
       input: { message: `Processing ${i + 1}` },
       finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
       executionTimeMs: 12 + (i % 5),
-      scopeStack: [timeoutScope, foreachScope],
+      scopeStack: [workflowScope, foreachScope],
     });
 
     stepExecutions.push({
@@ -684,7 +682,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
       input: { method: 'GET', path: '/api/status' },
       finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
       executionTimeMs: 30 + (i % 10),
-      scopeStack: [timeoutScope, foreachScope],
+      scopeStack: [workflowScope, foreachScope],
     });
 
     stepExecutions.push({
@@ -703,7 +701,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
       finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
       executionTimeMs: 17 + (i % 8),
       scopeStack: [
-        timeoutScope,
+        workflowScope,
         foreachScope,
         {
           stepId: 'http_call',
@@ -733,7 +731,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
       input: { message: `Logging ${i + 1}` },
       finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
       executionTimeMs: 12 + (i % 4),
-      scopeStack: [timeoutScope, foreachScope],
+      scopeStack: [workflowScope, foreachScope],
     });
   }
 
@@ -752,7 +750,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
     input: {},
     finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
     executionTimeMs: 1,
-    scopeStack: [timeoutScope],
+    scopeStack: [workflowScope],
   });
 
   stepExecutions.push({
@@ -770,7 +768,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
     input: { message: 'Final summary' },
     finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
     executionTimeMs: 13,
-    scopeStack: [timeoutScope],
+    scopeStack: [workflowScope],
   });
 
   stepExecutions.push({
@@ -788,7 +786,7 @@ const generateLargeForeachStepExecutions = (): any[] => {
     input: { method: 'GET', path: '/api/status' },
     finishedAt: new Date(baseTime + globalIndex * 100).toISOString(),
     executionTimeMs: 18,
-    scopeStack: [timeoutScope],
+    scopeStack: [workflowScope],
   });
 
   return stepExecutions;

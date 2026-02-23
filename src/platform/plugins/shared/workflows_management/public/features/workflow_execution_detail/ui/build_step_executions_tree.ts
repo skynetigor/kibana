@@ -49,7 +49,7 @@ function getStepTreeType(
 }
 
 function isVisibleStepType(stepType: string): boolean {
-  return !['workflow_level_timeout'].includes(stepType);
+  return !['workflow_level_timeout', 'workflow'].includes(stepType);
 }
 
 /**

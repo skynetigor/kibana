@@ -22,6 +22,8 @@ export const mainScopeNodes = [
   'exit-try-block',
   'enter-timeout-zone',
   'exit-timeout-zone',
+  'enter-workflow',
+  'exit-workflow',
 ];
 export const secondaryScopeNodes = [
   'enter-condition-branch',

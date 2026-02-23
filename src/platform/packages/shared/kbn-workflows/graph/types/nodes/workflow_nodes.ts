@@ -14,6 +14,7 @@ export const EnterWorkflowNodeSchema = GraphNodeSchema.extend({
   id: z.string(),
   type: z.literal('enter-workflow'),
   exitNodeId: z.string(),
+  timeout: z.string().optional(),
 });
 
 export type EnterWorkflowNode = z.infer<typeof EnterWorkflowNodeSchema>;

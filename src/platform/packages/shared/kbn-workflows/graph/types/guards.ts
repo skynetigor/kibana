@@ -92,12 +92,6 @@ export const isEnterNormalPath = (node: GraphNodeUnion): node is EnterNormalPath
 export const isExitNormalPath = (node: GraphNodeUnion): node is ExitNormalPathNode =>
   node.type === 'exit-normal-path';
 
-export const isEnterWorkflowTimeoutZone = (node: GraphNodeUnion): node is EnterTimeoutZoneNode =>
-  node.type === 'enter-timeout-zone' && node.stepType === 'workflow_level_timeout';
-
-export const isExitWorkflowTimeoutZone = (node: GraphNodeUnion): node is ExitTimeoutZoneNode =>
-  node.type === 'exit-timeout-zone' && node.stepType === 'workflow_level_timeout';
-
 export const isEnterStepTimeoutZone = (node: GraphNodeUnion): node is EnterTimeoutZoneNode =>
   node.type === 'enter-timeout-zone' && node.stepType !== 'workflow_level_timeout';
 
