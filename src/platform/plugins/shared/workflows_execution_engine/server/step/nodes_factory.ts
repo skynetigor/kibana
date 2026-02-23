@@ -59,16 +59,18 @@ import type { StepExecutionRuntime } from '../workflow_context_manager/step_exec
 import type { StepExecutionRuntimeFactory } from '../workflow_context_manager/step_execution_runtime_factory';
 import type { ContextDependencies } from '../workflow_context_manager/types';
 import type { WorkflowExecutionRuntimeManager } from '../workflow_context_manager/workflow_execution_runtime_manager';
+import type { WorkflowExecutionState } from '../workflow_context_manager/workflow_execution_state';
 import type { IWorkflowEventLogger } from '../workflow_event_logger';
 
 export class NodesFactory {
   constructor(
-    private connectorExecutor: ConnectorExecutor, // this is temporary, we will remove it when we have a proper connector executor
+    private connectorExecutor: ConnectorExecutor,
     private workflowRuntime: WorkflowExecutionRuntimeManager,
-    private workflowLogger: IWorkflowEventLogger, // Assuming you have a logger interface
+    private workflowLogger: IWorkflowEventLogger,
     private urlValidator: UrlValidator,
     private workflowGraph: WorkflowGraph,
     private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory,
+    private workflowExecutionState: WorkflowExecutionState,
     private dependencies: ContextDependencies
   ) {}
 
@@ -155,10 +157,15 @@ export class NodesFactory {
         return new EnterWorkflowNodeImpl(
           node as EnterWorkflowNode,
           this.workflowRuntime,
-          this.stepExecutionRuntimeFactory
+          this.stepExecutionRuntimeFactory,
+          this.workflowExecutionState
         );
       case 'exit-workflow':
-        return new ExitWorkflowNodeImpl(node as ExitWorkflowNode, this.workflowRuntime);
+        return new ExitWorkflowNodeImpl(
+          node as ExitWorkflowNode,
+          this.workflowRuntime,
+          this.workflowExecutionState
+        );
       case 'enter-foreach':
         return new EnterForeachNodeImpl(
           node as EnterForeachNode,

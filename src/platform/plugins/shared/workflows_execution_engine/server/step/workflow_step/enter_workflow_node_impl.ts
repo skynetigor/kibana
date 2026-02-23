@@ -8,20 +8,27 @@
  */
 
 import type { EnterWorkflowNode } from '@kbn/workflows/graph';
+import { ExecutionStatus } from '@kbn/workflows/types/latest';
 import { parseDuration } from '../../utils';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
 import type { StepExecutionRuntimeFactory } from '../../workflow_context_manager/step_execution_runtime_factory';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
+import type { WorkflowExecutionState } from '../../workflow_context_manager/workflow_execution_state';
 import type { MonitorableNode, NodeImplementation } from '../node_implementation';
 
 export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNode {
   constructor(
     private node: EnterWorkflowNode,
     private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
-    private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory
+    private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory,
+    private workflowExecutionState: WorkflowExecutionState
   ) {}
 
   public run(): void {
+    this.workflowExecutionState.updateWorkflowExecution({
+      status: ExecutionStatus.RUNNING,
+      startedAt: new Date().toISOString(),
+    });
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }
 
@@ -58,9 +65,10 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
           scopeStepExecutionRuntime.failStep(timeoutError);
         }
       }
-
-      this.wfExecutionRuntimeManager.setWorkflowError(undefined);
-      this.wfExecutionRuntimeManager.markWorkflowTimeouted();
+      this.workflowExecutionState.updateWorkflowExecution({
+        error: undefined,
+        status: ExecutionStatus.TIMED_OUT,
+      });
     }
   }
 }

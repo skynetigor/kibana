@@ -134,6 +134,7 @@ export async function setupDependencies(
     urlValidator,
     workflowExecutionGraph,
     stepExecutionRuntimeFactory,
+    workflowExecutionState,
     dependencies
   );
 

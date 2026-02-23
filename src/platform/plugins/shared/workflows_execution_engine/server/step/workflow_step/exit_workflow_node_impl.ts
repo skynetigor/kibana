@@ -8,16 +8,29 @@
  */
 
 import type { ExitWorkflowNode } from '@kbn/workflows/graph';
+import { ExecutionStatus } from '@kbn/workflows/types/latest';
+import { buildWorkflowContext } from '../../workflow_context_manager/build_workflow_context';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
+import type { WorkflowExecutionState } from '../../workflow_context_manager/workflow_execution_state';
 import type { NodeImplementation } from '../node_implementation';
 
 export class ExitWorkflowNodeImpl implements NodeImplementation {
   constructor(
     private node: ExitWorkflowNode,
-    private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager
+    private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
+    private workflowExecutionState: WorkflowExecutionState
   ) {}
 
   public run(): void {
-    this.wfExecutionRuntimeManager.navigateToNextNode();
+    const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
+    const startedAt = new Date(workflowExecution.startedAt);
+    const finishDate = new Date();
+
+    this.workflowExecutionState.updateWorkflowExecution({
+      status: ExecutionStatus.COMPLETED,
+      finishedAt: finishDate.toISOString(),
+      duration: finishDate.getTime() - startedAt.getTime(),
+      context: buildWorkflowContext(workflowExecution, this.coreStart, this.dependencies),
+    });
   }
 }
