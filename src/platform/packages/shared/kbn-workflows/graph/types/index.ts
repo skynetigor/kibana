@@ -39,6 +39,12 @@ export type {
   EnterForeachNodeConfigurationSchema,
 } from './nodes/loop_nodes';
 export type {
+  EnterWorkflowNode,
+  EnterWorkflowNodeSchema,
+  ExitWorkflowNode,
+  ExitWorkflowNodeSchema,
+} from './nodes/workflow_nodes';
+export type {
   EnterRetryNode,
   EnterRetryNodeSchema,
   ExitRetryNode,
@@ -89,4 +95,6 @@ export {
   isExitStepTimeoutZone,
   isEnterWorkflowTimeoutZone,
   isExitWorkflowTimeoutZone,
+  isEnterWorkflow,
+  isExitWorkflow,
 } from './guards';

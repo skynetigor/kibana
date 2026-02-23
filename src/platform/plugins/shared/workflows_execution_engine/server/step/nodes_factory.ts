@@ -15,11 +15,13 @@ import type {
   EnterIfNode,
   EnterRetryNode,
   EnterTryBlockNode,
+  EnterWorkflowNode,
   ExitConditionBranchNode,
   ExitFallbackPathNode,
   ExitForeachNode,
   ExitNormalPathNode,
   ExitRetryNode,
+  ExitWorkflowNode,
   HttpGraphNode,
   WorkflowGraph,
 } from '@kbn/workflows/graph';
@@ -61,6 +63,7 @@ import {
   ExitWorkflowTimeoutZoneNodeImpl,
 } from './timeout_zone_step';
 import { WaitStepImpl } from './wait_step/wait_step';
+import { EnterWorkflowNodeImpl, ExitWorkflowNodeImpl } from './workflow_step';
 import type { ConnectorExecutor } from '../connector_executor';
 import type { UrlValidator } from '../lib/url_validator';
 import type { StepExecutionRuntime } from '../workflow_context_manager/step_execution_runtime';
@@ -159,6 +162,10 @@ export class NodesFactory {
     const node = stepExecutionRuntime.node;
     const stepLogger = stepExecutionRuntime.stepLogger;
     switch (node.type) {
+      case 'enter-workflow':
+        return new EnterWorkflowNodeImpl(node as EnterWorkflowNode, this.workflowRuntime);
+      case 'exit-workflow':
+        return new ExitWorkflowNodeImpl(node as ExitWorkflowNode, this.workflowRuntime);
       case 'enter-foreach':
         return new EnterForeachNodeImpl(
           node as EnterForeachNode,

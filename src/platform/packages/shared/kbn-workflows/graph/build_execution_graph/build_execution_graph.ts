@@ -40,6 +40,7 @@ import type {
   EnterRetryNode,
   EnterTimeoutZoneNode,
   EnterTryBlockNode,
+  EnterWorkflowNode,
   ExitConditionBranchNode,
   ExitContinueNode,
   ExitFallbackPathNode,
@@ -49,6 +50,7 @@ import type {
   ExitRetryNode,
   ExitTimeoutZoneNode,
   ExitTryBlockNode,
+  ExitWorkflowNode,
   GraphNodeUnion,
   HttpGraphNode,
   KibanaGraphNode,
@@ -790,6 +792,30 @@ function createForeachGraphForStepWithForeach(
   return createForeachGraph(generatedStepId, foreachStep, context);
 }
 
+function wrapWithWorkflowNodes(innerGraph: WorkflowGraphType): WorkflowGraphType {
+  const graph = createTypedGraph({ directed: true });
+  const enterWorkflowNodeId = 'enterWorkflow';
+  const exitWorkflowNodeId = 'exitWorkflow';
+  const enterWorkflowNode: EnterWorkflowNode = {
+    id: enterWorkflowNodeId,
+    type: 'enter-workflow',
+    stepId: 'workflow',
+    stepType: 'workflow',
+    exitNodeId: exitWorkflowNodeId,
+  };
+  const exitWorkflowNode: ExitWorkflowNode = {
+    id: exitWorkflowNodeId,
+    type: 'exit-workflow',
+    stepId: 'workflow',
+    stepType: 'workflow',
+    startNodeId: enterWorkflowNodeId,
+  };
+  graph.setNode(enterWorkflowNodeId, enterWorkflowNode);
+  graph.setNode(exitWorkflowNodeId, exitWorkflowNode);
+  insertGraphBetweenNodes(graph, innerGraph, enterWorkflowNodeId, exitWorkflowNodeId);
+  return graph;
+}
+
 export function convertToWorkflowGraph(
   workflowSchema: WorkflowYaml,
   defaultSettings?: WorkflowSettings
@@ -812,6 +838,8 @@ export function convertToWorkflowGraph(
       context
     );
   }
+
+  finalGraph = wrapWithWorkflowNodes(finalGraph);
 
   return finalGraph;
 }

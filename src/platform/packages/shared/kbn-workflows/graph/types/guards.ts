@@ -35,6 +35,7 @@ import type {
   ExitTryBlockNode,
 } from './nodes/on_failure_nodes';
 import type { GraphNodeUnion } from './nodes/union';
+import type { EnterWorkflowNode, ExitWorkflowNode } from './nodes/workflow_nodes';
 
 export const isAtomic = (node: GraphNodeUnion): node is AtomicGraphNode => node.type === 'atomic';
 
@@ -102,3 +103,9 @@ export const isEnterStepTimeoutZone = (node: GraphNodeUnion): node is EnterTimeo
 
 export const isExitStepTimeoutZone = (node: GraphNodeUnion): node is ExitTimeoutZoneNode =>
   node.type === 'exit-timeout-zone' && node.stepType !== 'workflow_level_timeout';
+
+export const isEnterWorkflow = (node: GraphNodeUnion): node is EnterWorkflowNode =>
+  node.type === 'enter-workflow';
+
+export const isExitWorkflow = (node: GraphNodeUnion): node is ExitWorkflowNode =>
+  node.type === 'exit-workflow';

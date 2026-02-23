@@ -43,6 +43,8 @@ export type {
   ExitFallbackPathNode,
   EnterTimeoutZoneNode,
   ExitTimeoutZoneNode,
+  EnterWorkflowNode,
+  ExitWorkflowNode,
   GraphNodeUnion,
 } from './types';
 
@@ -69,4 +71,6 @@ export {
   isExitStepTimeoutZone,
   isEnterWorkflowTimeoutZone,
   isExitWorkflowTimeoutZone,
+  isEnterWorkflow,
+  isExitWorkflow,
 } from './types';
