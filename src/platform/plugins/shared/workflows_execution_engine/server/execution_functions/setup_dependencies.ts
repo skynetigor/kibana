@@ -103,6 +103,12 @@ export async function setupDependencies(
   // Create telemetry client
   const telemetryClient = new WorkflowExecutionTelemetryClient(coreStart.analytics, logger);
 
+  // Set the workflow execution to executing so execution loop can start
+  workflowExecution.isExecuting = true;
+  workflowExecution.currentNodeId =
+    workflowExecution.currentNodeId ?? workflowExecutionGraph.topologicalOrder.at(0);
+  workflowExecution.scopeStack = workflowExecution.scopeStack ?? [];
+
   // Create workflow runtime first (simpler, fewer dependencies)
   const workflowRuntime = new WorkflowExecutionRuntimeManager({
     workflowExecution: workflowExecution as EsWorkflowExecution,

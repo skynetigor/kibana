@@ -55,6 +55,7 @@ export async function handleExecutionDelay(
       status: ExecutionStatus.RUNNING,
     });
   } else {
+    await params.workflowRuntime.breakExecutionLoop();
     await params.workflowTaskManager.scheduleResumeTask({
       workflowExecution,
       resumeAt,

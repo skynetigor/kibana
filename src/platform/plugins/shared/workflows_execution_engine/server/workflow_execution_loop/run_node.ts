@@ -75,7 +75,7 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
      * When cancelRequested is true, status is always updated to CANCELLED, so this check
      * covers both cancellation and other terminal states (COMPLETED, FAILED, etc.).
      */
-    if (params.workflowRuntime.getWorkflowExecution().status !== ExecutionStatus.RUNNING) {
+    if (!params.workflowRuntime.isExecuting) {
       nodeSpan?.setOutcome('unknown');
       nodeSpan?.end();
       return;
@@ -132,7 +132,7 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
     }
 
     const saveStateSpan = apm.startSpan('save state', 'workflow', 'persistence');
-    await params.workflowRuntime.saveState(); // Ensure state is updated after each step
+    // await params.workflowRuntime.saveState(); // Ensure state is updated after each step
     saveStateSpan?.end();
 
     nodeSpan?.end();

@@ -59,7 +59,7 @@ export class WorkflowExecutionRuntimeManager {
   private entryTransactionId?: string;
   private workflowTransaction?: any; // APM transaction instance
   private workflowGraph: WorkflowGraph;
-  private nextNodeId: string | undefined;
+  // private nextNodeId: string | undefined;
   private coreStart?: CoreStart;
   private dependencies?: ContextDependencies;
   private telemetryClient?: WorkflowExecutionTelemetryClient;
@@ -77,6 +77,10 @@ export class WorkflowExecutionRuntimeManager {
     this.coreStart = workflowExecutionRuntimeManagerInit.coreStart;
     this.dependencies = workflowExecutionRuntimeManagerInit.dependencies;
     this.telemetryClient = workflowExecutionRuntimeManagerInit.telemetryClient;
+  }
+
+  public get isExecuting(): boolean {
+    return this.workflowExecution.isExecuting;
   }
 
   public get workflowExecution() {
@@ -118,21 +122,33 @@ export class WorkflowExecutionRuntimeManager {
       throw new Error(`Node with ID ${nodeId} is not part of the workflow graph`);
     }
 
-    this.nextNodeId = nodeId;
+    this.workflowExecutionState.updateWorkflowExecution({
+      currentNodeId: nodeId,
+    });
   }
 
   public navigateToNextNode(): void {
     const currentNodeId = this.workflowExecution.currentNodeId;
     const currentNodeIndex = this.topologicalOrder.findIndex((nodeId) => nodeId === currentNodeId);
     if (currentNodeIndex < this.topologicalOrder.length - 1) {
-      this.nextNodeId = this.topologicalOrder[currentNodeIndex + 1];
+      this.workflowExecutionState.updateWorkflowExecution({
+        currentNodeId: this.topologicalOrder[currentNodeIndex + 1],
+      });
       return;
     }
-    this.nextNodeId = undefined;
+    this.workflowExecutionState.updateWorkflowExecution({
+      currentNodeId: undefined,
+    });
   }
 
   public getCurrentNodeScope(): StackFrame[] {
     return [...this.workflowExecution.scopeStack];
+  }
+
+  public breakExecutionLoop(): void {
+    this.workflowExecutionState.updateWorkflowExecution({
+      isExecuting: false,
+    });
   }
 
   /**
@@ -365,9 +381,9 @@ export class WorkflowExecutionRuntimeManager {
       );
     }
 
-    this.nextNodeId = this.topologicalOrder[0];
+    // this.nextNodeId = this.topologicalOrder[0];
     const updatedWorkflowExecution: Partial<EsWorkflowExecution> = {
-      currentNodeId: this.nextNodeId,
+      // currentNodeId: this.nextNodeId,
       scopeStack: [],
       status: ExecutionStatus.RUNNING,
       startedAt: new Date().toISOString(),
@@ -378,72 +394,108 @@ export class WorkflowExecutionRuntimeManager {
   }
 
   public async resume(): Promise<void> {
-    await this.workflowExecutionState.load();
-    this.nextNodeId = this.workflowExecution.currentNodeId;
-    const updatedWorkflowExecution: Partial<EsWorkflowExecution> = {
-      status: ExecutionStatus.RUNNING,
-    };
-    this.workflowExecutionState.updateWorkflowExecution(updatedWorkflowExecution);
+    // await this.workflowExecutionState.load();
+    // this.nextNodeId = this.workflowExecution.currentNodeId;
+    // const updatedWorkflowExecution: Partial<EsWorkflowExecution> = {
+    //   status: ExecutionStatus.RUNNING,
+    // };
+    // this.workflowExecutionState.updateWorkflowExecution(updatedWorkflowExecution);
   }
 
-  public async saveState(): Promise<void> {
+  public async finishWorkflowExecution(): Promise<void> {
     const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
+    const startedAt = new Date(workflowExecution.startedAt);
+    const finishDate = new Date();
     const workflowExecutionUpdate: Partial<EsWorkflowExecution> = {
-      currentNodeId: this.nextNodeId,
+      startedAt: startedAt.toISOString(),
+      finishedAt: finishDate.toISOString(),
+      duration: finishDate.getTime() - startedAt.getTime(),
+      context: buildWorkflowContext(this.workflowExecution, this.coreStart, this.dependencies),
+      status: workflowExecution.error ? ExecutionStatus.FAILED : ExecutionStatus.COMPLETED,
+      isExecuting: false, // workflow is no longer executing, exiting execution loop
     };
 
-    if (isTerminalStatus(workflowExecution.status)) {
-      workflowExecutionUpdate.status = workflowExecution.status;
-    } else if (workflowExecution.error) {
-      workflowExecutionUpdate.status = ExecutionStatus.FAILED;
-      workflowExecutionUpdate.error = workflowExecution.error;
-    } else if (!this.nextNodeId) {
-      workflowExecutionUpdate.status = ExecutionStatus.COMPLETED;
-    }
+    this.logWorkflowComplete(workflowExecutionUpdate.status === ExecutionStatus.COMPLETED);
 
-    if (
-      (workflowExecutionUpdate.status && isTerminalStatus(workflowExecutionUpdate.status)) ||
-      isTerminalStatus(workflowExecution.status)
-    ) {
-      const startedAt = new Date(workflowExecution.startedAt);
-      const finishDate = new Date();
-      workflowExecutionUpdate.finishedAt = finishDate.toISOString();
-      workflowExecutionUpdate.duration = finishDate.getTime() - startedAt.getTime();
-      workflowExecutionUpdate.context = buildWorkflowContext(
-        this.workflowExecution,
-        this.coreStart,
-        this.dependencies
-      );
-      this.logWorkflowComplete(workflowExecutionUpdate.status === ExecutionStatus.COMPLETED);
+    // Update the workflow transaction outcome when workflow completes
+    if (this.workflowTransaction) {
+      const isSuccess = workflowExecutionUpdate.status === ExecutionStatus.COMPLETED;
+      this.workflowTransaction.outcome = isSuccess ? 'success' : 'failure';
 
-      // Update the workflow transaction outcome when workflow completes
-      if (this.workflowTransaction) {
-        const isSuccess = workflowExecutionUpdate.status === ExecutionStatus.COMPLETED;
-        this.workflowTransaction.outcome = isSuccess ? 'success' : 'failure';
-
-        // For alerting-triggered workflows, we created a dedicated transaction and need to end it
-        const isTriggeredByAlerting = this.workflowTransaction.type === 'workflow_execution';
-        if (isTriggeredByAlerting) {
-          this.workflowTransaction.end();
-          this.workflowLogger?.logDebug('Workflow transaction ended (alerting-triggered)', {
-            transaction: { outcome: this.workflowTransaction.outcome },
-          });
-        } else {
-          // For task manager triggered workflows, Task Manager will handle ending
-          this.workflowLogger?.logDebug(
-            'Task transaction outcome updated (task manager will end)',
-            {
-              transaction: { outcome: this.workflowTransaction.outcome },
-            }
-          );
-        }
+      // For alerting-triggered workflows, we created a dedicated transaction and need to end it
+      const isTriggeredByAlerting = this.workflowTransaction.type === 'workflow_execution';
+      if (isTriggeredByAlerting) {
+        this.workflowTransaction.end();
+        this.workflowLogger?.logDebug('Workflow transaction ended (alerting-triggered)', {
+          transaction: { outcome: this.workflowTransaction.outcome },
+        });
+      } else {
+        // For task manager triggered workflows, Task Manager will handle ending
+        this.workflowLogger?.logDebug('Task transaction outcome updated (task manager will end)', {
+          transaction: { outcome: this.workflowTransaction.outcome },
+        });
       }
-
-      // Report telemetry for terminal status (only once)
-      this.reportTelemetryIfTerminal(workflowExecution, workflowExecutionUpdate);
     }
+
+    // Report telemetry for terminal status (only once)
+    this.reportTelemetryIfTerminal(workflowExecution, workflowExecutionUpdate);
 
     this.workflowExecutionState.updateWorkflowExecution(workflowExecutionUpdate);
+  }
+
+  // TODO: Remove this method
+  public async saveState(): Promise<void> {
+    // const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
+    // const workflowExecutionUpdate: Partial<EsWorkflowExecution> = {
+    //   currentNodeId: this.nextNodeId,
+    // };
+    // if (isTerminalStatus(workflowExecution.status)) {
+    //   workflowExecutionUpdate.status = workflowExecution.status;
+    // } else if (workflowExecution.error) {
+    //   workflowExecutionUpdate.status = ExecutionStatus.FAILED;
+    //   workflowExecutionUpdate.error = workflowExecution.error;
+    // } else if (!this.nextNodeId) {
+    //   workflowExecutionUpdate.status = ExecutionStatus.COMPLETED;
+    // }
+    // if (
+    //   (workflowExecutionUpdate.status && isTerminalStatus(workflowExecutionUpdate.status)) ||
+    //   isTerminalStatus(workflowExecution.status)
+    // ) {
+    //   const startedAt = new Date(workflowExecution.startedAt);
+    //   const finishDate = new Date();
+    //   workflowExecutionUpdate.finishedAt = finishDate.toISOString();
+    //   workflowExecutionUpdate.duration = finishDate.getTime() - startedAt.getTime();
+    //   workflowExecutionUpdate.context = buildWorkflowContext(
+    //     this.workflowExecution,
+    //     this.coreStart,
+    //     this.dependencies
+    //   );
+    //   this.logWorkflowComplete(workflowExecutionUpdate.status === ExecutionStatus.COMPLETED);
+    //   // Update the workflow transaction outcome when workflow completes
+    //   if (this.workflowTransaction) {
+    //     const isSuccess = workflowExecutionUpdate.status === ExecutionStatus.COMPLETED;
+    //     this.workflowTransaction.outcome = isSuccess ? 'success' : 'failure';
+    //     // For alerting-triggered workflows, we created a dedicated transaction and need to end it
+    //     const isTriggeredByAlerting = this.workflowTransaction.type === 'workflow_execution';
+    //     if (isTriggeredByAlerting) {
+    //       this.workflowTransaction.end();
+    //       this.workflowLogger?.logDebug('Workflow transaction ended (alerting-triggered)', {
+    //         transaction: { outcome: this.workflowTransaction.outcome },
+    //       });
+    //     } else {
+    //       // For task manager triggered workflows, Task Manager will handle ending
+    //       this.workflowLogger?.logDebug(
+    //         'Task transaction outcome updated (task manager will end)',
+    //         {
+    //           transaction: { outcome: this.workflowTransaction.outcome },
+    //         }
+    //       );
+    //     }
+    //   }
+    //   // Report telemetry for terminal status (only once)
+    //   this.reportTelemetryIfTerminal(workflowExecution, workflowExecutionUpdate);
+    // }
+    // this.workflowExecutionState.updateWorkflowExecution(workflowExecutionUpdate);
   }
 
   private logWorkflowStart(): void {

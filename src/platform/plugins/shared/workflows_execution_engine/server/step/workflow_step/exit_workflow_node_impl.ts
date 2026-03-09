@@ -7,9 +7,9 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import type { CoreStart } from '@kbn/core/server';
 import type { ExitWorkflowNode } from '@kbn/workflows/graph';
-import { ExecutionStatus } from '@kbn/workflows/types/latest';
-import { buildWorkflowContext } from '../../workflow_context_manager/build_workflow_context';
+import type { ContextDependencies } from '../../workflow_context_manager/types';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
 import type { WorkflowExecutionState } from '../../workflow_context_manager/workflow_execution_state';
 import type { NodeImplementation } from '../node_implementation';
@@ -18,19 +18,12 @@ export class ExitWorkflowNodeImpl implements NodeImplementation {
   constructor(
     private node: ExitWorkflowNode,
     private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
-    private workflowExecutionState: WorkflowExecutionState
+    private workflowExecutionState: WorkflowExecutionState,
+    private coreStart: CoreStart,
+    private dependencies: ContextDependencies
   ) {}
 
-  public run(): void {
-    const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
-    const startedAt = new Date(workflowExecution.startedAt);
-    const finishDate = new Date();
-
-    this.workflowExecutionState.updateWorkflowExecution({
-      status: ExecutionStatus.COMPLETED,
-      finishedAt: finishDate.toISOString(),
-      duration: finishDate.getTime() - startedAt.getTime(),
-      context: buildWorkflowContext(workflowExecution, this.coreStart, this.dependencies),
-    });
+  public async run(): Promise<void> {
+    await this.wfExecutionRuntimeManager.finishWorkflowExecution();
   }
 }

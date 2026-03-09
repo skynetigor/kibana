@@ -24,11 +24,8 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
     private workflowExecutionState: WorkflowExecutionState
   ) {}
 
-  public run(): void {
-    this.workflowExecutionState.updateWorkflowExecution({
-      status: ExecutionStatus.RUNNING,
-      startedAt: new Date().toISOString(),
-    });
+  public async run(): Promise<void> {
+    await this.wfExecutionRuntimeManager.start();
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }
 

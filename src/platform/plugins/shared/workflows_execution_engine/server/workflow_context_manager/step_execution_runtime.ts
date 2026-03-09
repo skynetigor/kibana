@@ -247,6 +247,9 @@ export class StepExecutionRuntime {
         resumeAt: resumeDate.toISOString(),
       },
     });
+    // this.workflowExecutionState.updateWorkflowExecution({
+    //   isExecuting: false,
+    // });
     return true; // successfully entered wait state
   }
 

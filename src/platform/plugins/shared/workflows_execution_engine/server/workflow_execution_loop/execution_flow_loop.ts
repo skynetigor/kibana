@@ -7,7 +7,6 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { ExecutionStatus } from '@kbn/workflows';
 import { runNode } from './run_node';
 import type { WorkflowExecutionLoopParams } from './types';
 
@@ -25,7 +24,7 @@ import type { WorkflowExecutionLoopParams } from './types';
  * Each iteration processes a single node execution.
  */
 export async function executionFlowLoop(params: WorkflowExecutionLoopParams) {
-  while (params.workflowRuntime.getWorkflowExecutionStatus() === ExecutionStatus.RUNNING) {
+  while (params.workflowRuntime.isExecuting) {
     await runNode(params);
   }
 }
