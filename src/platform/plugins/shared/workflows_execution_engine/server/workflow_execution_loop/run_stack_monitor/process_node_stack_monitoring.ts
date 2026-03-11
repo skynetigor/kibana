@@ -10,7 +10,6 @@
 import type { MonitorableNode } from '../../step/node_implementation';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
 import { WorkflowScopeStack } from '../../workflow_context_manager/workflow_scope_stack';
-import { cancelWorkflowIfRequested } from '../cancel_workflow_if_requested';
 import type { WorkflowExecutionLoopParams } from '../types';
 
 /**
@@ -54,12 +53,4 @@ export async function processNodeStackMonitoring(
       await Promise.resolve(monitored.monitor(monitoredStepExecutionRuntime));
     }
   }
-
-  await cancelWorkflowIfRequested(
-    params.workflowExecutionRepository,
-    params.workflowExecutionState,
-    monitoredStepExecutionRuntime,
-    params.workflowLogger,
-    monitoredStepExecutionRuntime.abortController
-  );
 }

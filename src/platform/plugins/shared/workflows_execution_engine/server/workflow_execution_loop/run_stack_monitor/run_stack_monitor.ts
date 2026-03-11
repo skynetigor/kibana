@@ -59,7 +59,6 @@ import type { WorkflowExecutionLoopParams } from '../types';
  * @throws Generally does not throw as monitoring should be resilient, but individual
  *   monitor() implementations may throw errors that bubble up
  * @see {@link MonitorableNode} - Interface for nodes that provide monitoring capabilities
- * @see {@link cancelWorkflowIfRequested} - Function for handling cancellation requests
  * @see {@link WorkflowScopeStack} - Stack management for nested workflow scopes
  */
 export async function runStackMonitor(
