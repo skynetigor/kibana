@@ -18,8 +18,6 @@ export async function handleExecutionDelay(
   params: WorkflowExecutionLoopParams,
   stepExecutionRuntime: StepExecutionRuntime
 ) {
-  const workflowExecution = params.workflowRuntime.getWorkflowExecution();
-
   if (
     !stepExecutionRuntime.stepExecution ||
     stepExecutionRuntime.stepExecution.status !== ExecutionStatus.WAITING
@@ -60,11 +58,6 @@ export async function handleExecutionDelay(
       status: ExecutionStatus.RUNNING,
     });
   } else {
-    await params.workflowRuntime.breakExecutionLoop();
-    await params.workflowTaskManager.scheduleResumeTask({
-      workflowExecution,
-      resumeAt,
-      fakeRequest: params.fakeRequest,
-    });
+    await params.workflowRuntime.yieldResumeTask({ resumeAt });
   }
 }

@@ -11,7 +11,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import agent from 'elastic-apm-node';
-import type { CoreStart } from '@kbn/core/server';
+import type { CoreStart, KibanaRequest } from '@kbn/core/server';
 import type { EsWorkflowExecution, StackFrame } from '@kbn/workflows';
 import { ExecutionStatus } from '@kbn/workflows';
 import type { GraphNodeUnion, WorkflowGraph } from '@kbn/workflows/graph';
@@ -22,8 +22,9 @@ import type { ContextDependencies } from './types';
 import type { WorkflowExecutionState } from './workflow_execution_state';
 import { WorkflowScopeStack } from './workflow_scope_stack';
 import type { WorkflowExecutionTelemetryClient } from '../lib/telemetry/workflow_execution_telemetry_client';
-import { getEnclosingScopeRuntimes } from '../utils';
+import { getEnclosingScopeRuntimes, parseDuration } from '../utils';
 import type { IWorkflowEventLogger } from '../workflow_event_logger';
+import type { WorkflowTaskManager } from '../workflow_task_manager/workflow_task_manager';
 
 interface WorkflowExecutionRuntimeManagerInit {
   workflowExecutionState: WorkflowExecutionState;
@@ -34,6 +35,8 @@ interface WorkflowExecutionRuntimeManagerInit {
   dependencies?: ContextDependencies;
   stepExecutionRuntimeFactory: StepExecutionRuntimeFactory;
   telemetryClient?: WorkflowExecutionTelemetryClient;
+  workflowTaskManager: WorkflowTaskManager;
+  fakeRequest: KibanaRequest;
 }
 
 /**
@@ -69,6 +72,8 @@ export class WorkflowExecutionRuntimeManager {
   }
   private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory;
   private telemetryClient?: WorkflowExecutionTelemetryClient;
+  private workflowTaskManager: WorkflowTaskManager;
+  private fakeRequest: KibanaRequest;
 
   constructor(workflowExecutionRuntimeManagerInit: WorkflowExecutionRuntimeManagerInit) {
     this.workflowGraph = workflowExecutionRuntimeManagerInit.workflowExecutionGraph;
@@ -81,6 +86,8 @@ export class WorkflowExecutionRuntimeManager {
     this.stepExecutionRuntimeFactory =
       workflowExecutionRuntimeManagerInit.stepExecutionRuntimeFactory;
     this.telemetryClient = workflowExecutionRuntimeManagerInit.telemetryClient;
+    this.workflowTaskManager = workflowExecutionRuntimeManagerInit.workflowTaskManager;
+    this.fakeRequest = workflowExecutionRuntimeManagerInit.fakeRequest;
   }
 
   public get isExecuting(): boolean {
@@ -385,6 +392,7 @@ export class WorkflowExecutionRuntimeManager {
     this.logWorkflowStart();
   }
 
+  /** Finishes the workflow: sets status to COMPLETED and terminates the execution. */
   // TODO: The apm-agent should be moved to a separate class for better separation of concerns
   public async finish(): Promise<void> {
     const status = this.workflowExecution.error
@@ -414,6 +422,7 @@ export class WorkflowExecutionRuntimeManager {
     this.terminateWorkflow({ status });
   }
 
+  /** Times out the workflow: aborts the running step, fails all enclosing scopes with a timeout error, and terminates the execution. */
   timeout(): void {
     const currentNode = this.getCurrentNode();
     if (!currentNode) {
@@ -446,6 +455,7 @@ export class WorkflowExecutionRuntimeManager {
     this.terminateWorkflow({ status: ExecutionStatus.TIMED_OUT });
   }
 
+  /** Cancels the workflow: aborts the running step, marks all enclosing scopes as cancelled, and terminates the execution. */
   cancel(): void {
     const currentNode = this.getCurrentNode();
     if (!currentNode) {
@@ -464,6 +474,34 @@ export class WorkflowExecutionRuntimeManager {
       this.stepExecutionRuntimeFactory
     ).forEach((step) => step.cancelStep());
     this.terminateWorkflow({ status: ExecutionStatus.CANCELLED });
+  }
+
+  /**
+   * Stops the current execution loop and schedules a task manager task to resume later.
+   *
+   * If the workflow has a timeout, the resume time is capped at the timeout deadline
+   * so the workflow doesn't sleep past its allowed duration.
+   */
+  public async yieldResumeTask({ resumeAt }: { resumeAt?: Date }): Promise<void> {
+    let newResumeAt = resumeAt ?? new Date();
+
+    const workflowTimeout = this.workflowExecution.workflowDefinition.settings?.timeout;
+
+    if (workflowTimeout) {
+      const timeoutMs = parseDuration(workflowTimeout);
+      const startedAtMs = new Date(this.workflowExecution.startedAt).getTime();
+      const timeoutDeadline = startedAtMs + timeoutMs;
+      newResumeAt = new Date(Math.min(timeoutDeadline, newResumeAt.getTime()));
+    }
+
+    await this.workflowTaskManager.scheduleResumeTask({
+      workflowExecution: this.workflowExecution,
+      resumeAt: newResumeAt,
+      fakeRequest: this.fakeRequest,
+    });
+    this.workflowExecutionState.updateWorkflowExecution({
+      isExecuting: false,
+    });
   }
 
   private terminateWorkflow({ status, error }: { status: ExecutionStatus; error?: Error }): void {
