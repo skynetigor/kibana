@@ -13,14 +13,13 @@
 import agent from 'elastic-apm-node';
 import type { CoreStart } from '@kbn/core/server';
 import type { EsWorkflowExecution, StackFrame } from '@kbn/workflows';
-import { ExecutionStatus, isTerminalStatus } from '@kbn/workflows';
+import { ExecutionStatus } from '@kbn/workflows';
 import type { GraphNodeUnion, WorkflowGraph } from '@kbn/workflows/graph';
 import { ExecutionError } from '@kbn/workflows/server';
 import { buildWorkflowContext } from './build_workflow_context';
 import type { ContextDependencies } from './types';
 import type { WorkflowExecutionState } from './workflow_execution_state';
 import { WorkflowScopeStack } from './workflow_scope_stack';
-import type { WorkflowExecutionTelemetryClient } from '../lib/telemetry/workflow_execution_telemetry_client';
 import type { IWorkflowEventLogger } from '../workflow_event_logger';
 
 interface WorkflowExecutionRuntimeManagerInit {
@@ -30,7 +29,6 @@ interface WorkflowExecutionRuntimeManagerInit {
   workflowLogger: IWorkflowEventLogger;
   coreStart?: CoreStart;
   dependencies?: ContextDependencies;
-  telemetryClient?: WorkflowExecutionTelemetryClient;
 }
 
 /**
@@ -59,11 +57,8 @@ export class WorkflowExecutionRuntimeManager {
   private entryTransactionId?: string;
   private workflowTransaction?: any; // APM transaction instance
   private workflowGraph: WorkflowGraph;
-  // private nextNodeId: string | undefined;
   private coreStart?: CoreStart;
   private dependencies?: ContextDependencies;
-  private telemetryClient?: WorkflowExecutionTelemetryClient;
-  private telemetryReported: boolean = false;
   private get topologicalOrder(): string[] {
     return this.workflowGraph.topologicalOrder;
   }
@@ -76,7 +71,6 @@ export class WorkflowExecutionRuntimeManager {
     this.workflowExecutionState = workflowExecutionRuntimeManagerInit.workflowExecutionState;
     this.coreStart = workflowExecutionRuntimeManagerInit.coreStart;
     this.dependencies = workflowExecutionRuntimeManagerInit.dependencies;
-    this.telemetryClient = workflowExecutionRuntimeManagerInit.telemetryClient;
   }
 
   public get isExecuting(): boolean {
@@ -232,16 +226,9 @@ export class WorkflowExecutionRuntimeManager {
     });
   }
 
-  public markWorkflowTimeouted(): void {
-    const finishedAt = new Date().toISOString();
-    this.workflowExecutionState.updateWorkflowExecution({
-      status: ExecutionStatus.TIMED_OUT,
-      finishedAt,
-      duration:
-        new Date(finishedAt).getTime() - new Date(this.workflowExecution.startedAt).getTime(),
-    });
-  }
-
+  // TODO: The code besides apm-agent interaction should be migrated to EnterWorkflowNodeImpl
+  // as now EnterWorkflowNodeImpl will indicate the start of the workflow execution
+  // The apm-agent should be moved to a separate class for better separation of concerns
   public async start(): Promise<void> {
     this.workflowLogger?.logInfo('Starting workflow execution with APM tracing', {
       workflow: { execution_id: this.workflowExecution.id },
@@ -381,27 +368,18 @@ export class WorkflowExecutionRuntimeManager {
       );
     }
 
-    // this.nextNodeId = this.topologicalOrder[0];
     const updatedWorkflowExecution: Partial<EsWorkflowExecution> = {
-      // currentNodeId: this.nextNodeId,
       scopeStack: [],
       status: ExecutionStatus.RUNNING,
       startedAt: new Date().toISOString(),
     };
     this.workflowExecutionState.updateWorkflowExecution(updatedWorkflowExecution);
-    this.logWorkflowStart();
     await this.workflowExecutionState.flush();
   }
 
-  public async resume(): Promise<void> {
-    // await this.workflowExecutionState.load();
-    // this.nextNodeId = this.workflowExecution.currentNodeId;
-    // const updatedWorkflowExecution: Partial<EsWorkflowExecution> = {
-    //   status: ExecutionStatus.RUNNING,
-    // };
-    // this.workflowExecutionState.updateWorkflowExecution(updatedWorkflowExecution);
-  }
-
+  // TODO: The code besides apm-agent interaction should be migrated to ExitWorkflowNodeImpl
+  // as now ExitWorkflowNodeImpl will indicate the end of the workflow execution
+  // The apm-agent should be moved to a separate class for better separation of concerns
   public async finishWorkflowExecution(): Promise<void> {
     const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
     const startedAt = new Date(workflowExecution.startedAt);
@@ -414,8 +392,6 @@ export class WorkflowExecutionRuntimeManager {
       status: workflowExecution.error ? ExecutionStatus.FAILED : ExecutionStatus.COMPLETED,
       isExecuting: false, // workflow is no longer executing, exiting execution loop
     };
-
-    this.logWorkflowComplete(workflowExecutionUpdate.status === ExecutionStatus.COMPLETED);
 
     // Update the workflow transaction outcome when workflow completes
     if (this.workflowTransaction) {
@@ -437,113 +413,6 @@ export class WorkflowExecutionRuntimeManager {
       }
     }
 
-    // Report telemetry for terminal status (only once)
-    this.reportTelemetryIfTerminal(workflowExecution, workflowExecutionUpdate);
-
     this.workflowExecutionState.updateWorkflowExecution(workflowExecutionUpdate);
-  }
-
-  // TODO: Remove this method
-  public async saveState(): Promise<void> {
-    // const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
-    // const workflowExecutionUpdate: Partial<EsWorkflowExecution> = {
-    //   currentNodeId: this.nextNodeId,
-    // };
-    // if (isTerminalStatus(workflowExecution.status)) {
-    //   workflowExecutionUpdate.status = workflowExecution.status;
-    // } else if (workflowExecution.error) {
-    //   workflowExecutionUpdate.status = ExecutionStatus.FAILED;
-    //   workflowExecutionUpdate.error = workflowExecution.error;
-    // } else if (!this.nextNodeId) {
-    //   workflowExecutionUpdate.status = ExecutionStatus.COMPLETED;
-    // }
-    // if (
-    //   (workflowExecutionUpdate.status && isTerminalStatus(workflowExecutionUpdate.status)) ||
-    //   isTerminalStatus(workflowExecution.status)
-    // ) {
-    //   const startedAt = new Date(workflowExecution.startedAt);
-    //   const finishDate = new Date();
-    //   workflowExecutionUpdate.finishedAt = finishDate.toISOString();
-    //   workflowExecutionUpdate.duration = finishDate.getTime() - startedAt.getTime();
-    //   workflowExecutionUpdate.context = buildWorkflowContext(
-    //     this.workflowExecution,
-    //     this.coreStart,
-    //     this.dependencies
-    //   );
-    //   this.logWorkflowComplete(workflowExecutionUpdate.status === ExecutionStatus.COMPLETED);
-    //   // Update the workflow transaction outcome when workflow completes
-    //   if (this.workflowTransaction) {
-    //     const isSuccess = workflowExecutionUpdate.status === ExecutionStatus.COMPLETED;
-    //     this.workflowTransaction.outcome = isSuccess ? 'success' : 'failure';
-    //     // For alerting-triggered workflows, we created a dedicated transaction and need to end it
-    //     const isTriggeredByAlerting = this.workflowTransaction.type === 'workflow_execution';
-    //     if (isTriggeredByAlerting) {
-    //       this.workflowTransaction.end();
-    //       this.workflowLogger?.logDebug('Workflow transaction ended (alerting-triggered)', {
-    //         transaction: { outcome: this.workflowTransaction.outcome },
-    //       });
-    //     } else {
-    //       // For task manager triggered workflows, Task Manager will handle ending
-    //       this.workflowLogger?.logDebug(
-    //         'Task transaction outcome updated (task manager will end)',
-    //         {
-    //           transaction: { outcome: this.workflowTransaction.outcome },
-    //         }
-    //       );
-    //     }
-    //   }
-    //   // Report telemetry for terminal status (only once)
-    //   this.reportTelemetryIfTerminal(workflowExecution, workflowExecutionUpdate);
-    // }
-    // this.workflowExecutionState.updateWorkflowExecution(workflowExecutionUpdate);
-  }
-
-  private logWorkflowStart(): void {
-    this.workflowLogger?.logInfo('Workflow execution started', {
-      event: { action: 'workflow-start', category: ['workflow'] },
-      tags: ['workflow', 'execution', 'start'],
-    });
-  }
-
-  private logWorkflowComplete(success: boolean): void {
-    this.workflowLogger?.logInfo(
-      `Workflow execution ${success ? 'completed successfully' : 'failed'}`,
-      {
-        event: {
-          action: 'workflow-complete',
-          category: ['workflow'],
-          outcome: success ? 'success' : 'failure',
-        },
-        tags: ['workflow', 'execution', 'complete'],
-      }
-    );
-  }
-
-  /**
-   * Reports telemetry for workflow execution when it reaches a terminal status.
-   * Only reports once per execution to avoid duplicate events.
-   */
-  private reportTelemetryIfTerminal(
-    workflowExecution: EsWorkflowExecution,
-    workflowExecutionUpdate: Partial<EsWorkflowExecution>
-  ): void {
-    const finalStatus = workflowExecutionUpdate.status || workflowExecution.status;
-    if (!this.telemetryClient || this.telemetryReported || !isTerminalStatus(finalStatus)) {
-      return;
-    }
-
-    this.telemetryReported = true;
-    const stepExecutions = this.workflowExecutionState.getAllStepExecutions();
-    const finalWorkflowExecution = {
-      ...workflowExecution,
-      ...workflowExecutionUpdate,
-      status: finalStatus,
-    } as EsWorkflowExecution;
-
-    this.telemetryClient.reportWorkflowExecutionTerminated({
-      workflowExecution: finalWorkflowExecution,
-      stepExecutions,
-      finalStatus,
-    });
   }
 }

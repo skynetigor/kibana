@@ -161,7 +161,8 @@ export class NodesFactory {
           node as EnterWorkflowNode,
           this.workflowRuntime,
           this.stepExecutionRuntimeFactory,
-          this.workflowExecutionState
+          this.workflowExecutionState,
+          this.workflowLogger
         );
       case 'exit-workflow':
         return new ExitWorkflowNodeImpl(
@@ -169,7 +170,8 @@ export class NodesFactory {
           this.workflowRuntime,
           this.workflowExecutionState,
           this.dependencies.coreStart,
-          this.dependencies
+          this.dependencies,
+          this.workflowLogger
         );
       case 'enter-foreach':
         return new EnterForeachNodeImpl(

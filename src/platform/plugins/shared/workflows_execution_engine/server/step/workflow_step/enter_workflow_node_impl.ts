@@ -8,12 +8,14 @@
  */
 
 import type { EnterWorkflowNode } from '@kbn/workflows/graph';
+import { ExecutionError } from '@kbn/workflows/server';
 import { ExecutionStatus } from '@kbn/workflows/types/latest';
 import { parseDuration } from '../../utils';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
 import type { StepExecutionRuntimeFactory } from '../../workflow_context_manager/step_execution_runtime_factory';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
 import type { WorkflowExecutionState } from '../../workflow_context_manager/workflow_execution_state';
+import type { IWorkflowEventLogger } from '../../workflow_event_logger';
 import type { MonitorableNode, NodeImplementation } from '../node_implementation';
 
 export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNode {
@@ -21,10 +23,12 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
     private node: EnterWorkflowNode,
     private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
     private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory,
-    private workflowExecutionState: WorkflowExecutionState
+    private workflowExecutionState: WorkflowExecutionState,
+    private workflowLogger: IWorkflowEventLogger
   ) {}
 
   public async run(): Promise<void> {
+    this.logWorkflowStart();
     await this.wfExecutionRuntimeManager.start();
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }
@@ -35,14 +39,17 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
     }
 
     const timeoutMs = parseDuration(this.node.timeout);
-    const whenStepStartedTime = new Date(
+    const whenWorkflowStartedTime = new Date(
       this.wfExecutionRuntimeManager.getWorkflowExecution().startedAt
     ).getTime();
     const currentTimeMs = new Date().getTime();
-    const currentStepDuration = currentTimeMs - whenStepStartedTime;
+    const currentWorkflowDuration = currentTimeMs - whenWorkflowStartedTime;
 
-    if (currentStepDuration > timeoutMs) {
-      const timeoutError = new Error('Failed due to workflow timeout');
+    if (currentWorkflowDuration > timeoutMs) {
+      const timeoutError = new ExecutionError({
+        type: 'WorkflowTimeoutError',
+        message: `Workflow timed out after ${currentWorkflowDuration}ms`,
+      });
       monitoredStepExecutionRuntime.abortController.abort();
       monitoredStepExecutionRuntime.failStep(timeoutError);
 
@@ -65,7 +72,17 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
       this.workflowExecutionState.updateWorkflowExecution({
         error: undefined,
         status: ExecutionStatus.TIMED_OUT,
+        finishedAt: new Date().toISOString(),
+        duration: currentWorkflowDuration,
+        isExecuting: false,
       });
     }
+  }
+
+  private logWorkflowStart(): void {
+    this.workflowLogger?.logInfo('Workflow execution started', {
+      event: { action: 'workflow-start', category: ['workflow'] },
+      tags: ['workflow', 'execution', 'start'],
+    });
   }
 }
