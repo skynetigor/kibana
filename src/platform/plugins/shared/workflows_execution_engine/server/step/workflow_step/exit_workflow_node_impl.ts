@@ -30,11 +30,8 @@ export class ExitWorkflowNodeImpl implements NodeImplementation {
   ) {}
 
   public async run(): Promise<void> {
-    await this.wfExecutionRuntimeManager.finishWorkflowExecution();
+    await this.wfExecutionRuntimeManager.finish();
     this.reportTelemetryIfTerminal();
-    this.logWorkflowComplete(
-      this.wfExecutionRuntimeManager.getWorkflowExecutionStatus() === ExecutionStatus.COMPLETED
-    );
   }
 
   /**
@@ -58,19 +55,5 @@ export class ExitWorkflowNodeImpl implements NodeImplementation {
       stepExecutions,
       finalStatus: workflowExecution.status,
     });
-  }
-
-  private logWorkflowComplete(success: boolean): void {
-    this.workflowLogger?.logInfo(
-      `Workflow execution ${success ? 'completed successfully' : 'failed'}`,
-      {
-        event: {
-          action: 'workflow-complete',
-          category: ['workflow'],
-          outcome: success ? 'success' : 'failure',
-        },
-        tags: ['workflow', 'execution', 'complete'],
-      }
-    );
   }
 }

@@ -99,15 +99,16 @@ export async function catchError(
       });
       params.workflowRuntime.navigateToNode(scopeEntry.nodeId);
 
-      const stepExecutionRuntime = params.stepExecutionRuntimeFactory.createStepExecutionRuntime({
-        nodeId: scopeEntry.nodeId,
-        stackFrames: newWorkflowScopeStack.stackFrames,
-      });
+      const stepExecutionRuntime =
+        params.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
+          nodeId: scopeEntry.nodeId,
+          stackFrames: newWorkflowScopeStack.stackFrames,
+        });
       const stepImplementation = params.nodesFactory.create(stepExecutionRuntime);
 
       if ((stepImplementation as unknown as NodeWithErrorCatching).catchError) {
         const stepErrorCatcher = stepImplementation as unknown as NodeWithErrorCatching;
-        const failedContext = params.stepExecutionRuntimeFactory.createStepExecutionRuntime({
+        const failedContext = params.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
           nodeId: currentNodeId,
           stackFrames: workflowScopeStack.stackFrames,
         });

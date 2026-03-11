@@ -64,7 +64,7 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
 
   try {
     params.workflowRuntime.exitScope();
-    stepExecutionRuntime = params.stepExecutionRuntimeFactory.createStepExecutionRuntime({
+    stepExecutionRuntime = params.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
       nodeId: node.id,
       stackFrames: params.workflowRuntime.getCurrentNodeScope(),
     });

@@ -27,7 +27,7 @@ export const getEnclosingScopeRuntimes = (
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const currentScope = stack.getCurrentScope()!;
     stack = stack.exitScope();
-    const scopeStepExecutionRuntime = stepExecutionRuntimeFactory.createStepExecutionRuntime({
+    const scopeStepExecutionRuntime = stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
       nodeId: currentScope.nodeId,
       stackFrames: stack.stackFrames,
     });

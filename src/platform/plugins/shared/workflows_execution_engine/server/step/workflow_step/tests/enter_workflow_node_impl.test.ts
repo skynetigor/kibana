@@ -200,7 +200,7 @@ describe('EnterWorkflowNodeImpl', () => {
         failStep: jest.fn(),
       } as unknown as StepExecutionRuntime;
 
-      (stepExecutionRuntimeFactoryMock.createStepExecutionRuntime as jest.Mock)
+      (stepExecutionRuntimeFactoryMock.getOrCreateStepExecutionRuntime as jest.Mock)
         .mockReturnValueOnce(scopeStepExecutionRuntime1)
         .mockReturnValueOnce(scopeStepExecutionRuntime2);
 

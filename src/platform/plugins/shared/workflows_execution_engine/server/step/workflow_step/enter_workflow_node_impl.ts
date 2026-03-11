@@ -30,7 +30,6 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
   ) {}
 
   public async run(): Promise<void> {
-    this.logWorkflowStart();
     await this.wfExecutionRuntimeManager.start();
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }
@@ -53,18 +52,7 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
     const currentWorkflowDuration = currentTimeMs - whenWorkflowStartedTime;
 
     if (currentWorkflowDuration > timeoutMs) {
-      const timeoutError = new ExecutionError({
-        type: 'WorkflowTimeoutError',
-        message: `Workflow timed out after ${currentWorkflowDuration}ms`,
-      });
-      monitoredStepExecutionRuntime.abortController.abort();
-      monitoredStepExecutionRuntime.failStep(timeoutError);
-      getEnclosingScopeRuntimes(
-        monitoredStepExecutionRuntime,
-        this.stepExecutionRuntimeFactory
-      ).forEach((step) => step.failStep(timeoutError));
-
-      this.terminateWorkflow({ status: ExecutionStatus.TIMED_OUT });
+      this.wfExecutionRuntimeManager.timeout();
     }
   }
 
@@ -92,37 +80,6 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
       }
     }
 
-    monitoredStepExecutionRuntime.abortController.abort();
-    monitoredStepExecutionRuntime.cancelStep();
-    getEnclosingScopeRuntimes(
-      monitoredStepExecutionRuntime,
-      this.stepExecutionRuntimeFactory
-    ).forEach((step) => step.cancelStep());
-    this.terminateWorkflow({ status: ExecutionStatus.CANCELLED });
-  }
-
-  private terminateWorkflow({
-    status,
-    error,
-  }: {
-    status: ExecutionStatus;
-    error?: ExecutionError;
-  }): void {
-    this.workflowExecutionState.updateWorkflowExecution({
-      status,
-      isExecuting: false,
-      finishedAt: new Date().toISOString(),
-      error,
-      duration:
-        new Date().getTime() -
-        new Date(this.workflowExecutionState.getWorkflowExecution().startedAt).getTime(),
-    });
-  }
-
-  private logWorkflowStart(): void {
-    this.workflowLogger?.logInfo('Workflow execution started', {
-      event: { action: 'workflow-start', category: ['workflow'] },
-      tags: ['workflow', 'execution', 'start'],
-    });
+    this.wfExecutionRuntimeManager.cancel();
   }
 }

@@ -119,7 +119,7 @@ describe('runNode', () => {
 
       // Verify step execution runtime was created
       expect(
-        mockParams.stepExecutionRuntimeFactory.createStepExecutionRuntime
+        mockParams.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime
       ).toHaveBeenCalledWith({
         nodeId: 'node1',
         stackFrames: [],
@@ -234,7 +234,9 @@ describe('runNode', () => {
       await runNode(mockParams);
 
       // Step should still be created but may not run depending on timing
-      expect(mockParams.stepExecutionRuntimeFactory.createStepExecutionRuntime).toHaveBeenCalled();
+      expect(
+        mockParams.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime
+      ).toHaveBeenCalled();
     });
   });
 
