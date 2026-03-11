@@ -236,9 +236,7 @@ export class WorkflowExecutionRuntimeManager {
     });
   }
 
-  // TODO: The code besides apm-agent interaction should be migrated to EnterWorkflowNodeImpl
-  // as now EnterWorkflowNodeImpl will indicate the start of the workflow execution
-  // The apm-agent should be moved to a separate class for better separation of concerns
+  // TODO: The apm-agent should be moved to a separate class for better separation of concerns
   public async start(): Promise<void> {
     this.workflowLogger?.logInfo('Starting workflow execution with APM tracing', {
       workflow: { execution_id: this.workflowExecution.id },
@@ -388,9 +386,7 @@ export class WorkflowExecutionRuntimeManager {
     this.reportTelemetryIfTerminal();
   }
 
-  // TODO: The code besides apm-agent interaction should be migrated to ExitWorkflowNodeImpl
-  // as now ExitWorkflowNodeImpl will indicate the end of the workflow execution
-  // The apm-agent should be moved to a separate class for better separation of concerns
+  // TODO: The apm-agent should be moved to a separate class for better separation of concerns
   public async finish(): Promise<void> {
     const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
     const startedAt = new Date(workflowExecution.startedAt);
@@ -426,6 +422,25 @@ export class WorkflowExecutionRuntimeManager {
 
     this.workflowExecutionState.updateWorkflowExecution(workflowExecutionUpdate);
     this.logWorkflowComplete(workflowExecutionUpdate.status === ExecutionStatus.COMPLETED);
+  }
+
+  fail(error: Error): void {
+    const currentNode = this.getCurrentNode();
+    if (!currentNode) {
+      return;
+    }
+
+    const currentStepExecutionRuntime =
+      this.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
+        nodeId: currentNode.id,
+        stackFrames: this.workflowExecution.scopeStack,
+      });
+    currentStepExecutionRuntime.failStep(error);
+    getEnclosingScopeRuntimes(
+      currentStepExecutionRuntime,
+      this.stepExecutionRuntimeFactory
+    ).forEach((step) => step.failStep(error));
+    this.terminateWorkflow({ status: ExecutionStatus.FAILED, error });
   }
 
   timeout(): void {
@@ -480,18 +495,14 @@ export class WorkflowExecutionRuntimeManager {
     this.terminateWorkflow({ status: ExecutionStatus.CANCELLED });
   }
 
-  private terminateWorkflow({
-    status,
-    error,
-  }: {
-    status: ExecutionStatus;
-    error?: ExecutionError;
-  }): void {
+  private terminateWorkflow({ status, error }: { status: ExecutionStatus; error?: Error }): void {
+    const executionError = error ? ExecutionError.fromError(error) : undefined;
+
     this.workflowExecutionState.updateWorkflowExecution({
       status,
       isExecuting: false,
       finishedAt: new Date().toISOString(),
-      error,
+      error: executionError?.toSerializableObject(),
       duration:
         new Date().getTime() -
         new Date(this.workflowExecutionState.getWorkflowExecution().startedAt).getTime(),

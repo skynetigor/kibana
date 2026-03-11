@@ -8,12 +8,9 @@
  */
 
 import type { EnterWorkflowNode } from '@kbn/workflows/graph';
-import { ExecutionError } from '@kbn/workflows/server';
-import { ExecutionStatus } from '@kbn/workflows/types/latest';
 import type { WorkflowExecutionRepository } from '../../repositories/workflow_execution_repository';
-import { getEnclosingScopeRuntimes, parseDuration } from '../../utils';
+import { parseDuration } from '../../utils';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
-import type { StepExecutionRuntimeFactory } from '../../workflow_context_manager/step_execution_runtime_factory';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
 import type { WorkflowExecutionState } from '../../workflow_context_manager/workflow_execution_state';
 import type { IWorkflowEventLogger } from '../../workflow_event_logger';
@@ -23,7 +20,6 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
   constructor(
     private node: EnterWorkflowNode,
     private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
-    private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory,
     private workflowExecutionState: WorkflowExecutionState,
     private workflowLogger: IWorkflowEventLogger,
     private workflowExecutionRepository: WorkflowExecutionRepository

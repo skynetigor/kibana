@@ -7,53 +7,13 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type { CoreStart } from '@kbn/core/server';
-import { ExecutionStatus } from '@kbn/workflows';
-import type { EsWorkflowExecution } from '@kbn/workflows';
-import type { ExitWorkflowNode } from '@kbn/workflows/graph';
-import type { WorkflowExecutionTelemetryClient } from '../../lib/telemetry/workflow_execution_telemetry_client';
-import type { ContextDependencies } from '../../workflow_context_manager/types';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
-import type { WorkflowExecutionState } from '../../workflow_context_manager/workflow_execution_state';
-import type { IWorkflowEventLogger } from '../../workflow_event_logger';
 import type { NodeImplementation } from '../node_implementation';
 
 export class ExitWorkflowNodeImpl implements NodeImplementation {
-  constructor(
-    private node: ExitWorkflowNode,
-    private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
-    private workflowExecutionState: WorkflowExecutionState,
-    private coreStart: CoreStart,
-    private dependencies: ContextDependencies,
-    private workflowLogger: IWorkflowEventLogger,
-    private telemetryClient?: WorkflowExecutionTelemetryClient
-  ) {}
+  constructor(private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager) {}
 
   public async run(): Promise<void> {
     await this.wfExecutionRuntimeManager.finish();
-    this.reportTelemetryIfTerminal();
-  }
-
-  /**
-   * Reports telemetry for workflow execution when it reaches a terminal status.
-   * Only reports once per execution to avoid duplicate events.
-   */
-  private reportTelemetryIfTerminal(): void {
-    if (!this.telemetryClient) {
-      return;
-    }
-
-    const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
-
-    const stepExecutions = this.workflowExecutionState.getAllStepExecutions();
-    const finalWorkflowExecution = {
-      ...workflowExecution,
-    } as EsWorkflowExecution;
-
-    this.telemetryClient.reportWorkflowExecutionTerminated({
-      workflowExecution: finalWorkflowExecution,
-      stepExecutions,
-      finalStatus: workflowExecution.status,
-    });
   }
 }

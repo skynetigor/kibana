@@ -15,14 +15,13 @@ import type {
   EnterIfNode,
   EnterRetryNode,
   EnterTryBlockNode,
-  EnterWorkflowNode,
   EnterWhileNode,
+  EnterWorkflowNode,
   ExitConditionBranchNode,
   ExitFallbackPathNode,
   ExitForeachNode,
   ExitNormalPathNode,
   ExitRetryNode,
-  ExitWorkflowNode,
   ExitWhileNode,
   WorkflowExecuteAsyncGraphNode,
   WorkflowExecuteGraphNode,
@@ -156,23 +155,20 @@ export class NodesFactory {
     const node = stepExecutionRuntime.node;
     const stepLogger = stepExecutionRuntime.stepLogger;
     switch (node.type) {
-      case 'enter-workflow':
+      case 'enter-workflow': {
+        if (!this.dependencies.workflowExecutionRepository) {
+          throw new Error('WorkflowExecutionRepository is not available in dependencies');
+        }
         return new EnterWorkflowNodeImpl(
-          node as EnterWorkflowNode,
+          node as unknown as EnterWorkflowNode,
           this.workflowRuntime,
-          this.stepExecutionRuntimeFactory,
           this.workflowExecutionState,
-          this.workflowLogger
+          this.workflowLogger,
+          this.dependencies.workflowExecutionRepository
         );
+      }
       case 'exit-workflow':
-        return new ExitWorkflowNodeImpl(
-          node as ExitWorkflowNode,
-          this.workflowRuntime,
-          this.workflowExecutionState,
-          this.dependencies.coreStart,
-          this.dependencies,
-          this.workflowLogger
-        );
+        return new ExitWorkflowNodeImpl(this.workflowRuntime);
       case 'enter-foreach':
         return new EnterForeachNodeImpl(
           node as EnterForeachNode,
