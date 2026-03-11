@@ -100,6 +100,8 @@ export async function setupDependencies(
     stepExecutionRepository
   );
 
+  await workflowExecutionState.load();
+
   // Create telemetry client
   const telemetryClient = new WorkflowExecutionTelemetryClient(coreStart.analytics, logger);
 
