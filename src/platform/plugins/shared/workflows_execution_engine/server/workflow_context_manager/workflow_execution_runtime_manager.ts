@@ -74,6 +74,7 @@ export class WorkflowExecutionRuntimeManager {
   private telemetryClient?: WorkflowExecutionTelemetryClient;
   private workflowTaskManager: WorkflowTaskManager;
   private fakeRequest: KibanaRequest;
+  private nextNodeId?: string;
 
   constructor(workflowExecutionRuntimeManagerInit: WorkflowExecutionRuntimeManagerInit) {
     this.workflowGraph = workflowExecutionRuntimeManagerInit.workflowExecutionGraph;
@@ -102,13 +103,22 @@ export class WorkflowExecutionRuntimeManager {
    * Initializes the workflow execution runtime manager.
    * This method sets the workflow execution to executing.
    */
-  public initialize(): void {
+  public async initialize(): Promise<void> {
+    this.nextNodeId =
+      this.workflowExecution.currentNodeId ?? this.workflowGraph.topologicalOrder.at(0);
     this.workflowExecutionState.updateWorkflowExecution({
       isExecuting: true,
-      currentNodeId:
-        this.workflowExecution.currentNodeId ?? this.workflowGraph.topologicalOrder.at(0),
+      currentNodeId: this.nextNodeId,
       scopeStack: this.workflowExecution.scopeStack ?? [],
     });
+    this.workflowExecutionState.load();
+  }
+
+  public commit(): void {
+    this.workflowExecutionState.updateWorkflowExecution({
+      currentNodeId: this.nextNodeId,
+    });
+    this.nextNodeId = undefined;
   }
 
   /**
@@ -146,23 +156,17 @@ export class WorkflowExecutionRuntimeManager {
       throw new Error(`Node with ID ${nodeId} is not part of the workflow graph`);
     }
 
-    this.workflowExecutionState.updateWorkflowExecution({
-      currentNodeId: nodeId,
-    });
+    this.nextNodeId = nodeId;
   }
 
   public navigateToNextNode(): void {
     const currentNodeId = this.workflowExecution.currentNodeId;
     const currentNodeIndex = this.topologicalOrder.findIndex((nodeId) => nodeId === currentNodeId);
     if (currentNodeIndex < this.topologicalOrder.length - 1) {
-      this.workflowExecutionState.updateWorkflowExecution({
-        currentNodeId: this.topologicalOrder[currentNodeIndex + 1],
-      });
+      this.nextNodeId = this.topologicalOrder[currentNodeIndex + 1];
       return;
     }
-    this.workflowExecutionState.updateWorkflowExecution({
-      currentNodeId: undefined,
-    });
+    this.nextNodeId = undefined;
   }
 
   public getCurrentNodeScope(): StackFrame[] {
@@ -427,6 +431,10 @@ export class WorkflowExecutionRuntimeManager {
     }
 
     this.terminateWorkflow({ status });
+  }
+
+  public fail(error: Error): void {
+    this.terminateWorkflow({ status: ExecutionStatus.FAILED, error });
   }
 
   /** Times out the workflow: aborts the running step, fails all enclosing scopes with a timeout error, and terminates the execution. */

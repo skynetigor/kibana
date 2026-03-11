@@ -14,9 +14,13 @@ import type { StepExecutionRuntime } from '../../workflow_context_manager/step_e
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
 import type { WorkflowExecutionState } from '../../workflow_context_manager/workflow_execution_state';
 import type { IWorkflowEventLogger } from '../../workflow_event_logger';
-import type { MonitorableNode, NodeImplementation } from '../node_implementation';
+import type {
+  MonitorableNode,
+  NodeImplementation,
+  NodeWithErrorCatching,
+} from '../node_implementation';
 
-export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNode {
+export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNode, NodeWithErrorCatching {
   constructor(
     private node: EnterWorkflowNode,
     private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
@@ -28,6 +32,12 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
   public async run(): Promise<void> {
     await this.wfExecutionRuntimeManager.start();
     this.wfExecutionRuntimeManager.navigateToNextNode();
+  }
+
+  public catchError(failedContext: StepExecutionRuntime): void {
+    this.wfExecutionRuntimeManager.fail(
+      new Error(failedContext.stepExecution?.error?.message ?? 'Unknown error')
+    );
   }
 
   public async monitor(monitoredStepExecutionRuntime: StepExecutionRuntime): Promise<void> {

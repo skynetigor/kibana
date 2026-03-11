@@ -23,6 +23,7 @@ import type {
   ExitNormalPathNode,
   ExitRetryNode,
   ExitWhileNode,
+  GraphNodeUnion,
   WorkflowExecuteAsyncGraphNode,
   WorkflowExecuteGraphNode,
   WorkflowGraph,
@@ -58,7 +59,6 @@ import { WorkflowExecuteStepImpl } from './workflow_execute_step/workflow_execut
 import { EnterWorkflowNodeImpl, ExitWorkflowNodeImpl } from './workflow_step';
 import type { ConnectorExecutor } from '../connector_executor';
 import type { StepExecutionRuntime } from '../workflow_context_manager/step_execution_runtime';
-import type { StepExecutionRuntimeFactory } from '../workflow_context_manager/step_execution_runtime_factory';
 import type { ContextDependencies } from '../workflow_context_manager/types';
 import type { WorkflowExecutionRuntimeManager } from '../workflow_context_manager/workflow_execution_runtime_manager';
 import type { WorkflowExecutionState } from '../workflow_context_manager/workflow_execution_state';
@@ -70,14 +70,14 @@ export class NodesFactory {
     private workflowRuntime: WorkflowExecutionRuntimeManager,
     private workflowLogger: IWorkflowEventLogger, // Assuming you have a logger interface
     private workflowGraph: WorkflowGraph,
-    private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory,
     private workflowExecutionState: WorkflowExecutionState,
     private dependencies: ContextDependencies
   ) {}
 
-  public create(stepExecutionRuntime: StepExecutionRuntime): NodeImplementation {
-    const { node } = stepExecutionRuntime;
-
+  public create(
+    stepExecutionRuntime: StepExecutionRuntime,
+    node: GraphNodeUnion
+  ): NodeImplementation {
     // Built-in steps - checked first before workflows_extensions
     // Note: Some built-in steps (like data.set) are also registered in workflows_extensions
     // for YAML schema validation, but execution always uses the built-in implementation.
@@ -147,12 +147,14 @@ export class NodesFactory {
       }
     }
 
-    return this.createGenericStepNode(stepExecutionRuntime);
+    return this.createGenericStepNode(stepExecutionRuntime, node);
   }
 
   // eslint-disable-next-line complexity
-  private createGenericStepNode(stepExecutionRuntime: StepExecutionRuntime): NodeImplementation {
-    const node = stepExecutionRuntime.node;
+  private createGenericStepNode(
+    stepExecutionRuntime: StepExecutionRuntime,
+    node: GraphNodeUnion
+  ): NodeImplementation {
     const stepLogger = stepExecutionRuntime.stepLogger;
     switch (node.type) {
       case 'enter-workflow': {

@@ -80,7 +80,7 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
       return;
     }
 
-    const nodeImplementation = params.nodesFactory.create(stepExecutionRuntime);
+    const nodeImplementation = params.nodesFactory.create(stepExecutionRuntime, node);
     monitorAbortController = new AbortController();
 
     /**

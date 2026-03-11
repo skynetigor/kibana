@@ -104,7 +104,10 @@ export async function catchError(
           nodeId: scopeEntry.nodeId,
           stackFrames: newWorkflowScopeStack.stackFrames,
         });
-      const stepImplementation = params.nodesFactory.create(stepExecutionRuntime);
+      const stepImplementation = params.nodesFactory.create(
+        stepExecutionRuntime,
+        stepExecutionRuntime.node
+      );
 
       if ((stepImplementation as unknown as NodeWithErrorCatching).catchError) {
         const stepErrorCatcher = stepImplementation as unknown as NodeWithErrorCatching;
@@ -132,9 +135,7 @@ export async function catchError(
       }
     }
   } catch (error) {
-    params.workflowExecutionState.updateWorkflowExecution({
-      error,
-    });
+    params.workflowRuntime.fail(error);
     params.workflowLogger.logError(
       `Error in catchError: ${error.message}. Workflow execution may be in an inconsistent state.`
     );

@@ -100,8 +100,6 @@ export async function setupDependencies(
     stepExecutionRepository
   );
 
-  await workflowExecutionState.load();
-
   const telemetryClient = new WorkflowExecutionTelemetryClient(coreStart.analytics, logger);
 
   const esClient: ElasticsearchClient =
@@ -141,14 +139,12 @@ export async function setupDependencies(
     workflowTaskManager,
     fakeRequest,
   });
-  workflowRuntime.initialize();
 
   const nodesFactory = new NodesFactory(
     connectorExecutor,
     workflowRuntime,
     workflowLogger,
     workflowExecutionGraph,
-    stepExecutionRuntimeFactory,
     workflowExecutionState,
     enhancedDependencies
   );
