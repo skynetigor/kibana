@@ -383,7 +383,6 @@ export class WorkflowExecutionRuntimeManager {
     };
     this.workflowExecutionState.updateWorkflowExecution(updatedWorkflowExecution);
     this.logWorkflowStart();
-    this.reportTelemetryIfTerminal();
   }
 
   // TODO: The apm-agent should be moved to a separate class for better separation of concerns
@@ -507,6 +506,7 @@ export class WorkflowExecutionRuntimeManager {
         new Date().getTime() -
         new Date(this.workflowExecutionState.getWorkflowExecution().startedAt).getTime(),
     });
+    this.reportTelemetryIfTerminal();
   }
 
   private logWorkflowStart(): void {

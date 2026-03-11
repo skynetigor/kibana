@@ -8,7 +8,6 @@
  */
 
 import apm from 'elastic-apm-node';
-import { ExecutionStatus } from '@kbn/workflows';
 import { catchError } from './catch_error';
 import { handleExecutionDelay } from './handle_execution_delay';
 import { runStackMonitor } from './run_stack_monitor/run_stack_monitor';
@@ -132,7 +131,6 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
     }
 
     const saveStateSpan = apm.startSpan('save state', 'workflow', 'persistence');
-    // await params.workflowRuntime.saveState(); // Ensure state is updated after each step
     saveStateSpan?.end();
 
     nodeSpan?.end();
