@@ -14,7 +14,7 @@ import type { WorkflowExecutionLoopParams } from './types';
  * Executes the workflow execution loop, continuously running nodes while `isExecuting` is true.
  *
  * Each iteration processes a single node execution via `runNode`. The loop exits when
- * `isExecuting` is set to false by `finish()`, `cancel()`, `timeout()`, or `breakExecutionLoop()`.
+ * `isExecuting` is set to false by `finish()`, `cancel()` or `timeout()`.
  */
 export async function executionFlowLoop(params: WorkflowExecutionLoopParams) {
   while (params.workflowRuntime.isExecuting) {

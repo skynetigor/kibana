@@ -156,12 +156,6 @@ export class WorkflowExecutionRuntimeManager {
     return [...this.workflowExecution.scopeStack];
   }
 
-  public breakExecutionLoop(): void {
-    this.workflowExecutionState.updateWorkflowExecution({
-      isExecuting: false,
-    });
-  }
-
   /**
    * Enters a new scope in the workflow execution context.
    *
