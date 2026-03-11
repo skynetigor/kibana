@@ -14,3 +14,4 @@ export { getKibanaUrl, buildWorkflowExecutionUrl } from './get_kibana_url';
 export { generateExecutionTaskScope } from './generate_execution_task_scope';
 export { TimeoutAbortedError, abortableTimeout } from './abortable_timeout/abortable_timeout';
 export { isTemplateExpression } from './templates';
+export { getEnclosingScopeRuntimes } from './get_enclosing_scope_runtimes';

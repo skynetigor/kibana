@@ -11,7 +11,7 @@ import type { EnterWorkflowNode } from '@kbn/workflows/graph';
 import { ExecutionError } from '@kbn/workflows/server';
 import { ExecutionStatus } from '@kbn/workflows/types/latest';
 import type { WorkflowExecutionRepository } from '../../repositories/workflow_execution_repository';
-import { parseDuration } from '../../utils';
+import { getEnclosingScopeRuntimes, parseDuration } from '../../utils';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
 import type { StepExecutionRuntimeFactory } from '../../workflow_context_manager/step_execution_runtime_factory';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
@@ -59,9 +59,10 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
       });
       monitoredStepExecutionRuntime.abortController.abort();
       monitoredStepExecutionRuntime.failStep(timeoutError);
-      this.getEnclosingScopeRuntimes(monitoredStepExecutionRuntime).forEach((step) =>
-        step.failStep(timeoutError)
-      );
+      getEnclosingScopeRuntimes(
+        monitoredStepExecutionRuntime,
+        this.stepExecutionRuntimeFactory
+      ).forEach((step) => step.failStep(timeoutError));
 
       this.terminateWorkflow({ status: ExecutionStatus.TIMED_OUT });
     }
@@ -93,40 +94,11 @@ export class EnterWorkflowNodeImpl implements NodeImplementation, MonitorableNod
 
     monitoredStepExecutionRuntime.abortController.abort();
     monitoredStepExecutionRuntime.cancelStep();
-    this.getEnclosingScopeRuntimes(monitoredStepExecutionRuntime).forEach((step) =>
-      step.cancelStep()
-    );
+    getEnclosingScopeRuntimes(
+      monitoredStepExecutionRuntime,
+      this.stepExecutionRuntimeFactory
+    ).forEach((step) => step.cancelStep());
     this.terminateWorkflow({ status: ExecutionStatus.CANCELLED });
-  }
-
-  /**
-   * Gets the step execution runtimes of the enclosing scopes of the current step execution runtime.
-   * The enclosing scopes are the scopes that are enclosing the current step execution runtime.
-   * For example, if the current step execution runtime is in a scope that is enclosed by another scope,
-   * the enclosing scope runtimes will be the step execution runtimes of the enclosing scope.
-   * @param currentStepExecutionRuntime - The step execution runtime of the current step
-   * @returns The step execution runtimes of the enclosing scopes
-   */
-  private getEnclosingScopeRuntimes(
-    currentStepExecutionRuntime: StepExecutionRuntime
-  ): StepExecutionRuntime[] {
-    let stack = currentStepExecutionRuntime.scopeStack;
-    const result: StepExecutionRuntime[] = [];
-
-    while (!stack.isEmpty()) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const currentScope = stack.getCurrentScope()!;
-      stack = stack.exitScope();
-      const scopeStepExecutionRuntime = this.stepExecutionRuntimeFactory.createStepExecutionRuntime(
-        {
-          nodeId: currentScope.nodeId,
-          stackFrames: stack.stackFrames,
-        }
-      );
-      result.push(scopeStepExecutionRuntime);
-    }
-
-    return result;
   }
 
   private terminateWorkflow({
