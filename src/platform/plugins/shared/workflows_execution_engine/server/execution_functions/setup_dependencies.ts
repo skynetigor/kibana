@@ -129,12 +129,6 @@ export async function setupDependencies(
     dependencies: enhancedDependencies,
   });
 
-  // Set the workflow execution to executing so execution loop can start
-  workflowExecution.isExecuting = true;
-  workflowExecution.currentNodeId =
-    workflowExecution.currentNodeId ?? workflowExecutionGraph.topologicalOrder.at(0);
-  workflowExecution.scopeStack = workflowExecution.scopeStack ?? [];
-
   const workflowRuntime = new WorkflowExecutionRuntimeManager({
     workflowExecution: workflowExecution as EsWorkflowExecution,
     workflowExecutionGraph,
@@ -144,7 +138,10 @@ export async function setupDependencies(
     dependencies,
     stepExecutionRuntimeFactory,
     telemetryClient,
+    workflowTaskManager,
+    fakeRequest,
   });
+  workflowRuntime.initialize();
 
   const nodesFactory = new NodesFactory(
     connectorExecutor,

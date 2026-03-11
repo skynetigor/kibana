@@ -99,6 +99,19 @@ export class WorkflowExecutionRuntimeManager {
   }
 
   /**
+   * Initializes the workflow execution runtime manager.
+   * This method sets the workflow execution to executing.
+   */
+  public initialize(): void {
+    this.workflowExecutionState.updateWorkflowExecution({
+      isExecuting: true,
+      currentNodeId:
+        this.workflowExecution.currentNodeId ?? this.workflowGraph.topologicalOrder.at(0),
+      scopeStack: this.workflowExecution.scopeStack ?? [],
+    });
+  }
+
+  /**
    * Get the APM trace ID for this workflow execution
    */
   public getTraceId(): string {
