@@ -215,8 +215,8 @@ describe('convertToWorkflowGraph', () => {
         'enterWorkflow',
         'enterForeach_foreach_testAtomicStep1',
         'enterTimeoutZone_testAtomicStep1',
+        'enterForeach_foreach_testAtomicStep1',
         'testAtomicStep1',
-        'exitTimeoutZone_testAtomicStep1',
         'exitForeach_foreach_testAtomicStep1',
         'exitWorkflow',
       ]);
