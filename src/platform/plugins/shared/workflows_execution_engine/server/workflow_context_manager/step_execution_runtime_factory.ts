@@ -92,6 +92,14 @@ export class StepExecutionRuntimeFactory {
     }
   ) {}
 
+  /**
+   * Returns a cached `StepExecutionRuntime` for the given node, or creates one if it doesn't exist.
+   *
+   * Instances are cached by `stepExecutionId` (derived from the workflow execution ID, step ID,
+   * and stack frames). Multiple callers — e.g. `runNode`, the runtime manager's `cancel()`/`timeout()`,
+   * and `processNodeStackMonitoring` — rely on getting the **same** instance for a given step so that
+   * abort signals and state mutations are shared across concurrent execution and monitoring paths.
+   */
   getOrCreateStepExecutionRuntime({
     nodeId,
     stackFrames,

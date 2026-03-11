@@ -11,17 +11,10 @@ import { runNode } from './run_node';
 import type { WorkflowExecutionLoopParams } from './types';
 
 /**
- * Executes the workflow execution loop, continuously running nodes while the workflow status remains RUNNING.
+ * Executes the workflow execution loop, continuously running nodes while `isExecuting` is true.
  *
- * This function manages the main execution flow of a workflow by repeatedly calling `runNode`
- * until the workflow execution status changes from RUNNING to another state.
- *
- * @param params - The workflow execution loop parameters containing the workflow runtime and execution context
- * @returns A promise that resolves when the workflow execution loop completes (i.e., when the workflow is no longer in RUNNING status)
- *
- * @remarks
- * The loop will continue until the workflow status changes to a terminal state (e.g., COMPLETED, FAILED, CANCELLED).
- * Each iteration processes a single node execution.
+ * Each iteration processes a single node execution via `runNode`. The loop exits when
+ * `isExecuting` is set to false by `finish()`, `cancel()`, `timeout()`, or `breakExecutionLoop()`.
  */
 export async function executionFlowLoop(params: WorkflowExecutionLoopParams) {
   while (params.workflowRuntime.isExecuting) {

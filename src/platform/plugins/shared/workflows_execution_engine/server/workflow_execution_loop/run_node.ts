@@ -130,9 +130,6 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
       catchErrorSpan?.end();
     }
 
-    const saveStateSpan = apm.startSpan('save state', 'workflow', 'persistence');
-    saveStateSpan?.end();
-
     nodeSpan?.end();
   }
 }

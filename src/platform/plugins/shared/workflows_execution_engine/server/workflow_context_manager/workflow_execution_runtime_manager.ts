@@ -387,21 +387,13 @@ export class WorkflowExecutionRuntimeManager {
 
   // TODO: The apm-agent should be moved to a separate class for better separation of concerns
   public async finish(): Promise<void> {
-    const workflowExecution = this.workflowExecutionState.getWorkflowExecution();
-    const startedAt = new Date(workflowExecution.startedAt);
-    const finishDate = new Date();
-    const workflowExecutionUpdate: Partial<EsWorkflowExecution> = {
-      startedAt: startedAt.toISOString(),
-      finishedAt: finishDate.toISOString(),
-      duration: finishDate.getTime() - startedAt.getTime(),
-      context: buildWorkflowContext(this.workflowExecution, this.coreStart, this.dependencies),
-      status: workflowExecution.error ? ExecutionStatus.FAILED : ExecutionStatus.COMPLETED,
-      isExecuting: false, // workflow is no longer executing, exiting execution loop
-    };
+    const status = this.workflowExecution.error
+      ? ExecutionStatus.FAILED
+      : ExecutionStatus.COMPLETED;
 
     // Update the workflow transaction outcome when workflow completes
     if (this.workflowTransaction) {
-      const isSuccess = workflowExecutionUpdate.status === ExecutionStatus.COMPLETED;
+      const isSuccess = this.workflowExecution.status === ExecutionStatus.COMPLETED;
       this.workflowTransaction.outcome = isSuccess ? 'success' : 'failure';
 
       // For alerting-triggered workflows, we created a dedicated transaction and need to end it
@@ -419,27 +411,7 @@ export class WorkflowExecutionRuntimeManager {
       }
     }
 
-    this.workflowExecutionState.updateWorkflowExecution(workflowExecutionUpdate);
-    this.logWorkflowComplete(workflowExecutionUpdate.status === ExecutionStatus.COMPLETED);
-  }
-
-  fail(error: Error): void {
-    const currentNode = this.getCurrentNode();
-    if (!currentNode) {
-      return;
-    }
-
-    const currentStepExecutionRuntime =
-      this.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
-        nodeId: currentNode.id,
-        stackFrames: this.workflowExecution.scopeStack,
-      });
-    currentStepExecutionRuntime.failStep(error);
-    getEnclosingScopeRuntimes(
-      currentStepExecutionRuntime,
-      this.stepExecutionRuntimeFactory
-    ).forEach((step) => step.failStep(error));
-    this.terminateWorkflow({ status: ExecutionStatus.FAILED, error });
+    this.terminateWorkflow({ status });
   }
 
   timeout(): void {
@@ -505,7 +477,9 @@ export class WorkflowExecutionRuntimeManager {
       duration:
         new Date().getTime() -
         new Date(this.workflowExecutionState.getWorkflowExecution().startedAt).getTime(),
+      context: buildWorkflowContext(this.workflowExecution, this.coreStart, this.dependencies),
     });
+    this.logWorkflowComplete(status === ExecutionStatus.COMPLETED);
     this.reportTelemetryIfTerminal();
   }
 
