@@ -58,6 +58,6 @@ export async function handleExecutionDelay(
       status: ExecutionStatus.RUNNING,
     });
   } else {
-    await params.workflowRuntime.yieldResumeTask({ resumeAt });
+    await params.workflowRuntime.scheduleResumeTask({ resumeAt });
   }
 }

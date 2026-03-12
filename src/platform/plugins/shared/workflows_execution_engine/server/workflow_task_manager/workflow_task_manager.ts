@@ -59,7 +59,7 @@ export class WorkflowTaskManager {
     const task = await this.taskManager.schedule(
       {
         id: v4(),
-        taskType: WORKFLOW_RESUME_TASK_TYPE,
+        taskType: 'workflow:run',
         params: {
           workflowRunId: executionId,
           spaceId,

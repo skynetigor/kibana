@@ -496,7 +496,7 @@ export class WorkflowExecutionRuntimeManager {
    * If the workflow has a timeout, the resume time is capped at the timeout deadline
    * so the workflow doesn't sleep past its allowed duration.
    */
-  public async yieldResumeTask({ resumeAt }: { resumeAt?: Date }): Promise<void> {
+  public async scheduleResumeTask({ resumeAt }: { resumeAt?: Date }): Promise<void> {
     let newResumeAt = resumeAt ?? new Date();
 
     const workflowTimeout = this.workflowExecution.workflowDefinition.settings?.timeout;
@@ -515,6 +515,20 @@ export class WorkflowExecutionRuntimeManager {
     });
     this.workflowExecutionState.updateWorkflowExecution({
       isExecuting: false,
+    });
+  }
+
+  /**
+   * Stops the current execution loop and schedules a task manager task to resume later.
+   *
+   * If the workflow has a timeout, the resume time is capped at the timeout deadline
+   * so the workflow doesn't sleep past its allowed duration.
+   */
+  public async yieldResumeTask(): Promise<void> {
+    await this.workflowTaskManager.scheduleImmediateResume({
+      executionId: this.workflowExecution.id,
+      spaceId: this.workflowExecution.spaceId,
+      fakeRequest: this.fakeRequest,
     });
   }
 
