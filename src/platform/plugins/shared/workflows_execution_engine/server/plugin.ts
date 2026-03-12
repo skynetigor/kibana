@@ -28,11 +28,7 @@ import {
 } from '@kbn/workflows/common/errors';
 import { ConcurrencyManager } from './concurrency/concurrency_manager';
 import type { WorkflowsExecutionEngineConfig } from './config';
-import {
-  checkAndSkipIfExistingScheduledExecution,
-  resumeWorkflow,
-  runWorkflow,
-} from './execution_functions';
+import { checkAndSkipIfExistingScheduledExecution, runWorkflow } from './execution_functions';
 import { checkLicense } from './lib/check_license';
 import { getAuthenticatedUser } from './lib/get_user';
 import { WorkflowExecutionTelemetryClient } from './lib/telemetry/workflow_execution_telemetry_client';
@@ -54,11 +50,7 @@ import { generateExecutionTaskScope } from './utils';
 import { buildWorkflowContext } from './workflow_context_manager/build_workflow_context';
 import type { ContextDependencies } from './workflow_context_manager/types';
 import { WorkflowEventLoggerService } from './workflow_event_logger';
-import { WORKFLOW_RESUME_TASK_TYPE } from './workflow_task_manager/types';
-import type {
-  ResumeWorkflowExecutionParams,
-  StartWorkflowExecutionParams,
-} from './workflow_task_manager/types';
+import type { StartWorkflowExecutionParams } from './workflow_task_manager/types';
 import { WorkflowTaskManager } from './workflow_task_manager/workflow_task_manager';
 import { createIndexes } from '../common';
 
