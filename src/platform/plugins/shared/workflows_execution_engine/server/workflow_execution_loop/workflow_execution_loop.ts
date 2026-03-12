@@ -69,7 +69,6 @@ export async function workflowExecutionLoop(params: WorkflowExecutionLoopParams)
 
   // Final save to ensure workflow state is persisted after execution loop
   const finalSaveSpan = apm.startSpan('final save state', 'workflow', 'persistence');
-  await params.workflowRuntime.saveState();
   finalSaveSpan?.end();
 
   // Flush the final state (including terminal status) to Elasticsearch

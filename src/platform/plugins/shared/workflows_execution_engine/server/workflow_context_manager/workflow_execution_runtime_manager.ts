@@ -111,14 +111,13 @@ export class WorkflowExecutionRuntimeManager {
       currentNodeId: this.nextNodeId,
       scopeStack: this.workflowExecution.scopeStack ?? [],
     });
-    this.workflowExecutionState.load();
+    await this.workflowExecutionState.load();
   }
 
   public commit(): void {
     this.workflowExecutionState.updateWorkflowExecution({
       currentNodeId: this.nextNodeId,
     });
-    this.nextNodeId = undefined;
   }
 
   /**
