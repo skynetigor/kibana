@@ -1,0 +1,97 @@
+# PROPOSED MODEL: How triggers should work as enforced contracts.
+#
+# This workflow demonstrates what the correct trigger model would look like.
+# NOTE: This is NOT valid syntax today -- it shows the target design.
+#
+# Key differences from current model:
+# 1. The manual trigger defines an input contract (JSON Schema for inputs)
+# 2. The alert trigger implies the event.alerts shape (enforced at runtime)
+# 3. Without a manual trigger, the workflow cannot be invoked manually
+# 4. With a manual trigger, the system validates inputs BEFORE execution starts
+# 5. Each trigger declares what data the workflow receives through that channel
+#
+# This is how GitHub Actions (workflow_dispatch), n8n (Manual Trigger),
+# and Tines (trigger-gated visibility) handle this.
+
+name: Respond to critical malware alert
+enabled: true
+description: |
+  Isolate compromised hosts and create investigation cases.
+  Can be triggered by alert rules or manually by SOC analysts with host details.
+
+triggers:
+  # Alert channel: system provides event.alerts and event.rule
+  - type: alert
+    with:
+      rule_name: "Malware Detection - Critical"
+
+  # Manual channel: caller must provide these inputs (validated before execution)
+  - type: manual
+    inputs:
+      properties:
+        host_name:
+          type: string
+          description: "Hostname of the compromised machine"
+        agent_id:
+          type: string
+          description: "Elastic Agent ID of the endpoint to isolate"
+        reason:
+          type: string
+          description: "Reason for manual isolation"
+          default: "Manual SOC response"
+      required:
+        - host_name
+        - agent_id
+
+steps:
+  # Normalize data from different trigger channels into variables
+  - name: resolve_target
+    type: data.set
+    with:
+      host_name: |
+        {% if event.alerts %}{{ event.alerts[0].host.name }}{% else %}{{ inputs.host_name }}{% endif %}
+      agent_id: |
+        {% if event.alerts %}{{ event.alerts[0].agent.id }}{% else %}{{ inputs.agent_id }}{% endif %}
+      reason: |
+        {% if event.rule %}Alert: {{ event.rule.name }}{% else %}{{ inputs.reason }}{% endif %}
+
+  - name: create_case
+    type: kibana.request
+    with:
+      request:
+        method: POST
+        path: /api/cases
+        body:
+          title: "Malware response: {{ steps.resolve_target.output.host_name | strip }}"
+          description: "{{ steps.resolve_target.output.reason | strip }}"
+          tags: ["malware", "auto-response"]
+          severity: "critical"
+          owner: "securitySolution"
+          connector:
+            id: "none"
+            name: "none"
+            type: ".none"
+            fields: null
+
+  - name: isolate_host
+    type: kibana.request
+    with:
+      request:
+        method: POST
+        path: /api/endpoint/action/isolate
+        body:
+          endpoint_ids:
+            - "{{ steps.resolve_target.output.agent_id | strip }}"
+          comment: "{{ steps.resolve_target.output.reason | strip }}"
+
+  - name: notify_soc
+    type: slack
+    connector-id: soc-alerts
+    with:
+      message: |
+        :rotating_light: *Host Isolated - Malware Response*
+        Host: {{ steps.resolve_target.output.host_name | strip }}
+        Agent: {{ steps.resolve_target.output.agent_id | strip }}
+        Reason: {{ steps.resolve_target.output.reason | strip }}
+        Case: {{ steps.create_case.output.id }}
+        _Triggered {{ execution.triggeredBy }}_

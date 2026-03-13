@@ -1,0 +1,67 @@
+# PROBLEM: This workflow is designed for alerts only, but anyone can trigger it
+# manually via API. If called without alert data, the isolate_host step could
+# target undefined/null hosts, while the create_case step creates a garbage case.
+# The workflow does NOT fail early -- it performs harmful actions before eventually
+# erroring on missing data.
+#
+# In the current system there is no enforcement: the alert trigger is decorative.
+
+name: Auto-isolate compromised host
+enabled: true
+description: |
+  When a critical malware alert fires, automatically isolate the affected host
+  and create a case for the SOC team to investigate.
+
+triggers:
+  - type: alert
+    with:
+      rule_name: "Malware Detection - Critical"
+
+steps:
+  - name: create_case
+    type: kibana.request
+    with:
+      request:
+        method: POST
+        path: /api/cases
+        body:
+          title: "Malware detected on {{ event.alerts[0].host.name | default: 'UNKNOWN' }}"
+          description: |
+            Alert rule: {{ event.rule.name }}
+            Severity: Critical
+            Host: {{ event.alerts[0].host.name }}
+            Timestamp: {{ event.alerts[0]['@timestamp'] }}
+          tags: ["malware", "auto-generated"]
+          severity: "critical"
+          owner: "securitySolution"
+          connector:
+            id: "none"
+            name: "none"
+            type: ".none"
+            fields: null
+
+  # This step is DANGEROUS if event.alerts is empty/undefined.
+  # With no alert trigger enforcement, a manual call with no event data
+  # could send an isolate command to an undefined host endpoint.
+  - name: isolate_host
+    type: kibana.request
+    with:
+      request:
+        method: POST
+        path: /api/endpoint/action/isolate
+        body:
+          endpoint_ids:
+            - "{{ event.alerts[0].agent.id }}"
+          comment: "Auto-isolated by workflow due to malware detection"
+
+  - name: notify_soc
+    type: slack
+    connector-id: soc-alerts
+    with:
+      message: |
+        :rotating_light: *Host Isolated - Malware Detection*
+        Host: {{ event.alerts[0].host.name }}
+        Agent ID: {{ event.alerts[0].agent.id }}
+        Rule: {{ event.rule.name }}
+        Case: {{ steps.create_case.output.id }}
+        _Auto-response by Elastic Workflows_

@@ -1,0 +1,68 @@
+# PROBLEM: This workflow is designed exclusively for the cases.updated custom trigger.
+# It reacts to case status changes by syncing to Jira.
+#
+# But nothing prevents someone from calling POST /api/workflows/{id}/run on this
+# workflow manually. The event object won't have case data, so:
+#   - The Jira ticket gets created with empty/undefined fields
+#   - The Elasticsearch update targets a nonexistent case document
+#   - The Slack notification posts garbage to the SOC channel
+#
+# In Datadog, this workflow would only appear in case-related contexts because it
+# has a case trigger. In the current Elastic system, it's callable from anywhere.
+
+name: Sync case status to Jira
+enabled: true
+description: |
+  When a security case is updated, sync the status change to the linked Jira ticket
+  and notify the SOC channel.
+
+triggers:
+  - type: cases.updated
+    on:
+      condition: 'event.case.status: "in-progress" or event.case.status: "closed"'
+
+steps:
+  - name: find_jira_ticket
+    type: elasticsearch.request
+    with:
+      method: GET
+      path: /case-jira-mapping/_search
+      body:
+        query:
+          term:
+            case_id: "{{ event.case.id }}"
+
+  - name: update_jira
+    type: http
+    if: 'steps.find_jira_ticket.output.hits.total.value > 0'
+    with:
+      url: "https://elastic.atlassian.net/rest/api/3/issue/{{ steps.find_jira_ticket.output.hits.hits[0]._source.jira_key }}/transitions"
+      method: POST
+      headers:
+        Authorization: "Basic {{ consts.jira_auth }}"
+        Content-Type: application/json
+      body:
+        transition:
+          id: "{% if event.case.status == 'in-progress' %}21{% elsif event.case.status == 'closed' %}31{% endif %}"
+
+  - name: update_case_custom_field
+    type: elasticsearch.request
+    with:
+      method: POST
+      path: /.kibana/_update/cases:{{ event.case.id }}
+      body:
+        doc:
+          cases:
+            customFields:
+              jira_synced: true
+              jira_synced_at: "{{ now }}"
+
+  - name: notify_channel
+    type: slack
+    connector-id: soc-alerts
+    with:
+      message: |
+        :jira: *Case → Jira Sync*
+        Case: {{ event.case.title }} ({{ event.case.status }})
+        Jira: {{ steps.find_jira_ticket.output.hits.hits[0]._source.jira_key }}
+        Updated by: {{ event.user.username }}

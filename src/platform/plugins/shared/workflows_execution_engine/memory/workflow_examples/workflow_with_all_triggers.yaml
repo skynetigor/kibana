@@ -9,7 +9,7 @@ triggers:
     with:
       every: 10s
 
-inputs:
+inputs: # inputs are outside of the triggers section. What inputs will be for scheduled trigger? for alert?
   - name: message
     type: string
     default: "hello world"

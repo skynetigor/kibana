@@ -1,0 +1,99 @@
+# PROBLEM: Manual/API invocation is trigger-unaware.
+#
+# This workflow has an alert trigger. The alert trigger implies a specific event
+# shape: event.alerts (array of alert objects), event.rule (the firing rule), etc.
+# When an alert rule fires this workflow, the system provides correctly shaped data.
+#
+# But the manual run API (POST /api/workflows/{id}/run) is completely disconnected
+# from triggers. It accepts { inputs: Record<string, any> } -- an arbitrary bag of
+# data with no schema. The caller (human, agent, API consumer) has no way to
+# discover what data this workflow needs, because:
+#   - The workflow has no "inputs" section (it relies on event.alerts from the trigger)
+#   - The API doesn't expose the trigger's implied event shape
+#   - The system doesn't validate the provided data against any trigger contract
+#
+# So when an Agent Builder agent calls this workflow as a tool, the agent sends
+# whatever the LLM decides: { inputs: {} }, { inputs: { ip: "1.2.3.4" } }, or
+# something else entirely. The workflow starts executing with empty event data:
+#   - block_ip sends a firewall rule for an empty/undefined IP
+#   - create_case creates a case with blank fields
+#   - notify_soc posts garbage to Slack
+#
+# HOW DATADOG SOLVES THIS:
+# In Datadog, when you manually run a workflow from its page, the system presents
+# "trigger variables" -- input fields derived from the workflow's trigger. The caller
+# sees "this workflow has an alert trigger, so provide alert-shaped data." The manual
+# run is trigger-AWARE: the system knows the shape and can expose it to callers.
+#
+# An agent calling this workflow in Datadog would know: "this workflow expects alert
+# data (host, IP, rule name)" because the trigger contract is exposed. The agent
+# provides correctly shaped data, and the workflow runs safely.
+#
+# In our current implementation, the manual run is trigger-UNAWARE. The API just
+# accepts { inputs: Record<string, any> }. If the workflow doesn't define an
+# "inputs" section, the caller has literally zero schema to follow -- the workflow
+# can be called with anything, and nothing validates the data before execution.
+
+name: Block malicious IP from alert
+enabled: true
+description: |
+  When a network threat alert fires, extract the source IP, block it via
+  firewall API, and create an investigation case.
+
+triggers:
+  - type: alert
+
+steps:
+  - name: extract_threat_data
+    type: data.set
+    with:
+      source_ip: "{{ event.alerts[0]._source.source.ip }}"
+      host_name: "{{ event.alerts[0]._source.host.name }}"
+      rule_name: "{{ event.rule.name }}"
+
+  - name: create_case
+    type: kibana.request
+    with:
+      request:
+        method: POST
+        path: /api/cases
+        body:
+          title: "Network threat: {{ steps.extract_threat_data.output.rule_name }} on {{ steps.extract_threat_data.output.host_name }}"
+          description: |
+            Source IP: {{ steps.extract_threat_data.output.source_ip }}
+            Host: {{ steps.extract_threat_data.output.host_name }}
+            Rule: {{ steps.extract_threat_data.output.rule_name }}
+          tags: ["network-threat", "auto-blocked"]
+          severity: "high"
+          owner: "securitySolution"
+          connector:
+            id: "none"
+            name: "none"
+            type: ".none"
+            fields: null
+
+  # DANGEROUS: if source_ip is empty/undefined, this sends a firewall rule
+  # for an empty IP -- which may be interpreted as a wildcard by some APIs
+  - name: block_ip
+    type: http
+    with:
+      url: "https://firewall.internal/api/v1/rules"
+      method: POST
+      headers:
+        Authorization: "Bearer {{ consts.firewall_token }}"
+      body:
+        action: block
+        source: "{{ steps.extract_threat_data.output.source_ip }}"
+        comment: "Auto-blocked by workflow: {{ steps.extract_threat_data.output.rule_name }}"
+        ttl: 86400
+
+  - name: notify_soc
+    type: slack
+    connector-id: soc-alerts
+    with:
+      message: |
+        :no_entry: *IP Blocked - Network Threat*
+        IP: {{ steps.extract_threat_data.output.source_ip }}
+        Host: {{ steps.extract_threat_data.output.host_name }}
+        Rule: {{ steps.extract_threat_data.output.rule_name }}
+        Case: {{ steps.create_case.output.id }}
