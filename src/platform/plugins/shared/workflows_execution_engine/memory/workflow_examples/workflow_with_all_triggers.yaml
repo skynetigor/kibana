@@ -1,0 +1,31 @@
+name: Workflow with all triggers
+enabled: false
+description: |
+  This workflow demonstrates all the triggers currently supported with inputs.
+triggers:
+  - type: manual
+  - type: alert
+  - type: scheduled
+    with:
+      every: 10s
+
+inputs:
+  - name: message
+    type: string
+    default: "hello world"
+
+steps:
+  - name: loog_manual_trigger
+    type: console
+    with:
+      message: "{{ inputs.message }}"
+  
+  - name: loog_alert_trigger
+    type: console
+    with:
+      message: "{{ event.alerts }}"
+
+  - name: log_scheduled_event
+    type: console
+    with:
+      message: "event does not have anything about 'scheduled' event. There is no info, such as: when scheduled, when next run, when previous run, etc"
