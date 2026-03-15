@@ -50,10 +50,7 @@
   }
   .slide.active { opacity: 1; pointer-events: auto; }
 
-  .slide-inner {
-    max-width: var(--slide-max-w);
-    width: 100%;
-  }
+  .slide-inner { max-width: var(--slide-max-w); width: 100%; }
 
   /* Title slides */
   .slide.title-slide {
@@ -81,7 +78,7 @@
     font-size: 20px;
     color: var(--elastic-muted);
     font-weight: 400;
-    max-width: 600px;
+    max-width: 650px;
   }
 
   /* Content slides */
@@ -89,35 +86,33 @@
     background: var(--elastic-dark);
     align-items: flex-start;
     justify-content: flex-start;
-    padding-top: 50px;
+    padding-top: 56px;
     overflow-y: auto;
   }
-  .slide.content-slide .slide-inner {
-    max-width: var(--slide-max-w);
-  }
+  .slide.content-slide .slide-inner { max-width: var(--slide-max-w); }
   .slide.content-slide h2 {
-    font-size: 32px;
+    font-size: 34px;
     font-weight: 700;
-    margin-bottom: 28px;
+    margin-bottom: 32px;
     color: #fff;
+    line-height: 1.2;
   }
   .slide.content-slide h3 {
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     color: var(--elastic-teal);
   }
   .slide.content-slide p {
     font-size: 17px;
-    line-height: 1.6;
-    margin-bottom: 14px;
+    line-height: 1.65;
+    margin-bottom: 16px;
     color: var(--elastic-text);
   }
   .slide.content-slide .muted { color: var(--elastic-muted); font-size: 15px; }
 
   /* Two-column layout */
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; width: 100%; }
-  .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; width: 100%; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; width: 100%; }
 
   /* Cards */
   .card {
@@ -149,10 +144,10 @@
   /* Lists */
   ul { list-style: none; padding: 0; }
   ul li {
-    font-size: 16px;
-    line-height: 1.5;
-    padding: 5px 0;
-    padding-left: 20px;
+    font-size: 17px;
+    line-height: 1.55;
+    padding: 6px 0;
+    padding-left: 22px;
     position: relative;
     color: var(--elastic-text);
   }
@@ -160,7 +155,7 @@
     content: '';
     position: absolute;
     left: 0;
-    top: 12px;
+    top: 14px;
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -168,16 +163,20 @@
   }
   ul.danger li::before { background: var(--elastic-pink); }
 
+  /* BLUF bullets - larger */
+  ul.bluf li { font-size: 20px; padding: 10px 0; padding-left: 24px; }
+  ul.bluf li::before { top: 18px; width: 10px; height: 10px; }
+
   /* Tables */
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
-    margin-top: 10px;
+    font-size: 15px;
+    margin-top: 12px;
   }
   th {
     text-align: left;
-    padding: 10px 14px;
+    padding: 12px 16px;
     background: rgba(255,255,255,0.06);
     color: var(--elastic-teal);
     font-weight: 600;
@@ -187,7 +186,7 @@
     border-bottom: 1px solid rgba(255,255,255,0.1);
   }
   td {
-    padding: 9px 14px;
+    padding: 10px 16px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     color: var(--elastic-text);
   }
@@ -195,36 +194,37 @@
   td.yes { color: var(--elastic-green); font-weight: 600; }
   td.no { color: var(--elastic-pink); font-weight: 600; }
   td.partial { color: var(--elastic-yellow); font-weight: 600; }
+  tr.highlight-row td { background: rgba(240,78,152,0.06); }
 
   /* Code blocks */
   pre[class*="language-"] {
     border-radius: 10px !important;
     font-size: 13px !important;
     line-height: 1.45 !important;
-    margin: 8px 0 !important;
-    padding: 14px !important;
+    margin: 10px 0 !important;
+    padding: 16px !important;
     background: #1a1a2e !important;
     border: 1px solid rgba(255,255,255,0.08) !important;
     overflow: visible;
   }
   code[class*="language-"] { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace !important; font-size: 13px !important; }
   .code-sm pre[class*="language-"] { font-size: 12px !important; }
-  .code-xs pre[class*="language-"] { font-size: 11px !important; padding: 10px !important; }
+  .code-xs pre[class*="language-"] { font-size: 11.5px !important; padding: 12px !important; }
 
   /* Blockquotes */
   blockquote {
     border-left: 3px solid var(--elastic-teal);
-    padding: 10px 16px;
-    margin: 10px 0;
+    padding: 12px 18px;
+    margin: 12px 0;
     background: rgba(0,191,179,0.06);
     border-radius: 0 8px 8px 0;
     font-style: italic;
-    font-size: 15px;
+    font-size: 16px;
     color: var(--elastic-muted);
   }
 
   /* Competitor logos */
-  .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   .logo-row svg { flex-shrink: 0; }
   .logo-row .name { font-size: 18px; font-weight: 700; color: #fff; }
 
@@ -232,24 +232,24 @@
   .flow {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    padding: 10px 0;
+    gap: 10px;
+    font-size: 15px;
+    padding: 8px 0;
     flex-wrap: wrap;
   }
   .flow-box {
-    padding: 8px 14px;
+    padding: 10px 16px;
     border-radius: 8px;
     font-weight: 500;
     white-space: nowrap;
-    font-size: 13px;
+    font-size: 14px;
   }
   .flow-box.caller { background: rgba(0,119,204,0.15); color: var(--elastic-blue); border: 1px solid rgba(0,119,204,0.3); }
   .flow-box.system { background: rgba(0,191,179,0.15); color: var(--elastic-teal); border: 1px solid rgba(0,191,179,0.3); }
   .flow-box.result { background: rgba(0,185,153,0.15); color: var(--elastic-green); border: 1px solid rgba(0,185,153,0.3); }
   .flow-box.reject { background: rgba(240,78,152,0.15); color: var(--elastic-pink); border: 1px solid rgba(240,78,152,0.3); }
   .flow-box.current { background: rgba(240,78,152,0.1); color: var(--elastic-pink); border: 1px dashed rgba(240,78,152,0.4); }
-  .flow-arrow { color: var(--elastic-gray); font-size: 18px; }
+  .flow-arrow { color: var(--elastic-gray); font-size: 20px; }
 
   /* Mockup */
   .mockup {
@@ -320,20 +320,18 @@
     letter-spacing: -0.3px;
   }
 
-  /* Highlight text */
+  /* Utilities */
   .hl-teal { color: var(--elastic-teal); }
   .hl-pink { color: var(--elastic-pink); }
   .hl-blue { color: var(--elastic-blue); }
   .hl-yellow { color: var(--elastic-yellow); }
-  .hl-white { color: #fff; }
   strong { color: #fff; font-weight: 600; }
   .text-sm { font-size: 14px; }
   .text-xs { font-size: 12px; }
-  .mt-sm { margin-top: 12px; }
-  .mt-md { margin-top: 20px; }
-  .mb-sm { margin-bottom: 12px; }
-  .mb-md { margin-bottom: 20px; }
-  .gap-sm { gap: 16px; }
+  .mt-sm { margin-top: 14px; }
+  .mt-md { margin-top: 24px; }
+  .mb-sm { margin-bottom: 14px; }
+  .mb-md { margin-bottom: 24px; }
 </style>
 </head>
 <body>
@@ -345,9 +343,7 @@
 
 <div class="deck" id="deck">
 
-<!-- ============================================================ -->
-<!-- COVER -->
-<!-- ============================================================ -->
+<!-- ========== COVER ========== -->
 <div class="slide title-slide active">
   <div class="slide-inner">
     <div class="chapter-num">RFC Presentation</div>
@@ -357,53 +353,61 @@
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- CHAPTER 1: THE CURRENT PROBLEM -->
-<!-- ============================================================ -->
+<!-- ========== BLUF ========== -->
+<div class="slide content-slide">
+  <div class="slide-inner" style="display:flex; flex-direction:column; justify-content:center; min-height: calc(100vh - 120px);">
+    <h2 style="font-size: 28px; color: var(--elastic-pink); margin-bottom: 20px;">Bottom line up front</h2>
+    <p style="font-size: 24px; line-height: 1.5; max-width: 850px;">Trigger declarations are <strong>ignored at runtime</strong>. Any workflow can be called with any data via the run API, bypassing all trigger contracts. This enables accidental service restarts, garbage case creation, and unvalidated agent calls in production.</p>
+    <ul class="bluf mt-md">
+      <li><strong>Problem:</strong> Trigger event data bypasses all validation on manual calls</li>
+      <li><strong>Evidence:</strong> Every competitor enforces trigger contracts; we are the only one that does not</li>
+      <li><strong>Proposal:</strong> Two models available &mdash; hard gate (GitHub Actions) or soft gate (Datadog)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ========== CHAPTER 1: THE CURRENT PROBLEM ========== -->
 <div class="slide title-slide">
   <div class="slide-inner">
     <div class="chapter-num">Chapter 1</div>
     <h1>The Current<br>Problem</h1>
-    <p class="subtitle">Triggers are decorative. Any workflow can be called from anywhere with any data.</p>
+    <p class="subtitle">Triggers declare intent but are never enforced at runtime.</p>
   </div>
 </div>
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Root Cause</h2>
+    <h2>Trigger Event Data Bypasses All Validation</h2>
     <div class="cols" style="align-items: start;">
       <div>
-        <h3>What works</h3>
+        <h3>Validated today</h3>
         <div class="card success">
-          <p class="text-sm">If a workflow defines an <code>inputs</code> section, the runtime validates them.</p>
+          <p class="text-sm">Workflow-level <code>inputs</code> are checked at runtime.</p>
           <pre class="language-yaml code-xs"><code>inputs:
   - name: message
     type: string
     required: true</code></pre>
-          <p class="text-sm muted">Caller must provide <code>inputs.message</code> or the call is rejected.</p>
         </div>
       </div>
       <div>
-        <h3>What doesn't work</h3>
+        <h3 style="color: var(--elastic-pink);">Never validated</h3>
         <div class="card danger">
-          <p class="text-sm">If a workflow relies on <strong>trigger event data</strong> (<code>event.alerts</code>, <code>event.case</code>), there is <span class="hl-pink">zero validation</span> on manual calls.</p>
+          <p class="text-sm">Trigger-implied event data (<code>event.alerts</code>, <code>event.case</code>) has <span class="hl-pink">zero validation</span> on manual calls.</p>
           <pre class="language-yaml code-xs"><code>triggers:
   - type: alert
     with:
       rule_name: "OOM in Payment API"
-# No inputs section — API accepts anything</code></pre>
-          <p class="text-sm muted">Caller sends <code>{ inputs: {} }</code> — workflow runs with empty event data.</p>
+# No inputs section — accepts anything</code></pre>
         </div>
       </div>
     </div>
     <div class="mt-md">
-      <h3>The gap</h3>
       <div class="flow">
-        <span class="flow-box current">POST /api/workflows/{id}/run</span>
-        <span class="flow-arrow">→</span>
+        <span class="flow-box current">POST /run</span>
+        <span class="flow-arrow">&rarr;</span>
         <span class="flow-box current">{ inputs: Record&lt;string, any&gt; }</span>
-        <span class="flow-arrow">→</span>
-        <span class="flow-box reject">No trigger validation. No event schema. Execution starts.</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box reject">No trigger check &rarr; execution starts</span>
       </div>
     </div>
   </div>
@@ -411,7 +415,7 @@
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Example: Production Service Restart</h2>
+    <h2>Unvalidated Call Restarts Production Service</h2>
     <div class="cols" style="align-items: start;">
       <div class="code-sm">
         <pre class="language-yaml"><code>name: Restart Payment API on OOM
@@ -444,26 +448,26 @@ steps:
     connector-id: payments-team
     with:
       message: |
-        ⚠️ *Payment API Restarted*
+        *Payment API Restarted*
         Reason: {{ event.rule.name }}
 </code></pre>
       </div>
       <div>
         <h3 style="color: var(--elastic-pink);">What goes wrong</h3>
         <ul class="danger">
-          <li>Trigger's <code>rule_name</code> filter is <strong>decorative</strong> — never enforced</li>
-          <li>No <code>inputs</code> section — API accepts <code>{ inputs: {} }</code></li>
-          <li><code>restart_service</code> executes immediately — <span class="hl-pink">production restarts for no reason</span></li>
-          <li><code>notify_team</code> posts to Slack with blank alert fields</li>
+          <li>Ignores trigger <code>rule_name</code> filter</li>
+          <li>Accepts empty <code>{ inputs: {} }</code></li>
+          <li>Restarts production unconditionally</li>
+          <li>Posts blank Slack notification</li>
         </ul>
 
         <div class="card danger mt-md">
-          <h3 style="color: var(--elastic-pink); font-size: 16px;">🤖 Agent scenario</h3>
-          <p class="text-sm">An AI agent misinterprets "check payment service health" and calls this workflow. It sends <code>{ inputs: {} }</code>. The production Payment API <strong>restarts during peak traffic</strong>. No alert, no OOM — just an LLM making a bad call, and the system doing nothing to stop it.</p>
+          <h3 style="color: var(--elastic-pink); font-size: 16px;">Agent scenario</h3>
+          <p class="text-sm">AI agent misinterprets "check service health" and calls this workflow. Sends <code>{ inputs: {} }</code>. Production <strong>restarts during peak traffic</strong>. No alert existed.</p>
         </div>
 
         <div class="card info mt-md">
-          <p class="text-sm"><strong>The fix isn't to forbid manual invocation.</strong> It's to require the caller to provide data matching the alert trigger shape. Today the API accepts anything.</p>
+          <p class="text-sm"><strong>Manual invocation is fine</strong> &mdash; but the API must require alert-shaped data, not accept anything.</p>
         </div>
       </div>
     </div>
@@ -472,32 +476,19 @@ steps:
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>The Pattern Across All Examples</h2>
+    <h2>Five Gaps in Current Trigger Model</h2>
     <table>
-      <tr><th style="width:45%">Problem</th><th>What happens</th></tr>
-      <tr><td>Triggers are not enforced at runtime</td><td class="no">Any workflow callable from anywhere regardless of triggers</td></tr>
-      <tr><td>Manual run is trigger-unaware</td><td class="no">API accepts arbitrary data; trigger event shapes invisible to callers</td></tr>
-      <tr><td><code>inputs</code> validation exists but doesn't cover triggers</td><td class="partial">Runtime validates <code>inputs</code> if defined, but trigger event data is never validated</td></tr>
-      <tr><td>Side effects before failure</td><td class="no">Dangerous actions (restart service, block IP, create case) run before error</td></tr>
-      <tr><td>No discoverable contract for callers</td><td class="no">Agents, API consumers have no schema to follow</td></tr>
+      <tr><th style="width:50%">Gap</th><th>Impact</th></tr>
+      <tr><td>Triggers not enforced at runtime</td><td class="no">Any workflow callable from anywhere</td></tr>
+      <tr><td>Manual run is trigger-unaware</td><td class="no">Trigger event shapes invisible to callers</td></tr>
+      <tr><td>Event data never validated on manual calls</td><td class="no">Garbage data reaches steps</td></tr>
+      <tr><td>Side effects execute before failure</td><td class="no">Restarts, blocks, cases happen before error</td></tr>
+      <tr><td>No discoverable contract for callers</td><td class="no">Agents and APIs have no schema</td></tr>
     </table>
-
-    <div class="cols mt-md gap-sm">
-      <div class="card danger">
-        <h3 style="color: var(--elastic-pink); font-size: 15px;">Block IP workflow</h3>
-        <p class="text-xs">Alert trigger only. Agent calls it — sends firewall rule for empty IP. Case created with blank fields.</p>
-      </div>
-      <div class="card danger">
-        <h3 style="color: var(--elastic-pink); font-size: 15px;">Jira sync workflow</h3>
-        <p class="text-xs"><code>cases.updated</code> trigger. Called manually via API — Jira ticket with empty fields, garbage Slack notification.</p>
-      </div>
-    </div>
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- CHAPTER 2: COMPETITOR ANALYSIS -->
-<!-- ============================================================ -->
+<!-- ========== CHAPTER 2: COMPETITOR ANALYSIS ========== -->
 <div class="slide title-slide">
   <div class="slide-inner">
     <div class="chapter-num">Chapter 2</div>
@@ -508,7 +499,7 @@ steps:
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Hard Gate Model</h2>
+    <h2>GitHub Actions and n8n Block Untyped Calls</h2>
     <div class="cols" style="align-items: start;">
       <div>
         <div class="logo-row">
@@ -517,9 +508,9 @@ steps:
         </div>
         <blockquote>"To enable a workflow to be triggered manually, you need to configure the <code>workflow_dispatch</code> event."</blockquote>
         <ul>
-          <li>No <code>workflow_dispatch</code> = no "Run" button, no API, no CLI</li>
-          <li>Defines <strong>typed inputs</strong> with description, required, default, type</li>
-          <li>UI renders form; API validates before execution</li>
+          <li>Requires <code>workflow_dispatch</code> to enable manual run</li>
+          <li>Defines typed inputs with defaults</li>
+          <li>Validates before execution</li>
         </ul>
         <div class="code-xs mt-sm">
           <pre class="language-yaml"><code>on:
@@ -539,14 +530,13 @@ steps:
         </div>
         <blockquote>"Workflows always need a trigger, or start point."</blockquote>
         <ul>
-          <li>Manual Trigger node required for manual execution</li>
-          <li>Only one Manual Trigger per workflow</li>
-          <li><strong>Form Trigger</strong> = manual trigger with structured input schema</li>
-          <li>Manual executions don't count toward billing</li>
+          <li>Requires Manual Trigger node</li>
+          <li>Offers Form Trigger with typed fields</li>
+          <li>Separates production vs manual runs</li>
         </ul>
         <div class="mt-md">
           <span class="badge green">Model</span>
-          <p class="text-sm" style="display:inline; color: var(--elastic-text);">No trigger = no invocation, period.</p>
+          <p class="text-sm" style="display:inline;">No trigger = no invocation, period.</p>
         </div>
       </div>
     </div>
@@ -555,7 +545,7 @@ steps:
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Soft Gate Model</h2>
+    <h2>Datadog Gates Visibility, Not Execution</h2>
     <div class="cols" style="align-items: start;">
       <div>
         <div class="logo-row">
@@ -563,16 +553,17 @@ steps:
           <span class="name">Datadog</span>
           <span class="badge blue" style="margin-left: 8px;">Closest competitor</span>
         </div>
-        <p class="text-sm mb-sm"><strong>Layer 1:</strong> Any workflow runnable from its page — <span class="hl-teal">trigger-aware</span></p>
-        <blockquote>"From the workflow page, click Run. Enter the values for existing trigger variables."</blockquote>
-        <p class="text-sm mt-sm mb-sm"><strong>Layer 2:</strong> Triggers gate contextual visibility</p>
-        <table class="text-xs">
+        <ul>
+          <li>Runs from workflow page are <span class="hl-teal">trigger-aware</span></li>
+          <li>Presents trigger variables as input form</li>
+          <li>Gates where workflows surface in product</li>
+        </ul>
+        <table class="text-xs mt-sm">
           <tr><th>Context</th><th>Gate</th></tr>
           <tr><td>Monitor notification</td><td>Needs Monitor trigger</td></tr>
           <tr><td>Security panel</td><td>Needs Security trigger</td></tr>
-          <tr><td>Dashboard widget</td><td>Needs Dashboard trigger</td></tr>
           <tr><td>Via API</td><td>Needs API trigger</td></tr>
-          <tr><td>Workflow page "Run"</td><td class="yes">Always available</td></tr>
+          <tr><td>Workflow page</td><td class="yes">Always available</td></tr>
         </table>
       </div>
       <div>
@@ -580,16 +571,14 @@ steps:
           <svg width="28" height="28" viewBox="0 0 24 24" fill="#8B5CF6"><rect width="24" height="24" rx="6" fill="#8B5CF6"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
           <span class="name">Tines</span>
         </div>
-        <p class="text-sm mb-sm">Action-based architecture: entry action defines the channel.</p>
         <ul>
-          <li><strong>Webhook Action</strong> = primary entry point</li>
-          <li><code>match_rules</code> validate incoming data shape</li>
-          <li><code>access_control</code>: Public, Secret, Team, Tenant</li>
-          <li>No "any story triggerable by anything"</li>
+          <li>Entry action defines invocation channel</li>
+          <li>Validates data with <code>match_rules</code></li>
+          <li>Controls access per webhook</li>
         </ul>
         <div class="mt-md">
           <span class="badge green">Model</span>
-          <p class="text-sm" style="display:inline; color: var(--elastic-text);">Entry action defines invocation channel + data contract.</p>
+          <p class="text-sm" style="display:inline;">Entry action = channel + data contract.</p>
         </div>
       </div>
     </div>
@@ -598,157 +587,129 @@ steps:
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Elastic vs Competitors</h2>
+    <h2>Every Competitor Validates Trigger Data</h2>
     <table>
       <tr>
         <th>Capability</th>
-        <th>Elastic (current)</th>
+        <th>Elastic</th>
         <th>GitHub Actions</th>
         <th>n8n</th>
         <th>Datadog</th>
-        <th>Tines</th>
       </tr>
-      <tr>
-        <td>Manual trigger gates invocation</td>
-        <td class="no">No</td>
-        <td class="yes">Yes</td>
-        <td class="yes">Yes</td>
-        <td class="partial">Partial</td>
-        <td class="yes">Yes</td>
-      </tr>
-      <tr>
-        <td>Trigger defines input schema</td>
+      <tr class="highlight-row">
+        <td>Enforces trigger contracts</td>
         <td class="no">No</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
-        <td class="yes">Yes</td>
       </tr>
-      <tr>
-        <td>Triggers gate visibility in product</td>
-        <td class="no">No</td>
-        <td style="color: var(--elastic-gray)">N/A</td>
-        <td style="color: var(--elastic-gray)">N/A</td>
-        <td class="yes">Yes</td>
-        <td style="color: var(--elastic-gray)">N/A</td>
-      </tr>
-      <tr>
-        <td>Input validation before execution</td>
+      <tr class="highlight-row">
+        <td>Validates data before execution</td>
         <td class="no">No*</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
-        <td class="yes">Yes</td>
       </tr>
-      <tr>
+      <tr class="highlight-row">
         <td>API requires explicit opt-in</td>
         <td class="no">No</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
-        <td class="yes">Yes</td>
       </tr>
-      <tr>
+      <tr class="highlight-row">
         <td>Trigger-aware manual run</td>
         <td class="no">No</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
         <td class="yes">Yes</td>
-        <td style="color: var(--elastic-gray)">N/A</td>
       </tr>
     </table>
-    <p class="text-xs muted mt-sm">* Elastic validates <code>inputs</code> if defined at workflow level, but trigger-driven event data is never validated on manual calls.</p>
+    <p class="text-xs muted mt-sm">* Elastic validates <code>inputs</code> if defined, but trigger event data is never validated on manual calls.</p>
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- CHAPTER 3: SOLUTION A — HARD GATE -->
-<!-- ============================================================ -->
+<!-- ========== CHAPTER 3: SOLUTION A — HARD GATE ========== -->
 <div class="slide title-slide">
   <div class="slide-inner">
     <div class="chapter-num">Chapter 3</div>
     <h1>Solution A:<br>Hard Gate</h1>
-    <p class="subtitle">No trigger declaration = no invocation of that type. <span class="hl-teal">GitHub Actions / n8n model.</span></p>
+    <p class="subtitle">No trigger declaration = no invocation. <span class="hl-teal">GitHub Actions / n8n model.</span></p>
   </div>
 </div>
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Mental Model: Call a Trigger, Not a Workflow</h2>
-    <p>Every trigger is an enforced contract. The caller specifies <strong>which trigger</strong> to invoke and provides data matching its schema. All data lands in <code class="hl-teal">event</code>.</p>
+    <h2>Callers Invoke Triggers, Not Workflows</h2>
+    <p>Every trigger defines an <strong>event contract</strong>. Callers specify which trigger to invoke and provide matching data. All data lands in <code class="hl-teal">event</code>. No <code>manual</code> trigger = no manual invocation.</p>
 
-    <h3 class="mt-md">Current</h3>
+    <h3 class="mt-md" style="color: var(--elastic-pink);">Current</h3>
     <div class="flow">
       <span class="flow-box caller">Any caller</span>
-      <span class="flow-arrow">→</span>
-      <span class="flow-box current">{ inputs: Record&lt;string, any&gt; }</span>
-      <span class="flow-arrow">→</span>
-      <span class="flow-box reject">No validation → execution starts</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box current">{ inputs: anything }</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box reject">No validation &rarr; execute</span>
     </div>
 
     <h3 class="mt-sm">Proposed</h3>
     <div class="flow">
       <span class="flow-box caller">Invoke manual trigger</span>
-      <span class="flow-arrow">→</span>
+      <span class="flow-arrow">&rarr;</span>
       <span class="flow-box system">Validate against schema</span>
-      <span class="flow-arrow">→</span>
-      <span class="flow-box result">Inject into event → execute</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box result">Inject into event &rarr; execute</span>
     </div>
     <div class="flow">
       <span class="flow-box caller">No manual trigger</span>
-      <span class="flow-arrow">→</span>
+      <span class="flow-arrow">&rarr;</span>
       <span class="flow-box reject">REJECTED (400)</span>
     </div>
     <div class="flow">
       <span class="flow-box caller">Alert connector</span>
-      <span class="flow-arrow">→</span>
+      <span class="flow-arrow">&rarr;</span>
       <span class="flow-box system">System provides alert data</span>
-      <span class="flow-arrow">→</span>
+      <span class="flow-arrow">&rarr;</span>
       <span class="flow-box result">event.alerts, event.rule</span>
-    </div>
-    <div class="flow">
-      <span class="flow-box caller">Test run</span>
-      <span class="flow-arrow">→</span>
-      <span class="flow-box result">Always allowed (isTestRun: true)</span>
     </div>
   </div>
 </div>
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Predefined Shapes + Example</h2>
+    <h2>Predefined Shapes Eliminate Boilerplate</h2>
     <div class="cols" style="align-items: start;">
       <div>
-        <h3>Predefined event shapes</h3>
-        <p class="text-sm">Instead of writing full JSON Schema, reference a known shape:</p>
+        <p class="text-sm mb-sm">Reference a known shape instead of writing JSON Schema:</p>
         <div class="code-xs">
           <pre class="language-yaml"><code>triggers:
   - type: alert
   - type: manual
     event:
-      shape: alert  # same as alert trigger</code></pre>
+      shape: alert  # same contract as alert trigger</code></pre>
         </div>
-        <table class="mt-sm text-xs">
+        <table class="mt-sm">
           <tr><th>Shape</th><th>Provides in <code>event</code></th></tr>
-          <tr><td><code>alert</code></td><td>event.alerts, event.rule, event.params</td></tr>
+          <tr><td><code>alert</code></td><td>event.alerts, event.rule</td></tr>
           <tr><td><code>case</code></td><td>event.case, event.user</td></tr>
-          <tr><td>Custom trigger ID</td><td>Trigger's registered eventSchema</td></tr>
+          <tr><td>Custom ID</td><td>Registered eventSchema</td></tr>
         </table>
-        <p class="text-sm mt-sm muted">Custom JSON Schema also supported:</p>
+        <p class="text-sm mt-sm muted">Custom schema also supported:</p>
         <div class="code-xs">
           <pre class="language-yaml"><code>triggers:
   - type: manual
     event:
       properties:
         alert_id: { type: string }
-        priority: { type: string,
-          enum: [low, medium, high, critical] }
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
       required: [alert_id, priority]</code></pre>
         </div>
       </div>
       <div>
         <h3>No normalization needed</h3>
-        <p class="text-sm mb-sm">Manual trigger data lands in <code class="hl-teal">event</code> — identical to a real alert. Steps work unchanged.</p>
+        <p class="text-sm mb-sm">Manual trigger data lands in <code class="hl-teal">event</code> &mdash; steps work unchanged.</p>
         <div class="code-sm">
           <pre class="language-yaml"><code>name: Block malicious IP
 triggers:
@@ -758,7 +719,6 @@ triggers:
       shape: alert
 
 steps:
-  # event.alerts works for both triggers
   - name: block_ip
     type: http
     with:
@@ -775,7 +735,6 @@ steps:
     with:
       message: |
         IP: {{ event.alerts[0].source.ip }}
-        Rule: {{ event.rule.name }}
         Via: {{ execution.triggeredBy }}
 </code></pre>
         </div>
@@ -786,7 +745,7 @@ steps:
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Agent Builder Integration</h2>
+    <h2>Agents Discover Contracts Automatically</h2>
     <div class="cols" style="align-items: start;">
       <div class="code-sm">
         <pre class="language-yaml"><code>name: Enrich and escalate alert
@@ -799,7 +758,6 @@ triggers:
           description: "Alert ID to investigate"
         priority:
           type: string
-          description: "Escalation priority"
           enum: [low, medium, high, critical]
       required: [alert_id, priority]
 
@@ -823,10 +781,10 @@ steps:
       <div>
         <h3>What the agent sees</h3>
         <div class="card success">
-          <p class="text-sm">The manual trigger's event schema is exposed as the <strong>tool input contract</strong>.</p>
+          <p>Event schema exposed as <strong>tool contract</strong>:</p>
           <ul>
-            <li><code>alert_id</code> — string, required</li>
-            <li><code>priority</code> — enum [low, medium, high, critical], required</li>
+            <li><code>alert_id</code> &mdash; string, required</li>
+            <li><code>priority</code> &mdash; enum, required</li>
           </ul>
           <p class="text-sm mt-sm">Data lands in <code>event</code>. No guessing.</p>
         </div>
@@ -835,63 +793,59 @@ steps:
         <table class="text-xs">
           <tr><th>Component</th><th>Change</th></tr>
           <tr><td><code>ManualTriggerSchema</code></td><td>Add <code>event</code> field</td></tr>
-          <tr><td>Run API</td><td>Check trigger; validate; inject into event</td></tr>
-          <tr><td>UI "Run" button</td><td>Only if manual trigger; render form</td></tr>
-          <tr><td>UI "Test" button</td><td>Always available; trigger-specific mock</td></tr>
-          <tr><td>Agent Builder</td><td>Expose event schema as tool contract</td></tr>
+          <tr><td>Run API</td><td>Validate; inject into event</td></tr>
+          <tr><td>UI "Run"</td><td>Show if manual trigger; render form</td></tr>
+          <tr><td>UI "Test"</td><td>Always available; mock data</td></tr>
+          <tr><td>Agent Builder</td><td>Expose schema as tool contract</td></tr>
         </table>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- CHAPTER 4: SOLUTION B — SOFT GATE -->
-<!-- ============================================================ -->
+<!-- ========== CHAPTER 4: SOLUTION B — SOFT GATE ========== -->
 <div class="slide title-slide">
   <div class="slide-inner">
     <div class="chapter-num">Chapter 4</div>
     <h1>Solution B:<br>Soft Gate</h1>
-    <p class="subtitle">Any trigger can be invoked manually. <span class="hl-teal">Datadog model.</span></p>
+    <p class="subtitle">Any trigger becomes manually invocable. <span class="hl-teal">Datadog model.</span></p>
   </div>
 </div>
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Mental Model: Invoke Any Trigger Manually</h2>
-    <p>Same principle: <strong>call a trigger, not a workflow.</strong> But any trigger is manually invocable — no separate <code>manual</code> trigger needed for existing trigger types.</p>
+    <h2>Any Trigger Becomes Manually Invocable</h2>
+    <p>Same principle: <strong>call a trigger, not a workflow.</strong> But any trigger can be invoked manually &mdash; no separate <code>manual</code> trigger needed for existing types. <code>manual</code> trigger exists only for <strong>custom event shapes</strong>.</p>
 
     <div class="cols mt-md" style="align-items: start;">
       <div>
         <h3>Layer 1: Trigger-aware manual run</h3>
-        <p class="text-sm">When clicking "Run" on any workflow page:</p>
         <ul>
-          <li>System shows list of defined triggers</li>
-          <li>User selects which trigger to invoke</li>
-          <li>System renders fields from trigger's event schema</li>
-          <li>Validates data → injects into <code>event</code></li>
+          <li>Select which trigger to invoke</li>
+          <li>Render fields from trigger's schema</li>
+          <li>Validate data before execution</li>
+          <li>Inject into <code>event</code></li>
         </ul>
         <div class="flow mt-sm">
           <span class="flow-box caller">Select alert trigger</span>
-          <span class="flow-arrow">→</span>
+          <span class="flow-arrow">&rarr;</span>
           <span class="flow-box system">Provide alert data</span>
-          <span class="flow-arrow">→</span>
+          <span class="flow-arrow">&rarr;</span>
           <span class="flow-box result">event.alerts</span>
         </div>
       </div>
       <div>
-        <h3>Layer 2: Contextual visibility gating</h3>
+        <h3>Layer 2: Contextual visibility</h3>
         <table class="text-xs">
           <tr><th>Context</th><th>Required trigger</th></tr>
-          <tr><td>Rule actions dropdown</td><td><code>alert</code></td></tr>
+          <tr><td>Rule actions</td><td><code>alert</code></td></tr>
           <tr><td>Case automation</td><td><code>cases.*</code></td></tr>
-          <tr><td>Agent Builder tools</td><td><code>manual</code></td></tr>
-          <tr><td>API invocation</td><td>Any (caller specifies)</td></tr>
-          <tr><td>Workflow page "Run"</td><td class="yes">Always available</td></tr>
+          <tr><td>Agent Builder</td><td><code>manual</code></td></tr>
+          <tr><td>Workflow page</td><td class="yes">Always available</td></tr>
         </table>
         <div class="mt-sm">
-          <h3>When do you need <code>manual</code> trigger?</h3>
-          <p class="text-sm">Only for <strong>custom event shapes</strong> not covered by other triggers.</p>
+          <h3>When is <code>manual</code> trigger needed?</h3>
+          <p class="text-sm">Only for <strong>custom shapes</strong> not covered by other triggers.</p>
         </div>
       </div>
     </div>
@@ -900,7 +854,7 @@ steps:
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Workflow Page "Run" Experience</h2>
+    <h2>System Derives Input Forms From Triggers</h2>
     <div class="cols" style="align-items: start;">
       <div>
         <div class="mockup">
@@ -920,8 +874,6 @@ steps:
           <div class="field">payment-api-prod-01</div>
           <label>Agent ID</label>
           <div class="field">abc-123-def-456</div>
-          <label>Timestamp</label>
-          <div class="field">2025-03-13T10:00:00Z</div>
           <div class="btn-row">
             <div class="btn btn-cancel">Cancel</div>
             <div class="btn btn-run">Run</div>
@@ -929,12 +881,12 @@ steps:
         </div>
       </div>
       <div>
-        <h3>What's different</h3>
+        <h3>What changes</h3>
         <ul>
-          <li>System <strong>derives the form</strong> from the alert trigger's event schema</li>
-          <li>Caller provides <strong>alert-shaped data</strong> — validated before execution</li>
-          <li>Data injected into <code class="hl-teal">event</code> — identical to a real alert</li>
-          <li>Steps reference <code>event.rule.name</code> — works for both</li>
+          <li>Derive form from trigger's event schema</li>
+          <li>Validate alert-shaped data before execution</li>
+          <li>Inject into <code class="hl-teal">event</code></li>
+          <li>Steps work unchanged for both sources</li>
         </ul>
 
         <div class="card success mt-md">
@@ -949,7 +901,7 @@ steps:
   }
 }</code></pre>
           </div>
-          <p class="text-xs muted">Caller specifies which trigger. System validates against that trigger's schema.</p>
+          <p class="text-xs muted">Caller specifies trigger. System validates.</p>
         </div>
       </div>
     </div>
@@ -958,46 +910,41 @@ steps:
 
 <div class="slide content-slide">
   <div class="slide-inner">
-    <h2>Comparison &amp; Recommendation</h2>
+    <h2>Both Models Enforce Contracts &mdash; Choose One</h2>
     <table>
-      <tr><th style="width: 30%">Aspect</th><th>Hard Gate (Solution A)</th><th>Soft Gate (Solution B)</th></tr>
-      <tr><td>Mental model</td><td>Call a trigger (manual required)</td><td>Call a trigger (any trigger invocable)</td></tr>
-      <tr><td>Manual run from page</td><td class="no">Blocked without manual trigger</td><td class="yes">Always available, trigger-aware</td></tr>
+      <tr><th style="width:34%">Aspect</th><th>Hard gate (A)</th><th>Soft gate (B)</th></tr>
+      <tr><td>Manual run from page</td><td class="no">Needs manual trigger</td><td class="yes">Invoke any trigger</td></tr>
       <tr><td>API invocation</td><td>Needs manual trigger</td><td>Caller specifies trigger</td></tr>
-      <tr><td>Agent Builder</td><td>Needs manual trigger</td><td>Needs manual trigger (custom shapes)</td></tr>
+      <tr><td>Safety level</td><td class="yes">Highest</td><td class="yes">High</td></tr>
       <tr><td>User friction</td><td class="partial">Higher</td><td class="yes">Lower</td></tr>
-      <tr><td>Safety</td><td class="yes">Highest</td><td class="yes">High</td></tr>
       <tr><td>Industry precedent</td><td>GitHub Actions, n8n</td><td>Datadog</td></tr>
     </table>
 
-    <div class="cols mt-md gap-sm">
+    <div class="cols mt-md">
       <div class="card info">
-        <h3 style="font-size: 15px;">Both share</h3>
+        <h3 style="font-size: 15px;">Shared by both</h3>
         <ul>
-          <li>"Call a trigger, not a workflow"</li>
-          <li>All triggers produce events</li>
+          <li>Invoke triggers, not workflows</li>
+          <li>All data lands in <code>event</code></li>
           <li>Predefined shapes (<code>shape: alert</code>)</li>
-          <li>Input validation before execution</li>
-          <li>No normalization boilerplate</li>
+          <li>Validate before execution</li>
         </ul>
       </div>
       <div class="card success">
         <h3 style="font-size: 15px;">Recommendation</h3>
-        <p class="text-sm">Either model is <strong>vastly better</strong> than the current state. Both enforce trigger contracts and validate data before execution.</p>
-        <p class="text-sm mt-sm">The current state — <span class="hl-pink">zero enforcement</span> — is not defensible for a security automation product.</p>
+        <p class="text-sm">Either model is <strong>vastly better</strong> than zero enforcement. Both validate data and expose contracts to callers.</p>
+        <p class="text-sm mt-sm">The current state is <span class="hl-pink">not defensible</span> for a security automation product.</p>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- CLOSING -->
-<!-- ============================================================ -->
+<!-- ========== CLOSING ========== -->
 <div class="slide title-slide">
   <div class="slide-inner">
     <div class="chapter-num">Summary</div>
     <h1>Let's discuss.</h1>
-    <p class="subtitle" style="max-width: 700px;">Triggers should be enforced contracts — defining both the invocation channel and the data shape. The industry agrees. We need to pick a model and implement it.</p>
+    <p class="subtitle" style="max-width: 700px;">Triggers should be enforced contracts &mdash; defining both the invocation channel and the data shape. The industry agrees. We need to pick a model and implement it.</p>
   </div>
 </div>
 
@@ -1030,7 +977,6 @@ steps:
     if (e.key === 'Home') { e.preventDefault(); go(0); }
     if (e.key === 'End') { e.preventDefault(); go(total - 1); }
   });
-
 
   go(0);
   Prism.highlightAll();
