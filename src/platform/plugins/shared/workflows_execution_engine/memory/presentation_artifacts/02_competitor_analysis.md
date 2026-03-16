@@ -121,6 +121,52 @@ Tines uses a different architecture: "stories" (workflows) are composed of "acti
 
 ---
 
+## Multiple Triggers of the Same Type
+
+An important design question: can a workflow have multiple triggers of the same type (e.g., two alert triggers with different rule filters)?
+
+### GitHub Actions
+
+**No duplicates of the same event type.** The `on:` block is a map -- each event type (`push`, `workflow_dispatch`, `schedule`) appears at most once. The exception is `schedule`, which supports multiple cron rules within a single trigger:
+
+```yaml
+on:
+  schedule:
+    - cron: '0 6 * * *'
+    - cron: '0 18 * * *'   # multiple cron rules within one schedule trigger
+  workflow_dispatch:        # only one workflow_dispatch allowed
+    inputs: ...
+```
+
+Multiple different event types are supported (e.g., `push` + `workflow_dispatch` + `schedule`).
+
+### n8n
+
+**One trigger node per type.** Only one Manual Trigger node is allowed per workflow (error: "Only one 'Manual Trigger' node is allowed in a workflow"). The Schedule Trigger supports **multiple trigger rules** within a single node (similar to GitHub's multiple cron rules). Multiple different trigger types are supported as separate start points.
+
+### Datadog
+
+**Unlimited duplicates of any type.** A workflow can have multiple Monitor triggers (each tied to a different monitor), multiple Security triggers, multiple API triggers, etc. Each is an independent entry point. The docs say: *"A workflow can have multiple triggers. This allows you to trigger a workflow from a variety of different sources."*
+
+### Tines
+
+**Unlimited duplicates.** Stories can have multiple Webhook actions, each with its own URL, secret, and match rules. No restriction on duplicate types because actions are just nodes in a graph.
+
+### Summary
+
+| Platform | Multiple triggers of same type? | Multiple different trigger types? |
+|---|---|---|
+| GitHub Actions | No (except multiple cron rules within `schedule`) | Yes |
+| n8n | No (one trigger node per type) | Yes |
+| Datadog | Yes -- unlimited duplicates | Yes |
+| Tines | Yes -- multiple entry actions | Yes |
+
+### Implications for Elastic
+
+The current Elastic model allows multiple triggers of any type in the `triggers[]` array (e.g., two alert triggers with different `rule_name` filters). This aligns with the **Datadog model** (most permissive). If adopting the hard-gate model (GitHub Actions/n8n), the design would likely constrain to one trigger per type, with multiple configurations handled within a single trigger.
+
+---
+
 ## Comparison: Elastic vs Competitors
 
 | Capability | Elastic (current) | GitHub Actions | n8n | Datadog | Tines |
@@ -131,3 +177,4 @@ Tines uses a different architecture: "stories" (workflows) are composed of "acti
 | Input validation before execution | No | Yes | Yes | Yes | Yes -- match rules |
 | API invocation requires explicit opt-in | No | Yes (via `workflow_dispatch`) | Yes (via Webhook node) | Yes -- needs API trigger | Yes -- Webhook action |
 | Trigger-aware manual run | No -- arbitrary `Record<string, any>` | Yes | Yes | Yes | N/A |
+| Multiple triggers of same type | Yes | No (except schedule cron rules) | No | Yes | Yes |
