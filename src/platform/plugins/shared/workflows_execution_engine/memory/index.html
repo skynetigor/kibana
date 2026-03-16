@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow Trigger Semantics</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+<style>
+:root {
+  --navy: #1B1B3A;
+  --dark: #0B0B2B;
+  --teal: #00BFB3;
+  --pink: #F04E98;
+  --blue: #0077CC;
+  --yellow: #FEC514;
+  --green: #00B999;
+  --gray: #98A2B3;
+  --text: #E8ECF2;
+  --muted: #8B95A5;
+  --max-w: 1100px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; background:var(--dark); color:var(--text); overflow:hidden; height:100vh; width:100vw; }
+.deck { position:relative; width:100%; height:100%; }
+.slide { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:60px 80px; opacity:0; pointer-events:none; transition:opacity .4s ease; }
+.slide.active { opacity:1; pointer-events:auto; }
+.slide-inner { max-width:var(--max-w); width:100%; }
+
+/* Title slides */
+.slide.title-slide { background:linear-gradient(135deg,var(--dark) 0%,var(--navy) 100%); }
+.slide.title-slide .chapter-label { font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:3px; color:var(--teal); margin-bottom:16px; }
+.slide.title-slide h1 { font-size:54px; font-weight:800; line-height:1.1; margin-bottom:20px; background:linear-gradient(135deg,#fff 0%,var(--teal) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.slide.title-slide .subtitle { font-size:20px; color:var(--muted); font-weight:400; max-width:650px; line-height:1.5; }
+
+/* Content slides */
+.slide.content-slide { background:var(--dark); align-items:flex-start; justify-content:flex-start; padding-top:56px; }
+.slide.content-slide h2 { font-size:32px; font-weight:700; margin-bottom:30px; color:#fff; line-height:1.2; }
+.slide.content-slide h3 { font-size:18px; font-weight:600; margin-bottom:12px; color:var(--teal); }
+.slide.content-slide p { font-size:17px; line-height:1.6; margin-bottom:14px; }
+
+/* Layout */
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:48px; width:100%; }
+
+/* Cards */
+.card { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:22px; margin-top:14px; }
+.card h3 { margin-bottom:8px; }
+.card.success { border-color:rgba(0,191,179,.3); background:rgba(0,191,179,.06); }
+.card.info { border-color:rgba(0,119,204,.3); background:rgba(0,119,204,.06); }
+.card.warn { border-color:rgba(254,197,20,.3); background:rgba(254,197,20,.06); }
+
+/* Badges */
+.badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+.badge.green { background:rgba(0,191,179,.15); color:var(--teal); }
+.badge.blue { background:rgba(0,119,204,.15); color:var(--blue); }
+
+/* Lists */
+ul { list-style:none; padding:0; }
+ul li { font-size:16px; line-height:1.55; padding:5px 0 5px 22px; position:relative; }
+ul li::before { content:''; position:absolute; left:0; top:13px; width:8px; height:8px; border-radius:50%; background:var(--teal); }
+
+/* Agenda list */
+ul.agenda li { font-size:22px; padding:12px 0 12px 28px; }
+ul.agenda li::before { top:20px; width:10px; height:10px; }
+
+/* Tables */
+table { width:100%; border-collapse:collapse; font-size:15px; margin-top:10px; }
+th { text-align:left; padding:11px 16px; background:rgba(255,255,255,.06); color:var(--teal); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid rgba(255,255,255,.1); }
+td { padding:10px 16px; border-bottom:1px solid rgba(255,255,255,.05); }
+tr:last-child td { border-bottom:none; }
+td.good { color:var(--teal); font-weight:500; }
+
+/* Code */
+pre[class*="language-"] { border-radius:10px!important; font-size:13px!important; line-height:1.45!important; margin:10px 0!important; padding:16px!important; background:#1a1a2e!important; border:1px solid rgba(255,255,255,.08)!important; overflow:visible!important; }
+code[class*="language-"] { font-family:'JetBrains Mono','Fira Code','Consolas',monospace!important; font-size:13px!important; }
+
+/* Blockquotes */
+blockquote { border-left:3px solid var(--teal); padding:10px 16px; margin:10px 0; background:rgba(0,191,179,.06); border-radius:0 8px 8px 0; font-style:italic; font-size:15px; color:var(--muted); }
+
+/* Logos */
+.logo-row { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.logo-row .name { font-size:18px; font-weight:700; color:#fff; }
+
+/* Flows */
+.flow { display:flex; align-items:center; gap:10px; font-size:14px; padding:8px 0; flex-wrap:wrap; }
+.flow-box { padding:9px 15px; border-radius:8px; font-weight:500; font-size:14px; white-space:nowrap; }
+.flow-box.caller { background:rgba(0,119,204,.15); color:var(--blue); border:1px solid rgba(0,119,204,.3); }
+.flow-box.system { background:rgba(0,191,179,.15); color:var(--teal); border:1px solid rgba(0,191,179,.3); }
+.flow-box.result { background:rgba(0,185,153,.15); color:var(--green); border:1px solid rgba(0,185,153,.3); }
+.flow-box.current { background:rgba(240,78,152,.1); color:var(--pink); border:1px dashed rgba(240,78,152,.4); }
+.flow-arrow { color:var(--gray); font-size:20px; }
+
+/* Progress */
+.progress { position:fixed; bottom:0; left:0; height:3px; background:var(--teal); transition:width .3s ease; z-index:100; }
+.counter { position:fixed; bottom:16px; right:24px; font-size:13px; color:var(--gray); z-index:100; font-weight:500; }
+
+/* Logo watermark */
+.logo { position:fixed; top:20px; left:24px; z-index:100; display:flex; align-items:center; gap:8px; }
+.logo span { font-weight:700; font-size:15px; color:var(--muted); letter-spacing:-.3px; }
+
+/* Utilities */
+.hl-teal { color:var(--teal); }
+.hl-pink { color:var(--pink); }
+strong { color:#fff; font-weight:600; }
+.text-sm { font-size:14px; }
+.text-xs { font-size:12px; }
+.mt-sm { margin-top:14px; }
+.mt-md { margin-top:24px; }
+.mb-sm { margin-bottom:14px; }
+.muted { color:var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="logo">
+  <svg width="24" height="24" viewBox="0 0 64 64" fill="none"><path d="M36.3 27.7h21.4c1 0 1.7-.8 1.7-1.7 0-7-3-13.5-8.3-18l-17.5 17.1c-.5.5-.5 1.3 0 1.8l2.2 2.2c.2-.8.5-1.4.5-1.4z" fill="#FEC514"/><path d="M31.4 32.6L13.9 50.1c5 4.7 11.5 7.4 18.4 7.4.9 0 1.7-.8 1.7-1.7V34.3c0-.9-.8-1.7-1.7-1.7h-.9z" fill="#00BFB3"/><path d="M27.7 27.7H6.3c-1 0-1.7.8-1.7 1.7 0 7 3 13.5 8.3 18l17.5-17.1c.5-.5.5-1.3 0-1.8l-2.2-2.2c-.2.8-.5 1.4-.5 1.4z" fill="#F04E98"/><path d="M32.6 32.6l17.5 17.5c5-4.7 7.4-11.5 7.4-18.4 0-.9-.8-1.7-1.7-1.7H34.3c-.9 0-1.7.8-1.7 1.7v.9z" fill="#0077CC"/><path d="M32.3 6.5c-.9 0-1.7.8-1.7 1.7v21.5c0 .9.8 1.7 1.7 1.7h.9L50.7 14C45.7 9.2 39.3 6.5 32.3 6.5z" fill="#93C90E"/></svg>
+  <span>One Workflow</span>
+</div>
+
+<div class="deck" id="deck">
+
+<!-- ===== 1. TITLE ===== -->
+<div class="slide title-slide active">
+  <div class="slide-inner">
+    <div class="chapter-label">RFC Presentation</div>
+    <h1>Workflow Trigger<br>Semantics</h1>
+    <p class="subtitle">How we can make triggers work the way users expect.</p>
+    <p class="subtitle mt-sm text-sm" style="color:var(--gray)">Ihor Panasiuk &middot; One Workflow Team &middot; March 2025</p>
+  </div>
+</div>
+
+<!-- ===== 2. AGENDA ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner" style="display:flex;flex-direction:column;justify-content:center;min-height:calc(100vh - 120px)">
+    <h2>Agenda</h2>
+    <ul class="agenda">
+      <li><strong>Where We Are Today</strong> &mdash; opportunities to strengthen triggers</li>
+      <li><strong>What the Industry Does</strong> &mdash; patterns we can learn from</li>
+      <li><strong>How We Can Improve</strong> &mdash; 8 improvements, hybrid gate model</li>
+      <li><strong>Discussion</strong> &mdash; align on priorities and next steps</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ===== 3. CHAPTER: WHERE WE ARE TODAY ===== -->
+<div class="slide title-slide">
+  <div class="slide-inner">
+    <div class="chapter-label">Chapter 1</div>
+    <h1>Where We Are<br>Today</h1>
+    <p class="subtitle">Opportunities to strengthen trigger enforcement.</p>
+  </div>
+</div>
+
+<!-- ===== 4. TRIGGER VALIDATION GAP ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Trigger Event Data Bypasses Validation</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <h3>Works today</h3>
+        <div class="card success">
+          <p class="text-sm">Workflow-level <code>inputs</code> are validated at runtime.</p>
+          <pre class="language-yaml"><code>inputs:
+  - name: message
+    type: string
+    required: true</code></pre>
+        </div>
+      </div>
+      <div>
+        <h3>Opportunity</h3>
+        <div class="card warn">
+          <p class="text-sm">Trigger event data (<code>event.alerts</code>, <code>event.case</code>) is not validated on manual calls.</p>
+          <pre class="language-yaml"><code>triggers:
+  - type: alert
+    with:
+      rule_name: "OOM in Payment API"
+# No inputs &mdash; accepts anything via API</code></pre>
+        </div>
+      </div>
+    </div>
+    <div class="mt-md">
+      <div class="flow">
+        <span class="flow-box current">POST /run</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box current">{ inputs: anything }</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box current">No trigger check &rarr; executes</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 5. PRODUCTION GUARDRAILS ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Production Workflows Need Stronger Guardrails</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <pre class="language-yaml"><code>name: Restart Payment API on OOM
+triggers:
+  - type: alert
+    with:
+      rule_name: "OOM in Payment API"
+
+consts:
+  k8s_deployment: payment-api
+
+steps:
+  - name: restart_service
+    type: http
+    with:
+      url: "https://k8s-api.internal/..."
+      method: PATCH
+      # ... restarts the deployment</code></pre>
+      </div>
+      <div>
+        <h3>What can happen</h3>
+        <ul>
+          <li>Trigger filter is not enforced</li>
+          <li>Accepts empty <code>{ inputs: {} }</code></li>
+          <li>Restarts production unconditionally</li>
+          <li>Posts blank Slack notification</li>
+        </ul>
+        <div class="card info mt-sm">
+          <h3 style="font-size:15px">Agent scenario</h3>
+          <p class="text-sm">AI agent misreads "check health" as "restart." Sends empty inputs. Production restarts during peak traffic.</p>
+        </div>
+        <p class="text-sm mt-sm muted">Trigger declaration should be the guardrail &mdash; authors shouldn't need defensive <code>if</code> conditions in every step.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 6. AGENT CONTRACTS ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Agent Integration Needs Typed Contracts</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <p>As Agent Builder grows, agents select workflows as tools. Today, the tool contract is:</p>
+        <pre class="language-yaml"><code># What agents see today
+tool_input: Record&lt;string, any&gt;
+# No schema. No guidance. No validation.</code></pre>
+        <p class="mt-sm">The agent has no way to know this workflow expects alert data &mdash; not arbitrary inputs.</p>
+      </div>
+      <div>
+        <h3>The opportunity</h3>
+        <ul>
+          <li>Expose trigger schemas as tool contracts</li>
+          <li>Agents discover required fields automatically</li>
+          <li>Validate data before execution starts</li>
+          <li>Only relevant workflows appear as tools</li>
+        </ul>
+        <div class="card success mt-sm">
+          <p class="text-sm"><strong>Every workflow with a typed <code>manual</code> trigger</strong> becomes a safe, discoverable agent tool.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 7. OPPORTUNITIES SUMMARY ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Opportunities Summary</h2>
+    <table>
+      <tr><th>Area</th><th>Today</th><th>Opportunity</th></tr>
+      <tr><td>Trigger enforcement</td><td>Triggers are declarative only</td><td class="good">Validate trigger contracts at runtime</td></tr>
+      <tr><td>Manual invocation</td><td>Accepts arbitrary data</td><td class="good">Require callers to invoke a specific trigger</td></tr>
+      <tr><td>Agent integration</td><td>No discoverable schema</td><td class="good">Expose trigger schemas as tool contracts</td></tr>
+      <tr><td>Execution context</td><td>Flat <code>event</code>, string-based trigger check</td><td class="good">Typed <code>triggers.*</code> namespace with autocomplete</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ===== 8. CHAPTER: WHAT THE INDUSTRY DOES ===== -->
+<div class="slide title-slide">
+  <div class="slide-inner">
+    <div class="chapter-label">Chapter 2</div>
+    <h1>What the<br>Industry Does</h1>
+    <p class="subtitle">Patterns we can learn from.</p>
+  </div>
+</div>
+
+<!-- ===== 9. GITHUB ACTIONS + N8N ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>GitHub Actions and n8n Enforce Trigger Contracts</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <div class="logo-row">
+          <svg width="26" height="26" viewBox="0 0 98 96" fill="#fff"><path fill-rule="evenodd" clip-rule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6C15.901 39.06 4.306 35.5 4.306 25.7c0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/></svg>
+          <span class="name">GitHub Actions</span>
+        </div>
+        <blockquote>"To enable a workflow to be triggered manually, you need to configure the <code>workflow_dispatch</code> event."</blockquote>
+        <pre class="language-yaml"><code>on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        type: choice
+        options: [info, warning, debug]</code></pre>
+      </div>
+      <div>
+        <div class="logo-row">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#EA4B71"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 4.8a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8zm-4.8 9.6a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8zm9.6 0a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8z"/></svg>
+          <span class="name">n8n</span>
+        </div>
+        <blockquote>"Workflows always need a trigger, or start point."</blockquote>
+        <ul>
+          <li>Requires Manual Trigger node</li>
+          <li>Offers Form Trigger with typed fields</li>
+          <li>Separates production vs manual runs</li>
+        </ul>
+        <div class="mt-md">
+          <span class="badge green">Model</span>
+          <span class="text-sm"> No trigger = no invocation, period.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 10. DATADOG + TINES ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Datadog and Tines Use Trigger-Aware Invocation</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <div class="logo-row">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#632CA6"><path d="M12.01 0C5.39 0 0 5.39 0 12.01S5.39 24 12.01 24 24 18.63 24 12.01 18.63 0 12.01 0zM8.47 15.53l-2.95 2.95a1.49 1.49 0 0 1-2.12-2.12l2.95-2.95a1.49 1.49 0 0 1 2.12 2.12zm0-6.94L5.52 5.64A1.49 1.49 0 0 1 7.64 3.52l2.95 2.95a1.49 1.49 0 0 1-2.12 2.12zm7.06 6.94a1.49 1.49 0 0 1-2.12 0l-2.95-2.95a1.49 1.49 0 0 1 2.12-2.12l2.95 2.95a1.49 1.49 0 0 1 0 2.12zm2.95-4.82l-2.95-2.95a1.49 1.49 0 0 1 2.12-2.12l2.95 2.95a1.49 1.49 0 0 1-2.12 2.12z"/></svg>
+          <span class="name">Datadog</span>
+          <span class="badge blue" style="margin-left:8px">Closest competitor</span>
+        </div>
+        <ul>
+          <li>Manual runs are <span class="hl-teal">trigger-aware</span></li>
+          <li>Presents trigger variables as input form</li>
+          <li>Gates visibility across the product</li>
+        </ul>
+        <table class="text-xs mt-sm">
+          <tr><th>Context</th><th>Gate</th></tr>
+          <tr><td>Monitor notification</td><td>Needs Monitor trigger</td></tr>
+          <tr><td>Security panel</td><td>Needs Security trigger</td></tr>
+          <tr><td>Via API</td><td>Needs API trigger</td></tr>
+          <tr><td>Workflow page</td><td class="good">Always available</td></tr>
+        </table>
+      </div>
+      <div>
+        <div class="logo-row">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#8B5CF6"><rect width="24" height="24" rx="6" fill="#8B5CF6"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="name">Tines</span>
+        </div>
+        <ul>
+          <li>Entry action defines invocation channel</li>
+          <li>Validates data with <code>match_rules</code></li>
+          <li>Controls access per webhook</li>
+        </ul>
+        <div class="mt-md">
+          <span class="badge green">Model</span>
+          <span class="text-sm"> Entry action = channel + data contract.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 11. COMMON PATTERNS ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Six Patterns We Can Adopt</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <ul>
+          <li><strong>Triggers are contracts</strong> &mdash; enforced at runtime, not decorative</li>
+          <li><strong>Invoke a trigger, not a workflow</strong> &mdash; callers interact with typed entry points</li>
+          <li><strong>Manual invocation needs a mechanism</strong> &mdash; explicit opt-in or trigger-aware form</li>
+        </ul>
+      </div>
+      <div>
+        <ul>
+          <li><strong>Consistent event path</strong> &mdash; all triggers produce events the same way</li>
+          <li><strong>Triggers gate visibility</strong> &mdash; workflows surface where triggers match</li>
+          <li><strong>Trigger type determines shape</strong> &mdash; system derives forms and autocomplete</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card info mt-md">
+      <p class="text-sm">These are not product-specific choices &mdash; they are <strong>industry consensus</strong> across GitHub Actions, n8n, Datadog, and Tines. We can adopt them incrementally.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 12. CHAPTER: HOW WE CAN IMPROVE ===== -->
+<div class="slide title-slide">
+  <div class="slide-inner">
+    <div class="chapter-label">Chapter 3</div>
+    <h1>How We Can<br>Improve</h1>
+    <p class="subtitle">8 improvements following industry patterns.</p>
+  </div>
+</div>
+
+<!-- ===== 13. NEW MENTAL MODEL ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>New Mental Model: Call a Trigger, Not a Workflow</h2>
+    <p>Callers specify <strong>which trigger</strong> to invoke and provide data matching its schema. All data lands in <code class="hl-teal">event</code>.</p>
+
+    <h3 class="mt-md" style="color:var(--muted)">Today</h3>
+    <div class="flow">
+      <span class="flow-box caller">Any caller</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box current">{ inputs: anything }</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box current">No validation &rarr; executes</span>
+    </div>
+
+    <h3 class="mt-sm">Proposed</h3>
+    <div class="flow">
+      <span class="flow-box caller">Invoke trigger</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box system">Validate against schema</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box result">Inject into event &rarr; execute</span>
+    </div>
+    <div class="flow">
+      <span class="flow-box caller">No matching trigger</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-box current">Rejected (400)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 14. HYBRID GATE ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Hybrid Production/Test Gate</h2>
+    <table>
+      <tr><th>Scenario</th><th>Allowed?</th><th>Context</th></tr>
+      <tr><td><strong>Production</strong> + manual trigger</td><td class="good">Yes &mdash; validated</td><td><code>isTestRun: false</code></td></tr>
+      <tr><td><strong>Production</strong> + alert/scheduled/custom</td><td>System channels only</td><td>N/A</td></tr>
+      <tr><td><strong>Test</strong> + any trigger</td><td class="good">Yes &mdash; user selects trigger</td><td><code>isTestRun: true</code></td></tr>
+    </table>
+    <div class="cols mt-md" style="align-items:start">
+      <div>
+        <h3>Production runs (hard gate)</h3>
+        <ul>
+          <li>Only <code>manual</code> trigger invocable</li>
+          <li>Prevents accidental production calls</li>
+          <li>Agents need explicit <code>manual</code> trigger</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Test runs (soft gate)</h3>
+        <ul>
+          <li>Any trigger invocable as test run</li>
+          <li>Execution flagged <code>isTestRun: true</code></li>
+          <li>Existing test/prod branching works</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 15. EDITOR UX ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Editor UX for Test Runs</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <h3>"Test" button (top-level)</h3>
+        <ul>
+          <li>Opens trigger selector modal</li>
+          <li>Renders input form from trigger schema</li>
+          <li>Submitting creates <code>isTestRun: true</code></li>
+        </ul>
+        <h3 class="mt-md">Per-trigger "play" button</h3>
+        <ul>
+          <li>Play icon next to each trigger in YAML</li>
+          <li>Skips trigger selection step</li>
+          <li>Like existing per-step run feature</li>
+        </ul>
+      </div>
+      <div>
+        <h3>API behavior</h3>
+        <pre class="language-yaml"><code># Production run (manual trigger only)
+POST /api/workflows/{id}/run
+{ "trigger": "manual",
+  "event": { "alert_id": "abc" } }
+
+# Test run (any trigger)
+POST /api/workflows/{id}/test
+{ "trigger": "alert",
+  "event": { "alerts": [...] } }</code></pre>
+        <p class="text-sm mt-sm muted">Both validate against the specified trigger's schema before execution.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 16. UNIFIED EVENT FLOW ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>All Triggers Produce Events Consistently</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <p>All invocations &mdash; automatic or manual &mdash; produce <code class="hl-teal">event</code> in the execution context. No normalization boilerplate needed.</p>
+        <pre class="language-yaml"><code>name: Block malicious IP
+triggers:
+  - type: alert
+  - type: manual
+    event:
+      $ref: alert
+
+steps:
+  # Works for both triggers
+  - name: block_ip
+    type: http
+    with:
+      url: "https://firewall.internal/..."
+      body:
+        source: "{{ event.alerts[0].ip }}"
+        comment: "{{ event.rule.name }}"</code></pre>
+      </div>
+      <div>
+        <h3>How data flows</h3>
+        <ul>
+          <li><strong>Alert fires:</strong> system injects into <code>event</code></li>
+          <li><strong>Manual call:</strong> caller data validated, injected into <code>event</code></li>
+          <li><strong>Test run:</strong> same flow, flagged <code>isTestRun</code></li>
+        </ul>
+        <p class="mt-sm text-sm">Steps reference <code>event.alerts</code> regardless of source. <code>execution.triggeredBy</code> distinguishes the channel.</p>
+        <div class="card success mt-sm">
+          <p class="text-sm"><strong><code>$ref: alert</code></strong> on the manual trigger inherits the alert event schema &mdash; no need to rewrite it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 17. TRIGGERS NAMESPACE ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>New <code>triggers.*</code> Namespace in Execution Context</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <pre class="language-yaml"><code>triggers:
+  - type: alert
+    with:
+      rule_name: "OOM in Payment API"
+  - type: manual
+    event:
+      $ref: alert
+
+steps:
+  - name: log
+    if: ${{ triggers.alert }}
+    type: console
+    with:
+      message: |
+        Rule: {{ triggers.alert.event.rule.name }}
+        Config: {{ triggers.alert.with.rule_name }}</code></pre>
+      </div>
+      <div>
+        <h3>How it works</h3>
+        <ul>
+          <li><code>triggers.alert</code> &mdash; truthy when alert fired</li>
+          <li><code>triggers.alert.event.*</code> &mdash; runtime data</li>
+          <li><code>triggers.alert.with.*</code> &mdash; static YAML config</li>
+          <li><code>triggers.manual</code> &mdash; null if not active</li>
+        </ul>
+        <h3 class="mt-md">Editor autocomplete</h3>
+        <ul>
+          <li><code>triggers.alert.event.</code> &rarr; alerts, rule, params</li>
+          <li><code>triggers.alert.with.</code> &rarr; rule_name, rule_id</li>
+          <li>Shape resolved statically from YAML</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 18. REFERENCEABLE SCHEMAS ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Referenceable Schemas for Manual Triggers</h2>
+    <div class="cols" style="align-items:start">
+      <div>
+        <h3>Reference a predefined schema</h3>
+        <pre class="language-yaml"><code>triggers:
+  - type: manual
+    event:
+      $ref: alert  # inherits AlertEventPropsSchema</code></pre>
+        <h3 class="mt-sm">Extend with extra fields</h3>
+        <pre class="language-yaml"><code>triggers:
+  - type: manual
+    event:
+      allOf:
+        - $ref: alert
+        - properties:
+            priority:
+              type: string
+              enum: [low, medium, high, critical]
+          required: [priority]</code></pre>
+      </div>
+      <div>
+        <h3>Available references</h3>
+        <table class="text-xs">
+          <tr><th>Reference</th><th>Provides</th></tr>
+          <tr><td><code>alert</code></td><td>event.alerts, event.rule</td></tr>
+          <tr><td><code>case</code></td><td>event.case, event.user</td></tr>
+          <tr><td>Custom trigger ID</td><td>Registered eventSchema</td></tr>
+        </table>
+        <div class="card info mt-sm">
+          <h3 style="font-size:14px">Future: schema registry</h3>
+          <p class="text-xs">User-defined schemas referenced via <code>$ref: my-team/enriched-alert</code>. Already requested by the community. The <code>$ref</code> pattern is forward-compatible.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 19. VISIBILITY GATING ===== -->
+<div class="slide content-slide">
+  <div class="slide-inner">
+    <h2>Triggers Gate Where Workflows Surface</h2>
+    <table>
+      <tr><th>Product context</th><th>Required trigger</th><th>Effect</th></tr>
+      <tr><td>Rule actions dropdown</td><td><code>alert</code></td><td>Only alert workflows appear</td></tr>
+      <tr><td>Case automation</td><td><code>cases.*</code></td><td>Only matching workflows appear</td></tr>
+      <tr><td>Agent Builder tools</td><td><code>manual</code></td><td>Only manual-trigger workflows appear</td></tr>
+      <tr><td>Scheduled execution</td><td><code>scheduled</code></td><td>Task Manager registers these only</td></tr>
+      <tr><td>Editor "Run" (production)</td><td><code>manual</code></td><td>Only if manual trigger exists</td></tr>
+      <tr><td>Editor "Test"</td><td>Any trigger</td><td class="good">Always available</td></tr>
+    </table>
+    <p class="text-sm mt-md muted">Right workflows in the right contexts. No more alert-only workflows appearing in Agent Builder, or case workflows in rule actions.</p>
+  </div>
+</div>
+
+<!-- ===== 20. DISCUSSION ===== -->
+<div class="slide title-slide">
+  <div class="slide-inner">
+    <div class="chapter-label">Next Steps</div>
+    <h1>Let's discuss.</h1>
+    <p class="subtitle" style="max-width:700px">We have a clear plan to make triggers work the way users expect. Let's align on priorities and next steps.</p>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<div class="progress" id="progress"></div>
+<div class="counter" id="counter"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+<script>
+(function(){
+  const slides=document.querySelectorAll('.slide'), total=slides.length;
+  let current=0;
+  function go(n){ if(n<0||n>=total)return; slides[current].classList.remove('active'); current=n; slides[current].classList.add('active'); document.getElementById('progress').style.width=((current/(total-1))*100)+'%'; document.getElementById('counter').textContent=(current+1)+' / '+total; }
+  document.addEventListener('keydown',function(e){ if(e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();go(current+1);} if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(current-1);} if(e.key==='Home'){e.preventDefault();go(0);} if(e.key==='End'){e.preventDefault();go(total-1);} });
+  go(0); Prism.highlightAll();
+})();
+</script>
+</body>
+</html>
