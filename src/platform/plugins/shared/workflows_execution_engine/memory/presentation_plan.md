@@ -271,11 +271,14 @@ All content derived from:
   - Today: adding a new trigger type requires rethinking how steps access data — no consistent pattern
   - Today: editor suggestions for `event` field are a union of all trigger schemas — hard to implement and confusing to use when a workflow has multiple triggers
 - **Solution:** `triggers.*` namespace in execution context
-  - `triggers.alert.event.alerts` for runtime data
-  - `triggers.alert.with.rule_name` for static YAML config
-  - Truthy/falsy: `if: ${{ triggers.alert }}` — branch based on which trigger fired
+  - `triggers.<type>` is always an object reflecting the YAML configuration — present for every declared trigger, not only the one that fired
+  - `triggers.<type>.with.*` — static YAML config (same keys as in YAML)
+  - `triggers.<type>.event` — truthy **only** for the invoked trigger; contains the runtime event data. Use `if: ${{ triggers.alert.event }}` to branch.
+  - Intuitive: the access path mirrors the YAML structure — `triggers.alert.with.rule_name` maps directly to the `with:` block under the `alert` trigger in YAML. Zero learning curve.
+  - **Backward compatibility:** the root-level `event` in the execution context stays as-is (untyped, schema on the user to know which fields to access). The new `triggers.<type>.event` co-exists alongside it with a known, typed schema.
   - YAML example with conditional branching
-- **Scalability emphasis:** The `triggers.*` namespace makes adding new trigger types (case, scheduled, custom, etc.) trivial — each new trigger automatically gets its own `triggers.<type>.event.*` / `triggers.<type>.with.*` subtree, conditional branching via `if: ${{ triggers.<type> }}`, and editor autocomplete. No refactoring of existing steps or event paths needed — the namespace pattern scales to any number of triggers without touching existing code.
+- **Scalability emphasis:** The `triggers.*` namespace makes adding new trigger types (case, scheduled, custom, etc.) trivial — each new trigger automatically gets its own `triggers.<type>.with.*` subtree and `triggers.<type>.event` for runtime data. `triggers.<type>.event` is unified across all triggers: every trigger populates it, so steps can always rely on the same access pattern regardless of trigger type. Conditional branching via `if: ${{ triggers.<type>.event }}`, editor autocomplete. No refactoring of existing steps or event paths needed — the namespace pattern scales to any number of triggers without touching existing code.
+- **Industry similarity (right column, below scalability):** Datadog icon + "Similar pattern" badge. Datadog Workflow Automation uses `Source.<trigger_type>` variables — the trigger source determines which properties are available at runtime. Link: https://docs.datadoghq.com/actions/workflows/variables/#source-object-variables
 
 **Slide: From Manual Wiring to Automatic Routing**
 - Source: 04, Improvement 5
