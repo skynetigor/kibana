@@ -2,10 +2,21 @@ import React from 'react';
 import {
   ContentSlide,
   SlideTable,
+  Card,
 } from '../components';
 
 export const Visibility: React.FC = () => (
-  <ContentSlide title="Triggers Gate Where Workflows Surface">
+  <ContentSlide title="From Manual Wiring to Automatic Routing">
+    <Card variant="success" className="mb-5">
+      <p className="text-slide-body text-slide-secondary">
+        With fully <strong>autonomous</strong> triggers, manual wiring (e.g.,
+        connecting workflows to rules from the Rules UI) can likely be{' '}
+        <strong>omitted entirely</strong> — the system reads the trigger config
+        and does the routing. If manual wiring is still needed for some cases,
+        visibility gating ensures only workflows with the right trigger type
+        appear:
+      </p>
+    </Card>
     <SlideTable
       headers={['Context', 'Trigger filter', 'Result']}
       rows={[
@@ -21,9 +32,5 @@ export const Visibility: React.FC = () => (
         ['Editor "Test"', 'Any trigger', 'Always available'],
       ]}
     />
-    <p className="text-slide-sm text-slide-muted mt-4">
-      Right workflows in right contexts — no alert workflows in Case automation,
-      no manual-only workflows in rule actions.
-    </p>
   </ContentSlide>
 );

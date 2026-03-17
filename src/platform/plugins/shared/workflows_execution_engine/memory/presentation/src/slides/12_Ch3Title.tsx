@@ -5,6 +5,6 @@ export const Ch3Title: React.FC = () => (
   <TitleSlide
     chapterLabel="Chapter 3"
     title="How We Can Improve"
-    subtitle="8 improvements following industry patterns."
+    subtitle="Improvements following industry patterns."
   />
 );

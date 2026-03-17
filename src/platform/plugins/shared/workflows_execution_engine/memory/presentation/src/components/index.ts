@@ -8,3 +8,5 @@ export { Card } from './Card';
 export { SlideTable } from './SlideTable';
 export { Badge } from './Badge';
 export { BulletList } from './BulletList';
+export { TableOfContents } from './TableOfContents';
+export { FullscreenToggle } from './FullscreenToggle';

@@ -11,19 +11,19 @@ export const Opportunities: React.FC = () => (
       headers={['Area', 'Current', 'Opportunity']}
       rows={[
         [
+          'Trigger types',
+          '2 of 3 are decorative',
+          <Opportunity key="1">Make all triggers autonomous and self-contained</Opportunity>,
+        ],
+        [
           'Trigger enforcement',
           'Triggers are declarative only',
-          <Opportunity key="1">Validate trigger contracts at runtime</Opportunity>,
+          <Opportunity key="2">Validate trigger contracts at runtime</Opportunity>,
         ],
         [
-          'Manual invocation',
-          'Accepts arbitrary data',
-          <Opportunity key="2">Require callers to invoke a specific trigger</Opportunity>,
-        ],
-        [
-          'Agent integration',
-          'No discoverable schema',
-          <Opportunity key="3">Expose trigger schemas as tool contracts</Opportunity>,
+          'Invocation bypass',
+          'Any caller bypasses triggers',
+          <Opportunity key="3">Require callers to invoke a specific trigger</Opportunity>,
         ],
         [
           'Execution context',

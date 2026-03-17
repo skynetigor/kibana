@@ -8,19 +8,27 @@ import {
 
 const leftItems: React.ReactNode[] = [
   <>
+    <strong>Triggers are autonomous</strong> — fire on their own once configured,
+    no manual wiring needed
+  </>,
+  <>
+    <strong>Triggers are self-contained</strong> — carry all context the workflow
+    needs in one place
+  </>,
+  <>
     <strong>Triggers are contracts</strong> — enforced at runtime, not decorative
   </>,
   <>
     <strong>Invoke a trigger, not a workflow</strong> — callers interact with typed
     entry points
   </>,
+];
+
+const rightItems: React.ReactNode[] = [
   <>
     <strong>Manual invocation needs a mechanism</strong> — explicit opt-in or
     trigger-aware form
   </>,
-];
-
-const rightItems: React.ReactNode[] = [
   <>
     <strong>Consistent event path</strong> — all triggers produce events the same
     way
@@ -36,7 +44,11 @@ const rightItems: React.ReactNode[] = [
 ];
 
 export const CommonPatterns: React.FC = () => (
-  <ContentSlide title="Six Patterns We Can Adopt">
+  <ContentSlide title="Patterns We Can Adopt">
+    <p className="text-slide-body text-slide-secondary mb-5 italic">
+      "You don't run a workflow — you invoke a <strong>trigger</strong> of a
+      workflow."
+    </p>
     <TwoColumns
       left={<BulletList items={leftItems} />}
       right={<BulletList items={rightItems} />}

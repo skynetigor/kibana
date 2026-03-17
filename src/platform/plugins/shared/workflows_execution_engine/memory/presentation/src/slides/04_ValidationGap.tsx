@@ -63,12 +63,12 @@ export const ValidationGap: React.FC = () => (
       right={
         <>
           <CodeBlock code={workflowB} />
-          <Card variant="warn" title="No trigger enforcement on API calls">
+          <Card variant="warn" title="No trigger enforcement on invocation">
             <p className="text-slide-sm text-slide-secondary">
               No <code className="text-elastic-blue">inputs</code> to validate.
-              Any caller can <code className="text-elastic-blue">POST /run</code> with
-              arbitrary data — the <code className="text-elastic-blue">alert</code> trigger
-              is not enforced.
+              The <code className="text-elastic-blue">alert</code> trigger is
+              purely decorative — any invoker can execute the workflow regardless
+              of trigger configuration.
             </p>
           </Card>
         </>
@@ -77,8 +77,8 @@ export const ValidationGap: React.FC = () => (
     <div className="mt-3">
       <FlowDiagram
         steps={[
-          { label: 'POST /run', variant: 'current' },
-          { label: '{ inputs: anything }', variant: 'current' },
+          { label: 'Any invoker', variant: 'current' },
+          { label: 'arbitrary data', variant: 'current' },
           { label: 'No trigger check', variant: 'current' },
           { label: 'executes', variant: 'current' },
         ]}

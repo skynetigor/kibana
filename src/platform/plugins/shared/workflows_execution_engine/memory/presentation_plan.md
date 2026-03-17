@@ -11,38 +11,6 @@ The presentation tone is **constructive and forward-looking**: "We can do better
 
 ## Approach
 
-Multi-file structure at `src/platform/plugins/shared/workflows_execution_engine/memory/presentation/` for easier manual editing:
-
-```
-presentation/
-  index.html              # entry point -- loads styles, slides, and JS
-  styles.css              # all CSS styles
-  slides.js               # navigation logic + Prism init
-  slides/
-    01_title.html         # one file per slide
-    02_agenda.html
-    03_ch1_title.html
-    04_validation_gap.html
-    05_guardrails.html
-    06_agent_contracts.html
-    07_opportunities.html
-    08_ch2_title.html
-    09_github_n8n.html
-    10_datadog_tines.html
-    11_common_patterns.html
-    12_ch3_title.html
-    13_mental_model.html
-    14_hybrid_gate.html
-    15_editor_ux.html
-    16_event_flow.html
-    17_triggers_namespace.html
-    18_schemas.html
-    19_visibility.html
-    20_discussion.html
-```
-
-`index.html` loads `styles.css`, includes all slide files (via inline or build step), and loads `slides.js`. Each slide file contains only the slide's HTML (the `<div class="slide">...</div>` block) so individual slides can be edited without touching the rest.
-
 **Design system (from reference images):**
 
 - **Title/chapter slides**: Elastic blue (`#0077CC`) solid background, white text, Elastic multicolor logo bottom-left with "elastic | The Search AI Company" tagline, decorative geometric artwork on right side
@@ -99,16 +67,18 @@ presentation/
       index.ts            # exports ordered array of all slide components
       01_Title.tsx
       02_Agenda.tsx
+      02b_WhatIsATrigger.tsx
       03_Ch1Title.tsx
+      03b_CurrentTriggers.tsx
       04_ValidationGap.tsx
-      05_Guardrails.tsx
-      06_AgentContracts.tsx
+      04c_ManualBypass.tsx
       07_Opportunities.tsx
       08_Ch2Title.tsx
       09_GithubN8n.tsx
       10_DatadogTines.tsx
       11_CommonPatterns.tsx
       12_Ch3Title.tsx
+      12b_RealTriggers.tsx
       13_MentalModel.tsx
       14_HybridGate.tsx
       15_EditorUx.tsx
@@ -139,6 +109,7 @@ presentation/
 These issues were encountered and fixed during implementation. Address them upfront:
 
 - **EUI v99+ has no CSS file.** Do NOT import `@elastic/eui/dist/eui_theme_light.css` -- it doesn't exist. `EuiProvider` handles styles via Emotion. Just wrap in `<EuiProvider colorMode="light">` and import nothing else.
+- **EUI reset breaks Tailwind borders.** EUI's CSS reset (Eric Meyer-based, injected via Emotion at runtime) applies `border: none` to most HTML elements (`div`, `span`, `pre`, `td`, `th`, `blockquote`, etc.) with element-level specificity (0-0-1). This overrides Tailwind Preflight's `* { border-style: solid; border-width: 0 }` (specificity 0-0-0), which utilities like `border`, `border-2` rely on. Note: `*` has zero specificity, so `html *` is only 0-0-1 — tied with EUI, and EUI wins via cascade order since Emotion injects at runtime. Fix: `index.css` includes `html body * { border-style: solid; border-width: 0; }` (specificity 0-0-2, since `*` contributes 0) that definitively beats EUI's element selectors.
 - **`${{` in template literals breaks TypeScript.** YAML strings containing `${{ triggers.alert }}` or `{{ event.* }}` cannot be in backtick template literals because `${` starts an expression. Use `['line1', 'line2'].join('\n')` for YAML strings that contain `${{` or `{{`.
 - **ContentSlide title prop must accept ReactNode.** Some slides pass JSX (e.g., inline `<code>`) as the title. Type the prop as `React.ReactNode`, not `string`.
 - **Icon SVGs must NOT be inlined.** The competitor SVG files are complex multi-path files. Inlining approximations breaks them. Always use `<img src="...">` with relative paths to the actual SVG files.
@@ -164,10 +135,24 @@ All content derived from:
 - Ihor Panasiuk, One Workflow Team, March 2025
 
 ### Agenda slide
+- What Is a Trigger
 - Where We Are Today
 - What the Industry Does
 - How We Can Improve
 - Discussion
+
+---
+
+### What Is a Trigger?
+
+**Slide: What Is a Trigger?**
+- Standalone definition slide before Chapter 1
+- Sets the universal benchmark: what a trigger should be in any workflow system
+- Definition text above the cards: "Trigger — a declarative entry point that fires a workflow in response to an event (alert, schedule, or manual invocation), optionally filtered by a condition."
+- Two-column card layout with the two properties:
+  - **Autonomous** — fires on its own, without human intervention. Configure once in YAML, it starts working automatically.
+  - **Self-contained** — carries all the context the workflow needs. Defines the event shape, data contract, and invocation mechanism in one place.
+- Key message card: "You configure it in YAML, and it starts working. No manual wiring in other UIs, no external setup required."
 
 ---
 
@@ -176,27 +161,32 @@ All content derived from:
 **Title slide:** "Where We Are Today"
 - Subtitle: "Opportunities to strengthen trigger enforcement"
 
+**Slide: Current Trigger Types**
+- Three-column layout, one column per trigger type: `manual`, `alert`, `scheduled`
+- Each column: trigger name as monospace heading + colored badge + short YAML snippet + one-line description
+- **`manual`** — badge: "decorative" (pink). Doesn't affect anything. The "Run workflow" button in the UI works regardless of whether you have a manual trigger in YAML or not.
+- **`alert`** — badge: "decorative" (pink). Not a real trigger. You have to manually connect the workflow to a rule from the Rules UI, and it doesn't enforce anything — even without an alert trigger, you can still attach and run a workflow from a rule.
+- **`scheduled`** — badge: "real trigger" (teal). The only real trigger. Configure it in YAML — the workflow runs automatically on the configured schedule.
+- Key message card at bottom: "Two out of three trigger types are decorative — they don't actually trigger anything and don't enforce how the workflow is invoked."
+
 **Slide: Inputs and Triggers Are Disconnected**
 - Source: 01, Problem 1
 - Two-column layout, each column shows a different workflow YAML with a problem card below it
 - **Left column — Problem 1: Inputs disconnected from triggers.** YAML: workflow with `triggers: [manual, scheduled]` and workflow-level `inputs: [message: string]`. The scheduled trigger fires every 10s — but `inputs` are defined globally, not per-trigger. Who provides `message` when the schedule fires? The relationship between inputs and triggers is ambiguous.
-- **Right column — Problem 2: No trigger enforcement on API calls.** YAML: workflow with only `triggers: [alert]`, no `inputs` defined. Since there are no inputs to validate, any caller can POST /run with arbitrary data and the workflow executes — the alert trigger declaration is not enforced at runtime. The caller doesn't need to match the declared trigger.
-- Flow diagram below both columns: POST /run → arbitrary data → no trigger check → executes
+- **Right column — Problem 2: No trigger enforcement on invocation.** YAML: workflow with only `triggers: [alert]`, no `inputs` defined. Since there are no inputs to validate, any invoker can execute the workflow — the alert trigger declaration is not enforced at runtime. Three invokers that all bypass: API call (POST /run with arbitrary data), "Run" button in the UI, Agent call. None need to match the declared trigger.
+- Flow diagram below both columns: API / UI / Agent → arbitrary data → no trigger check → executes
 
-**Slide: Production Workflows Need Stronger Guardrails**
-- Source: 01, Problem 2
-- YAML example: Payment API restart workflow (alert-only, no inputs)
-- Right column: What can happen (4 bullets, verb-first), agent scenario card
-- Key message: trigger declaration should be the guardrail -- authors shouldn't need defensive `if` conditions
-
-**Slide: Agent Integration Needs Typed Contracts**
-- Source: 01, Problem 3
-- Key message: as Agent Builder grows, workflows need discoverable schemas so agents know what data to provide
-- Today: tool contract is `Record<string, any>` -- agents have no guidance
+**Slide: Invocation Isn't Trigger-Aware**
+- Two-column layout
+- **Left column:** YAML example — alert-only workflow ("Restart on OOM Alert") with steps that reference `event.rule.name`. Warning card: "Designed for alert — but nothing stops other callers."
+- **Right column:** Three invocation paths that all bypass the trigger (3 items with icons/labels): **API call** (any client can POST /run), **Manual run from UI** (user clicks "Run workflow" button), **Agent call** (AI agent invokes workflow as a tool). All three execute the workflow without alert context — `event.rule.name` is undefined, no alert data provided. Info card: "The author has no way to prevent this. Trigger declarations are metadata — they don't gate invocation."
+- Flow diagram: three parallel paths (API / UI / Agent) all converging → trigger ignored → no event data → executes
+- Key message: any caller — API, UI, or agent — can bypass the configured triggers. The workflow runs without the context it was designed for, and the author cannot prevent it.
 
 **Slide: Opportunities Summary**
 - Source: 01, pattern table
 - 4-row table: Area / Today / Opportunity
+- Rows: Trigger types (2 of 3 decorative → autonomous & self-contained), Trigger enforcement (declarative only → validate at runtime), Invocation bypass (any caller bypasses → require specific trigger), Execution context (flat event → typed triggers.* namespace)
 - Framing: "today" and "opportunity" columns, not "problem" and "consequence"
 
 ---
@@ -206,17 +196,18 @@ All content derived from:
 **Title slide:** "What the Industry Does"
 - Subtitle: "Patterns we can learn from"
 
-**Slide: GitHub Actions, n8n, and Tines (hard-gate)**
+**Slide: GitHub Actions, n8n, and Tines — Triggers Gate All Invocation**
 - Source: 02, GitHub Actions + n8n + Tines sections
-- Two-column layout: GitHub Actions (left, with YAML example), n8n + Tines stacked (right, with bullet points each)
-- All three share the same model: strict entry-point enforcement, no trigger = no invocation
-- GitHub Actions: `workflow_dispatch` with typed inputs, key doc quote
-- n8n: requires trigger node, offers Form Trigger with typed fields, separates production vs manual runs
-- Tines: webhook entry action is the only way in, Send to Story requires defined inputs (fails on missing), testing always replays through the webhook entry point — there is no "bypass the trigger" option. Tines does NOT have named trigger types or trigger-type selection like Datadog. It belongs in the strict-enforcement group.
-- Model badge: "No trigger = no invocation, period."
+- Mental model statement above the columns: "You don't run a workflow — you invoke a trigger of a workflow. Triggers are the only entry points. They are autonomous and self-contained."
+- Key emphasis: triggers don't just control automatic invocation — they are the ONLY entry points. If you define `pull_request` in GitHub Actions, that workflow can ONLY be triggered by pull requests. There is no way to run it manually unless you explicitly add `workflow_dispatch`.
+- Two-column layout
+- **Left column (GitHub Actions):** Two YAML examples stacked. First: `on: pull_request` only — this workflow runs ONLY on PRs, no manual invocation possible. Second: `on: [pull_request, workflow_dispatch]` — now manual runs are enabled. The point: manual invocation is opt-in, not the default.
+- **Right column (n8n + Tines):** Same principle applies. n8n: if you use a Webhook Trigger node, the workflow only fires on webhooks — add Manual Trigger node explicitly for test runs. Tines: webhook entry action is the only way in, no bypass. Testing always replays through the configured entry point.
+- Model badge: "Triggers are the only entry points. No trigger = no invocation."
 
-**Slide: Datadog Uses Trigger-Aware Invocation (soft-gate) **
+**Slide: Datadog Uses Trigger-Aware Invocation (soft-gate)**
 - Source: 02, Datadog section
+- Mental model statement above the columns (same as previous slide): "You don't run a workflow — you invoke a trigger of a workflow. Triggers are the only entry points. They are autonomous and self-contained."
 - Full-width single-competitor slide (Datadog only — Tines moved to previous slide)
 - Datadog's unique model: multiple named trigger types per workflow (Monitor, Security, API, etc.), manual runs are trigger-aware (UI presents trigger-specific input form), visibility gating across the product (Monitor notification needs Monitor trigger, Security panel needs Security trigger, etc.)
 - Two-column: left = trigger-aware invocation bullets + visibility table, right = key differentiator explanation (why this is the closest to what we want)
@@ -224,7 +215,8 @@ All content derived from:
 
 **Slide: Common Patterns Across the Industry**
 - Source: 03, common trigger patterns
-- 6 patterns distilled: triggers are contracts, invoke trigger not workflow, manual requires mechanism, consistent event path, visibility gating, trigger determines shape
+- Mental model statement above the patterns: "You don't run a workflow — you invoke a trigger of a workflow."
+- 8 patterns distilled: triggers are autonomous (fire on their own once configured), triggers are self-contained (carry all context the workflow needs), triggers are contracts, invoke trigger not workflow, manual requires explicit mechanism, consistent event path, visibility gating, trigger determines shape
 - Key message: these are not product-specific choices -- they are industry consensus that we can adopt
 
 ---
@@ -232,12 +224,17 @@ All content derived from:
 ### Chapter 3: How We Can Improve
 
 **Title slide:** "How We Can Improve"
-- Subtitle: "8 improvements following industry patterns"
+- Subtitle: "Improvements following industry patterns"
+
+**Slide: Make Triggers Real Triggers**
+- First content slide of Chapter 3 — sets the vision before diving into specific improvements
+- Two-column layout
+- **Left column:** Triggers should be autonomous and self-contained. Bullets: configured entirely in the workflow YAML, declare what they connect to and under what conditions, system reads the config and sets up routing automatically, no manual wiring in other UIs required. Success card: "The workflow is the single source of truth. If it's not in the YAML, it doesn't happen."
+- **Right column:** Alert trigger example YAML — trigger declares the rule name, severity, condition. The system reads this and automatically routes matching alert events to the workflow. Info card contrasts today (declare `type: alert` then manually connect in Rules UI) vs proposed (system reads YAML and wires the connection for you).
 
 **Slide: New Mental Model**
 - "You don't call a workflow -- you call a trigger of a workflow"
 - Flow diagrams: Today (arbitrary data) vs Proposed (trigger-validated)
-- Hybrid model: production hard-gated (manual trigger), test soft-gated (any trigger)
 
 **Slide: Hybrid Production/Test Gate**
 - Source: 04, Improvement 3
@@ -268,14 +265,21 @@ All content derived from:
 
 **Slide: `triggers.*` Namespace**
 - Source: 04, Improvement 8
-- `triggers.alert.event.alerts` for runtime data
-- `triggers.alert.with.rule_name` for static YAML config
-- Truthy/falsy: `if: ${{ triggers.alert }}`
-- YAML example with conditional branching
+- **Motivation / problems solved** (left column, above YAML):
+  - Today: workflows with multiple triggers have no way to know WHICH trigger fired — steps can't branch based on trigger type
+  - Today: runtime event data and static YAML config are mixed together — no clean separation
+  - Today: adding a new trigger type requires rethinking how steps access data — no consistent pattern
+  - Today: editor suggestions for `event` field are a union of all trigger schemas — hard to implement and confusing to use when a workflow has multiple triggers
+- **Solution:** `triggers.*` namespace in execution context
+  - `triggers.alert.event.alerts` for runtime data
+  - `triggers.alert.with.rule_name` for static YAML config
+  - Truthy/falsy: `if: ${{ triggers.alert }}` — branch based on which trigger fired
+  - YAML example with conditional branching
 - **Scalability emphasis:** The `triggers.*` namespace makes adding new trigger types (case, scheduled, custom, etc.) trivial — each new trigger automatically gets its own `triggers.<type>.event.*` / `triggers.<type>.with.*` subtree, conditional branching via `if: ${{ triggers.<type> }}`, and editor autocomplete. No refactoring of existing steps or event paths needed — the namespace pattern scales to any number of triggers without touching existing code.
 
-**Slide: Visibility Gating**
+**Slide: From Manual Wiring to Automatic Routing**
 - Source: 04, Improvement 5
+- Attention-grabbing note/card ABOVE the table: With fully autonomous triggers, manual wiring (e.g., connecting workflows to rules from the Rules UI) can likely be omitted entirely — the system reads the trigger config and does the routing. If manual wiring is still needed for some cases, visibility gating ensures only workflows with the right trigger type appear.
 - Table: Product context / Required trigger / Effect
 - Rule actions -> alert trigger, Agent Builder -> manual trigger, Editor Test -> always available
 

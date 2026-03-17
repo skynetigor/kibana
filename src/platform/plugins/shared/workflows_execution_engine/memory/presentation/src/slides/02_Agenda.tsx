@@ -2,6 +2,7 @@ import React from 'react';
 import { ContentSlide } from '../components';
 
 const agendaItems = [
+  'What Is a Trigger — the definition',
   'Where We Are Today — opportunities to strengthen triggers',
   'What the Industry Does — patterns we can learn from',
   'How We Can Improve — 8 improvements, hybrid gate model',

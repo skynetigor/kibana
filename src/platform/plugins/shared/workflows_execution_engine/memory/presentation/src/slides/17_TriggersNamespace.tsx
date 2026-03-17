@@ -4,6 +4,7 @@ import {
   TwoColumns,
   CodeBlock,
   BulletList,
+  Card,
 } from '../components';
 
 const triggersYaml = [
@@ -29,25 +30,41 @@ export const TriggersNamespace: React.FC = () => (
   <ContentSlide
     title={
       <>
-        New <code className="font-mono text-sm">triggers.*</code> Namespace in
-        Execution Context
+        <code className="font-mono text-[26px]">triggers.*</code> Namespace
       </>
     }
   >
     <TwoColumns
-      left={<CodeBlock code={triggersYaml} />}
+      left={
+        <>
+          <Card variant="warn" title="Problems today">
+            <BulletList
+              items={[
+              'No way to know which trigger fired',
+              'Steps can\'t branch based on trigger type',
+              'Runtime event data and static YAML config are mixed',
+              <>Editor suggestions for <code className="text-elastic-blue font-mono">event</code> are a union of all trigger schemas — confusing with multiple triggers</>,
+              ]}
+            />
+          </Card>
+          <p className="text-slide-sm text-slide-secondary mt-4 mb-2">
+            Solution — a structured namespace:
+          </p>
+          <CodeBlock code={triggersYaml} />
+        </>
+      }
       right={
         <>
           <h3 className="text-slide-h3 text-slide-text mb-2">How it works</h3>
           <BulletList
             items={[
-              'triggers.alert — truthy when alert fired',
-              'triggers.alert.event.* — runtime data',
-              'triggers.alert.with.* — static YAML config',
-              'triggers.manual — null if not active',
+              <><code className="text-elastic-blue font-mono">triggers.alert</code> — truthy when alert fired</>,
+              <><code className="text-elastic-blue font-mono">.event.*</code> — runtime data from the trigger</>,
+              <><code className="text-elastic-blue font-mono">.with.*</code> — static YAML config</>,
+              <><code className="text-elastic-blue font-mono">triggers.manual</code> — null if not active</>,
             ]}
           />
-          <h3 className="text-slide-h3 text-slide-text mt-6 mb-2">
+          <h3 className="text-slide-h3 text-slide-text mt-5 mb-2">
             Scales to new triggers
           </h3>
           <BulletList

@@ -10,6 +10,11 @@ import {
 
 export const DatadogTines: React.FC = () => (
   <ContentSlide title="Datadog Uses Trigger-Aware Invocation (soft-gate)">
+    <p className="text-slide-body text-slide-secondary mb-5 italic">
+      "You don't run a workflow — you invoke a <strong>trigger</strong> of a
+      workflow. Triggers are the only entry points. They are{' '}
+      <strong>autonomous</strong> and <strong>self-contained</strong>."
+    </p>
     <TwoColumns
       left={
         <>

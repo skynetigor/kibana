@@ -1,19 +1,47 @@
 import { useState, useEffect, useCallback, type FC, type ReactNode } from 'react';
 import {
-  Title, Agenda, Ch1Title, ValidationGap, Guardrails, AgentContracts, Opportunities,
+  Title, Agenda, WhatIsATrigger, Ch1Title, CurrentTriggers, ValidationGap, ManualBypass, Opportunities,
   Ch2Title, GithubN8n, DatadogTines, CommonPatterns,
-  Ch3Title, MentalModel, HybridGate, EditorUx, EventFlow, TriggersNamespace, Schemas, Visibility, Discussion,
+  Ch3Title, RealTriggers, MentalModel, HybridGate, EditorUx, EventFlow, TriggersNamespace, Schemas, Visibility, Discussion,
 } from './slides';
+import { TableOfContents, FullscreenToggle } from './components';
 
 const SLIDES: FC[] = [
-  Title, Agenda,
-  Ch1Title, ValidationGap, Guardrails, AgentContracts, Opportunities,
+  Title, Agenda, WhatIsATrigger,
+  Ch1Title, CurrentTriggers, ValidationGap, ManualBypass, Opportunities,
   Ch2Title, GithubN8n, DatadogTines, CommonPatterns,
-  Ch3Title, MentalModel, HybridGate, EditorUx, Schemas, EventFlow, TriggersNamespace, Visibility,
+  Ch3Title, RealTriggers, MentalModel, HybridGate, EditorUx, Schemas, EventFlow, TriggersNamespace, Visibility,
   Discussion,
 ];
 
-const isTitleSlide = (idx: number) => [0, 2, 7, 11, 19].includes(idx);
+export interface SlideMeta { label: string; chapter: string }
+
+export const SLIDE_META: SlideMeta[] = [
+  { label: 'Title',                           chapter: 'Opening' },
+  { label: 'Agenda',                          chapter: 'Opening' },
+  { label: 'What Is a Trigger',               chapter: 'Opening' },
+  { label: 'Where We Are Today',              chapter: 'Ch 1 — Where We Are Today' },
+  { label: 'Current Triggers',                chapter: 'Ch 1 — Where We Are Today' },
+  { label: 'Inputs & Triggers Gap',           chapter: 'Ch 1 — Where We Are Today' },
+  { label: "Invocation Isn't Trigger-Aware",  chapter: 'Ch 1 — Where We Are Today' },
+  { label: 'Opportunities',                   chapter: 'Ch 1 — Where We Are Today' },
+  { label: 'What the Industry Does',          chapter: 'Ch 2 — What the Industry Does' },
+  { label: 'GitHub / n8n / Tines',            chapter: 'Ch 2 — What the Industry Does' },
+  { label: 'Datadog',                         chapter: 'Ch 2 — What the Industry Does' },
+  { label: 'Patterns We Can Adopt',           chapter: 'Ch 2 — What the Industry Does' },
+  { label: 'How We Can Improve',              chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'Real Triggers',                   chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'New Mental Model',                chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'Hybrid Gate',                     chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'Editor UX',                       chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'Schemas',                         chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'Event Flow',                      chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'triggers.* Namespace',            chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'Visibility / Routing',            chapter: 'Ch 3 — How We Can Improve' },
+  { label: 'Discussion',                      chapter: 'Next Steps' },
+];
+
+const isTitleSlide = (idx: number) => [0, 3, 8, 12, 21].includes(idx);
 
 const SlideWrapper = ({ children, isTitle, active }: { children: ReactNode; isTitle: boolean; active: boolean }) => (
   <div
@@ -77,6 +105,8 @@ export const App = () => {
 
       <div className="nav-chrome">
         <ElasticWatermark />
+        <TableOfContents slides={SLIDE_META} current={current} onNavigate={go} />
+        <FullscreenToggle />
 
         {/* Progress bar */}
         <div

@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * EUI's CSS reset (injected via Emotion at runtime) applies `border: none`
+ * to most HTML elements with element-level specificity (0-0-1).
+ * This overrides Tailwind Preflight's `* { border-style: solid; border-width: 0 }`
+ * which utilities like `border`, `border-2` rely on.
+ * `*` has zero specificity, so `html *` is only 0-0-1 — same as EUI's `span`.
+ * Use `html body *` (specificity 0-0-2) to definitively beat EUI's resets.
+ */
+html body *,
+html body *::before,
+html body *::after {
+  border-style: solid;
+  border-width: 0;
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;

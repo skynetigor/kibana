@@ -6,73 +6,77 @@ import {
   CodeBlock,
   BulletList,
   Badge,
+  Card,
 } from '../components';
 
-const githubYaml = `on:
-  workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        type: choice
-        options: [info, warning, debug]`;
+const ghOnlyPr = `on:
+  pull_request:
+    branches: [main]
 
-const Blockquote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <blockquote className="border-l-4 border-blue-500 bg-[#F0F6FC] italic pl-4 py-2 my-2.5 text-slide-secondary text-[15px]">
-    {children}
-  </blockquote>
-);
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # ...`;
+
+const ghWithDispatch = `on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # opt-in manual`;
 
 export const GithubN8n: React.FC = () => (
-  <ContentSlide title="GitHub Actions, n8n, and Tines (hard-gate)">
+  <ContentSlide title="Triggers Gate All Invocation">
+    <p className="text-slide-body text-slide-secondary mb-5 italic">
+      "You don't run a workflow — you invoke a <strong>trigger</strong> of a
+      workflow. Triggers are the only entry points. They are{' '}
+      <strong>autonomous</strong> and <strong>self-contained</strong>."
+    </p>
     <TwoColumns
       left={
         <>
-          <LogoRow
-            src="/icons/github-svgrepo-com.svg"
-            name="GitHub Actions"
-          />
-          <Blockquote>
-            To enable a workflow to be triggered manually, you need to configure the
-            workflow_dispatch event.
-          </Blockquote>
-          <CodeBlock code={githubYaml} />
+          <LogoRow src="/icons/github-svgrepo-com.svg" name="GitHub Actions" />
+          <p className="text-slide-sm text-slide-secondary mb-2">
+            Only <code className="text-elastic-blue">pull_request</code> — no
+            manual run possible:
+          </p>
+          <CodeBlock code={ghOnlyPr} />
+          <p className="text-slide-sm text-slide-secondary mt-3 mb-2">
+            Add <code className="text-elastic-blue">workflow_dispatch</code> to
+            opt in to manual runs:
+          </p>
+          <CodeBlock code={ghWithDispatch} />
+          <Card variant="info" className="mt-2">
+            <p className="text-slide-sm text-slide-secondary">
+              Manual invocation is <strong>opt-in</strong>, not the default. Each
+              trigger type must be explicitly declared.
+            </p>
+          </Card>
         </>
       }
       right={
         <>
-          <LogoRow
-            src="/icons/n8n.png"
-            name="n8n"
-          />
-          <Blockquote>
-            Workflows always need a trigger, or start point.
-          </Blockquote>
+          <LogoRow src="/icons/n8n.png" name="n8n" />
           <BulletList
             items={[
-              'Requires Manual Trigger node',
-              'Offers Form Trigger with typed fields',
-              'Separates production vs manual runs',
+              'Webhook Trigger → only fires on webhooks',
+              'Add Manual Trigger node explicitly for test runs',
+              'Form Trigger with typed fields for user input',
             ]}
           />
 
           <div className="mt-5 pt-4 border-t border-slide-border">
-            <LogoRow
-              src="/icons/tines.png"
-              name="Tines"
-            />
+            <LogoRow src="/icons/tines.png" name="Tines" />
             <BulletList
               items={[
                 'Webhook entry action is the only way in',
-                'Send to Story requires defined inputs — fails on missing',
-                'Testing always replays through the webhook',
+                'Testing always replays through the entry point',
+                'No "bypass the trigger" option exists',
               ]}
             />
           </div>
 
           <div className="mt-4">
             <Badge variant="green">
-              Model — No trigger = no invocation, period.
+              Triggers are the only entry points. No trigger = no invocation.
             </Badge>
           </div>
         </>
