@@ -47,6 +47,7 @@ import type {
   EnterRetryNode,
   EnterTimeoutZoneNode,
   EnterTryBlockNode,
+  EnterWorkflowNode,
   EnterWhileNode,
   ExitConditionBranchNode,
   ExitContinueNode,
@@ -57,6 +58,7 @@ import type {
   ExitRetryNode,
   ExitTimeoutZoneNode,
   ExitTryBlockNode,
+  ExitWorkflowNode,
   ExitWhileNode,
   GraphNodeUnion,
   LoopBreakNode,
@@ -896,6 +898,31 @@ function createForeachGraphForStepWithForeach(
   return createForeachGraph(generatedStepId, foreachStep, context);
 }
 
+function wrapWithWorkflowNodes(innerGraph: WorkflowGraphType, timeout?: string): WorkflowGraphType {
+  const graph = createTypedGraph({ directed: true });
+  const enterWorkflowNodeId = 'enterWorkflow';
+  const exitWorkflowNodeId = 'exitWorkflow';
+  const enterWorkflowNode: EnterWorkflowNode = {
+    id: enterWorkflowNodeId,
+    type: 'enter-workflow',
+    stepId: 'workflow',
+    stepType: 'workflow',
+    exitNodeId: exitWorkflowNodeId,
+    ...(timeout ? { timeout } : {}),
+  };
+  const exitWorkflowNode: ExitWorkflowNode = {
+    id: exitWorkflowNodeId,
+    type: 'exit-workflow',
+    stepId: 'workflow',
+    stepType: 'workflow',
+    startNodeId: enterWorkflowNodeId,
+  };
+  graph.setNode(enterWorkflowNodeId, enterWorkflowNode);
+  graph.setNode(exitWorkflowNodeId, exitWorkflowNode);
+  insertGraphBetweenNodes(graph, innerGraph, enterWorkflowNodeId, exitWorkflowNodeId);
+  return graph;
+}
+
 function createWhileGraph(
   stepId: string,
   whileStep: WhileStep,
@@ -1003,19 +1030,9 @@ export function convertToWorkflowGraph(
     parentKey: '',
   };
 
-  let finalGraph = createStepsSequence(workflowSchema.steps, context);
+  const finalGraph = createStepsSequence(workflowSchema.steps, context);
 
-  if (resolvedSettings?.timeout) {
-    finalGraph = handleTimeout(
-      'workflow_level_timeout',
-      'workflow_level_timeout',
-      resolvedSettings.timeout,
-      finalGraph,
-      context
-    );
-  }
-
-  return finalGraph;
+  return wrapWithWorkflowNodes(finalGraph, resolvedSettings?.timeout);
 }
 
 function resolveWorklfowSettings(

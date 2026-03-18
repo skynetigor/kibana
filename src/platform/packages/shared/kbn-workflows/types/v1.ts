@@ -93,6 +93,7 @@ export interface EsWorkflowExecution {
   workflowDefinition: WorkflowYaml;
   yaml: string;
   currentNodeId?: string; // The node currently being executed
+  isExecuting: boolean;
   /** If specified, the only this step and its children will be executed */
   stepId?: string;
   scopeStack: StackFrame[];

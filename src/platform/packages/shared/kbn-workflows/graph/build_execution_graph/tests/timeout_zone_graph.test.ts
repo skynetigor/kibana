@@ -31,9 +31,11 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml);
       const topSort = graphlib.alg.topsort(executionGraph);
       expect(topSort).toEqual([
+        'enterWorkflow',
         'enterTimeoutZone_testAtomicStep1',
         'testAtomicStep1',
         'exitTimeoutZone_testAtomicStep1',
+        'exitWorkflow',
       ]);
     });
 
@@ -41,6 +43,7 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml);
       const edges = executionGraph.edges();
       expect(edges).toEqual([
+        { v: 'enterWorkflow', w: 'enterTimeoutZone_testAtomicStep1' },
         {
           v: 'enterTimeoutZone_testAtomicStep1',
           w: 'testAtomicStep1',
@@ -49,6 +52,7 @@ describe('convertToWorkflowGraph', () => {
           v: 'testAtomicStep1',
           w: 'exitTimeoutZone_testAtomicStep1',
         },
+        { v: 'exitTimeoutZone_testAtomicStep1', w: 'exitWorkflow' },
       ]);
     });
 
@@ -77,7 +81,7 @@ describe('convertToWorkflowGraph', () => {
   });
 
   describe('workflow-level timeout', () => {
-    it('should return nodes for atomic step in correct topological order', () => {
+    it('should carry timeout on the enter-workflow node', () => {
       const workflowDefinition = {
         settings: {
           timeout: '5m',
@@ -95,11 +99,13 @@ describe('convertToWorkflowGraph', () => {
       } as Partial<WorkflowYaml>;
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml);
       const topSort = graphlib.alg.topsort(executionGraph);
-      expect(topSort).toEqual([
-        'enterTimeoutZone_workflow_level_timeout',
-        'testAtomicStep1',
-        'exitTimeoutZone_workflow_level_timeout',
-      ]);
+      expect(topSort).toEqual(['enterWorkflow', 'testAtomicStep1', 'exitWorkflow']);
+      expect(executionGraph.node('enterWorkflow')).toEqual(
+        expect.objectContaining({
+          type: 'enter-workflow',
+          timeout: '5m',
+        })
+      );
     });
 
     it('should handle both workflow-level and step-level timeouts', () => {
@@ -123,14 +129,18 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml);
       const topSort = graphlib.alg.topsort(executionGraph);
 
-      // Workflow-level timeout should wrap the entire workflow, including step-level timeouts
       expect(topSort).toEqual([
-        'enterTimeoutZone_workflow_level_timeout',
+        'enterWorkflow',
         'enterTimeoutZone_stepWithTimeout',
         'stepWithTimeout',
         'exitTimeoutZone_stepWithTimeout',
-        'exitTimeoutZone_workflow_level_timeout',
+        'exitWorkflow',
       ]);
+      expect(executionGraph.node('enterWorkflow')).toEqual(
+        expect.objectContaining({
+          timeout: '5m',
+        })
+      );
     });
 
     it('should use default workflow level timeout when not specified explicitly in workflow', () => {
@@ -149,7 +159,7 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml, {
         timeout: '10m',
       });
-      expect(executionGraph.node('enterTimeoutZone_workflow_level_timeout')).toEqual(
+      expect(executionGraph.node('enterWorkflow')).toEqual(
         expect.objectContaining({
           timeout: '10m',
         })
@@ -175,7 +185,7 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml, {
         timeout: '10m',
       });
-      expect(executionGraph.node('enterTimeoutZone_workflow_level_timeout')).toEqual(
+      expect(executionGraph.node('enterWorkflow')).toEqual(
         expect.objectContaining({
           timeout: '5m',
         })
@@ -202,11 +212,13 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml);
       const topSort = graphlib.alg.topsort(executionGraph);
       expect(topSort).toEqual([
+        'enterWorkflow',
+        'enterForeach_foreach_testAtomicStep1',
         'enterTimeoutZone_testAtomicStep1',
         'enterForeach_foreach_testAtomicStep1',
         'testAtomicStep1',
         'exitForeach_foreach_testAtomicStep1',
-        'exitTimeoutZone_testAtomicStep1',
+        'exitWorkflow',
       ]);
     });
 
@@ -228,6 +240,7 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml);
       const topSort = graphlib.alg.topsort(executionGraph);
       expect(topSort).toEqual([
+        'enterWorkflow',
         'enterCondition_if_testAtomicStep1',
         'enterThen_if_testAtomicStep1',
         'enterTimeoutZone_testAtomicStep1',
@@ -235,6 +248,7 @@ describe('convertToWorkflowGraph', () => {
         'exitTimeoutZone_testAtomicStep1',
         'exitThen_if_testAtomicStep1',
         'exitCondition_if_testAtomicStep1',
+        'exitWorkflow',
       ]);
     });
 
@@ -271,6 +285,7 @@ describe('convertToWorkflowGraph', () => {
       const executionGraph = convertToWorkflowGraph(workflowDefinition as WorkflowYaml);
       const topSort = graphlib.alg.topsort(executionGraph);
       expect(topSort).toEqual([
+        'enterWorkflow',
         'enterContinue_testAtomicStep1',
         'enterTryBlock_testAtomicStep1',
         'enterNormalPath_testAtomicStep1',
@@ -285,6 +300,7 @@ describe('convertToWorkflowGraph', () => {
         'exitFallbackPath_testAtomicStep1',
         'exitTryBlock_testAtomicStep1',
         'exitContinue_testAtomicStep1',
+        'exitWorkflow',
       ]);
     });
   });

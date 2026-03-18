@@ -18,8 +18,6 @@ export async function handleExecutionDelay(
   params: WorkflowExecutionLoopParams,
   stepExecutionRuntime: StepExecutionRuntime
 ) {
-  const workflowExecution = params.workflowRuntime.getWorkflowExecution();
-
   if (stepExecutionRuntime.stepExecution?.status === ExecutionStatus.WAITING_FOR_INPUT) {
     // Propagate WAITING_FOR_INPUT to the workflow level so the execution loop exits.
     // Resumption is triggered externally by the resume API; no task is scheduled here.
@@ -69,10 +67,6 @@ export async function handleExecutionDelay(
       status: ExecutionStatus.RUNNING,
     });
   } else {
-    await params.workflowTaskManager.scheduleResumeTask({
-      workflowExecution,
-      resumeAt,
-      fakeRequest: params.fakeRequest,
-    });
+    await params.workflowRuntime.scheduleResumeTask({ resumeAt });
   }
 }

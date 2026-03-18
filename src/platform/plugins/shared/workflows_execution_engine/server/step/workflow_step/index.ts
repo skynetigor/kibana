@@ -7,5 +7,5 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export { EnterStepTimeoutZoneNodeImpl } from './step-level/enter_step_timeout_zone_node_impl';
-export { ExitStepTimeoutZoneNodeImpl } from './step-level/exit_step_timeout_zone_node_impl';
+export { EnterWorkflowNodeImpl } from './enter_workflow_node_impl';
+export { ExitWorkflowNodeImpl } from './exit_workflow_node_impl';

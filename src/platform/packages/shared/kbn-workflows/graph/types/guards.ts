@@ -42,6 +42,7 @@ import type {
   ExitTryBlockNode,
 } from './nodes/on_failure_nodes';
 import type { GraphNodeUnion } from './nodes/union';
+import type { EnterWorkflowNode, ExitWorkflowNode } from './nodes/workflow_nodes';
 import type { LoopStepType } from '../../spec/schema';
 import { LoopStepTypes } from '../../spec/schema';
 
@@ -115,17 +116,17 @@ export const isEnterNormalPath = (node: GraphNodeUnion): node is EnterNormalPath
 export const isExitNormalPath = (node: GraphNodeUnion): node is ExitNormalPathNode =>
   node.type === 'exit-normal-path';
 
-export const isEnterWorkflowTimeoutZone = (node: GraphNodeUnion): node is EnterTimeoutZoneNode =>
-  node.type === 'enter-timeout-zone' && node.stepType === 'workflow_level_timeout';
-
-export const isExitWorkflowTimeoutZone = (node: GraphNodeUnion): node is ExitTimeoutZoneNode =>
-  node.type === 'exit-timeout-zone' && node.stepType === 'workflow_level_timeout';
-
 export const isEnterStepTimeoutZone = (node: GraphNodeUnion): node is EnterTimeoutZoneNode =>
   node.type === 'enter-timeout-zone' && node.stepType !== 'workflow_level_timeout';
 
 export const isExitStepTimeoutZone = (node: GraphNodeUnion): node is ExitTimeoutZoneNode =>
   node.type === 'exit-timeout-zone' && node.stepType !== 'workflow_level_timeout';
+
+export const isEnterWorkflow = (node: GraphNodeUnion): node is EnterWorkflowNode =>
+  node.type === 'enter-workflow';
+
+export const isExitWorkflow = (node: GraphNodeUnion): node is ExitWorkflowNode =>
+  node.type === 'exit-workflow';
 
 export const isLoopBreak = (node: GraphNodeUnion): node is LoopBreakNode =>
   node.type === 'loop-break';

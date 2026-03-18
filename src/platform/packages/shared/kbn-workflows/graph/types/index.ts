@@ -51,6 +51,10 @@ export type {
   EnterWhileNodeConfigurationSchema,
 } from './nodes/loop_nodes';
 export type {
+  EnterWorkflowNode,
+  EnterWorkflowNodeSchema,
+  ExitWorkflowNode,
+  ExitWorkflowNodeSchema,
   LoopBreakNode,
   LoopBreakNodeSchema,
   LoopContinueNode,
@@ -108,6 +112,8 @@ export {
   isExitContinue,
   isEnterStepTimeoutZone,
   isExitStepTimeoutZone,
+  isEnterWorkflow,
+  isExitWorkflow,
   isEnterWorkflowTimeoutZone,
   isExitWorkflowTimeoutZone,
   isLoopBreak,

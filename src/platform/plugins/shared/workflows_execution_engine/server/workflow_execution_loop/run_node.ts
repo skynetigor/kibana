@@ -8,7 +8,6 @@
  */
 
 import apm from 'elastic-apm-node';
-import { ExecutionStatus } from '@kbn/workflows';
 import { catchError } from './catch_error';
 import { handleExecutionDelay } from './handle_execution_delay';
 import { runStackMonitor } from './run_stack_monitor/run_stack_monitor';
@@ -64,7 +63,7 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
 
   try {
     params.workflowRuntime.exitScope();
-    stepExecutionRuntime = params.stepExecutionRuntimeFactory.createStepExecutionRuntime({
+    stepExecutionRuntime = params.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
       nodeId: node.id,
       stackFrames: params.workflowRuntime.getCurrentNodeScope(),
     });
@@ -75,13 +74,13 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
      * When cancelRequested is true, status is always updated to CANCELLED, so this check
      * covers both cancellation and other terminal states (COMPLETED, FAILED, etc.).
      */
-    if (params.workflowRuntime.getWorkflowExecution().status !== ExecutionStatus.RUNNING) {
+    if (!params.workflowRuntime.isExecuting) {
       nodeSpan?.setOutcome('unknown');
       nodeSpan?.end();
       return;
     }
 
-    const nodeImplementation = params.nodesFactory.create(stepExecutionRuntime);
+    const nodeImplementation = params.nodesFactory.create(stepExecutionRuntime, node);
     monitorAbortController = new AbortController();
 
     /**
@@ -130,10 +129,6 @@ export async function runNode(params: WorkflowExecutionLoopParams): Promise<void
       await catchError(params, stepExecutionRuntime);
       catchErrorSpan?.end();
     }
-
-    const saveStateSpan = apm.startSpan('save state', 'workflow', 'persistence');
-    await params.workflowRuntime.saveState(); // Ensure state is updated after each step
-    saveStateSpan?.end();
 
     nodeSpan?.end();
   }

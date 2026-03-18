@@ -16,12 +16,14 @@ import type {
   EnterRetryNode,
   EnterTryBlockNode,
   EnterWhileNode,
+  EnterWorkflowNode,
   ExitConditionBranchNode,
   ExitFallbackPathNode,
   ExitForeachNode,
   ExitNormalPathNode,
   ExitRetryNode,
   ExitWhileNode,
+  GraphNodeUnion,
   LoopBreakNode,
   LoopContinueNode,
   WaitForInputGraphNode,
@@ -30,13 +32,7 @@ import type {
   WorkflowGraph,
   WorkflowOutputGraphNode,
 } from '@kbn/workflows/graph';
-import {
-  isDataSet,
-  isEnterStepTimeoutZone,
-  isEnterWorkflowTimeoutZone,
-  isExitStepTimeoutZone,
-  isExitWorkflowTimeoutZone,
-} from '@kbn/workflows/graph';
+import { isDataSet, isEnterStepTimeoutZone, isExitStepTimeoutZone } from '@kbn/workflows/graph';
 import { AtomicStepImpl } from './atomic_step/atomic_step_impl';
 import { CustomStepImpl } from './custom_step_impl';
 import { DataSetStepImpl } from './data_set_step';
@@ -61,37 +57,34 @@ import {
   ExitTryBlockNodeImpl,
 } from './on_failure/fallback-step';
 import { EnterRetryNodeImpl, ExitRetryNodeImpl } from './on_failure/retry_step';
-import {
-  EnterStepTimeoutZoneNodeImpl,
-  EnterWorkflowTimeoutZoneNodeImpl,
-  ExitStepTimeoutZoneNodeImpl,
-  ExitWorkflowTimeoutZoneNodeImpl,
-} from './timeout_zone_step';
+import { EnterStepTimeoutZoneNodeImpl, ExitStepTimeoutZoneNodeImpl } from './timeout_zone_step';
 import { WaitForInputStepImpl } from './wait_for_input_step/wait_for_input_step';
 import { WaitStepImpl } from './wait_step/wait_step';
 import { EnterWhileNodeImpl, ExitWhileNodeImpl } from './while_step';
 import { WorkflowExecuteStepImpl } from './workflow_execute_step/workflow_execute_step_impl';
 import { WorkflowOutputStepImpl } from './workflow_output_step/workflow_output_step_impl';
+import { EnterWorkflowNodeImpl, ExitWorkflowNodeImpl } from './workflow_step';
 import type { ConnectorExecutor } from '../connector_executor';
 import type { StepExecutionRuntime } from '../workflow_context_manager/step_execution_runtime';
-import type { StepExecutionRuntimeFactory } from '../workflow_context_manager/step_execution_runtime_factory';
 import type { ContextDependencies } from '../workflow_context_manager/types';
 import type { WorkflowExecutionRuntimeManager } from '../workflow_context_manager/workflow_execution_runtime_manager';
+import type { WorkflowExecutionState } from '../workflow_context_manager/workflow_execution_state';
 import type { IWorkflowEventLogger } from '../workflow_event_logger';
 
 export class NodesFactory {
   constructor(
-    private connectorExecutor: ConnectorExecutor, // this is temporary, we will remove it when we have a proper connector executor
+    private connectorExecutor: ConnectorExecutor,
     private workflowRuntime: WorkflowExecutionRuntimeManager,
     private workflowLogger: IWorkflowEventLogger, // Assuming you have a logger interface
     private workflowGraph: WorkflowGraph,
-    private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory,
+    private workflowExecutionState: WorkflowExecutionState,
     private dependencies: ContextDependencies
   ) {}
 
-  public create(stepExecutionRuntime: StepExecutionRuntime): NodeImplementation {
-    const { node } = stepExecutionRuntime;
-
+  public create(
+    stepExecutionRuntime: StepExecutionRuntime,
+    node: GraphNodeUnion
+  ): NodeImplementation {
     // Built-in steps - checked first before workflows_extensions
     // Note: Some built-in steps (like data.set) are also registered in workflows_extensions
     // for YAML schema validation, but execution always uses the built-in implementation.
@@ -161,14 +154,30 @@ export class NodesFactory {
       }
     }
 
-    return this.createGenericStepNode(stepExecutionRuntime);
+    return this.createGenericStepNode(stepExecutionRuntime, node);
   }
 
   // eslint-disable-next-line complexity
-  private createGenericStepNode(stepExecutionRuntime: StepExecutionRuntime): NodeImplementation {
-    const node = stepExecutionRuntime.node;
+  private createGenericStepNode(
+    stepExecutionRuntime: StepExecutionRuntime,
+    node: GraphNodeUnion
+  ): NodeImplementation {
     const stepLogger = stepExecutionRuntime.stepLogger;
     switch (node.type) {
+      case 'enter-workflow': {
+        if (!this.dependencies.workflowExecutionRepository) {
+          throw new Error('WorkflowExecutionRepository is not available in dependencies');
+        }
+        return new EnterWorkflowNodeImpl(
+          node as unknown as EnterWorkflowNode,
+          this.workflowRuntime,
+          this.workflowExecutionState,
+          this.workflowLogger,
+          this.dependencies.workflowExecutionRepository
+        );
+      }
+      case 'exit-workflow':
+        return new ExitWorkflowNodeImpl(this.workflowRuntime);
       case 'enter-foreach':
         return new EnterForeachNodeImpl(
           node as EnterForeachNode,
@@ -202,16 +211,14 @@ export class NodesFactory {
           node as LoopBreakNode,
           stepExecutionRuntime,
           this.workflowRuntime,
-          stepLogger,
-          this.stepExecutionRuntimeFactory
+          stepLogger
         );
       case 'loop-continue':
         return new LoopContinueNodeImpl(
           node as LoopContinueNode,
           stepExecutionRuntime,
           this.workflowRuntime,
-          stepLogger,
-          this.stepExecutionRuntimeFactory
+          stepLogger
         );
       case 'enter-retry':
         return new EnterRetryNodeImpl(
@@ -252,22 +259,10 @@ export class NodesFactory {
       case 'exit-fallback-path':
         return new ExitFallbackPathNodeImpl(node as ExitFallbackPathNode, this.workflowRuntime);
       case 'enter-timeout-zone':
-        if (isEnterWorkflowTimeoutZone(node)) {
-          return new EnterWorkflowTimeoutZoneNodeImpl(
-            node,
-            this.workflowRuntime,
-            this.stepExecutionRuntimeFactory
-          );
-        }
-
         if (isEnterStepTimeoutZone(node)) {
           return new EnterStepTimeoutZoneNodeImpl(node, this.workflowRuntime, stepExecutionRuntime);
         }
       case 'exit-timeout-zone':
-        if (isExitWorkflowTimeoutZone(node)) {
-          return new ExitWorkflowTimeoutZoneNodeImpl(this.workflowRuntime);
-        }
-
         if (isExitStepTimeoutZone(node)) {
           return new ExitStepTimeoutZoneNodeImpl(stepExecutionRuntime, this.workflowRuntime);
         }

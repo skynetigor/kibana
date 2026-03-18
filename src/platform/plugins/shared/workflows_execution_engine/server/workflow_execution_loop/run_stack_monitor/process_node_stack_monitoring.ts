@@ -8,9 +8,8 @@
  */
 
 import type { MonitorableNode } from '../../step/node_implementation';
+import { getEnclosingScopeRuntimes } from '../../utils';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
-import { WorkflowScopeStack } from '../../workflow_context_manager/workflow_scope_stack';
-import { cancelWorkflowIfRequested } from '../cancel_workflow_if_requested';
 import type { WorkflowExecutionLoopParams } from '../types';
 
 /**
@@ -29,37 +28,20 @@ export async function processNodeStackMonitoring(
   params: WorkflowExecutionLoopParams,
   monitoredStepExecutionRuntime: StepExecutionRuntime
 ): Promise<void> {
-  const nodeStackFrames = params.workflowRuntime.getCurrentNodeScope();
-  let nodeStack = WorkflowScopeStack.fromStackFrames(nodeStackFrames);
+  const enclosingScopeRuntimes = getEnclosingScopeRuntimes(
+    monitoredStepExecutionRuntime,
+    params.stepExecutionRuntimeFactory
+  );
 
-  while (!nodeStack.isEmpty()) {
-    const scopeData = nodeStack.getCurrentScope();
-
-    if (!scopeData) {
-      break;
-    }
-
-    nodeStack = nodeStack.exitScope();
-    const scopeStepExecutionRuntime = params.stepExecutionRuntimeFactory.createStepExecutionRuntime(
-      {
-        nodeId: scopeData.nodeId,
-        stackFrames: nodeStack.stackFrames,
-      }
+  for (const scopeStepExecutionRuntime of enclosingScopeRuntimes) {
+    const nodeImplementation = params.nodesFactory.create(
+      scopeStepExecutionRuntime,
+      scopeStepExecutionRuntime.node
     );
-
-    const nodeImplementation = params.nodesFactory.create(scopeStepExecutionRuntime);
 
     if (typeof (nodeImplementation as unknown as MonitorableNode).monitor === 'function') {
       const monitored = nodeImplementation as unknown as MonitorableNode;
       await Promise.resolve(monitored.monitor(monitoredStepExecutionRuntime));
     }
   }
-
-  await cancelWorkflowIfRequested(
-    params.workflowExecutionRepository,
-    params.workflowExecutionState,
-    monitoredStepExecutionRuntime,
-    params.workflowLogger,
-    monitoredStepExecutionRuntime.abortController
-  );
 }

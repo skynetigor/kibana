@@ -10,7 +10,7 @@
 import type { CoreStart, KibanaRequest } from '@kbn/core/server';
 import type { ElasticsearchClient } from '@kbn/core-elasticsearch-server';
 import type { StackFrame } from '@kbn/workflows';
-import type { WorkflowGraph } from '@kbn/workflows/graph';
+import type { GraphNodeUnion, WorkflowGraph } from '@kbn/workflows/graph';
 import { StepExecutionRuntime } from './step_execution_runtime';
 import type { ContextDependencies } from './types';
 import { WorkflowContextManager } from './workflow_context_manager';
@@ -71,13 +71,15 @@ function removeCurrentNodeFromStackFrames(nodeId: string, stackFrames: StackFram
  *   coreStart
  * });
  *
- * const runtime = factory.createStepExecutionRuntime({
+ * const runtime = factory.getOrCreateStepExecutionRuntime({
  *   node: graphNode,
  *   stackFrames: currentStackFrames
  * });
  * ```
  */
 export class StepExecutionRuntimeFactory {
+  private createdStepExecutionRuntimes: Map<string, StepExecutionRuntime> = new Map();
+
   constructor(
     private params: {
       workflowExecutionState: WorkflowExecutionState;
@@ -90,7 +92,15 @@ export class StepExecutionRuntimeFactory {
     }
   ) {}
 
-  createStepExecutionRuntime({
+  /**
+   * Returns a cached `StepExecutionRuntime` for the given node, or creates one if it doesn't exist.
+   *
+   * Instances are cached by `stepExecutionId` (derived from the workflow execution ID, step ID,
+   * and stack frames). Multiple callers — e.g. `runNode`, the runtime manager's `cancel()`/`timeout()`,
+   * and `processNodeStackMonitoring` — rely on getting the **same** instance for a given step so that
+   * abort signals and state mutations are shared across concurrent execution and monitoring paths.
+   */
+  getOrCreateStepExecutionRuntime({
     nodeId,
     stackFrames,
   }: {
@@ -111,7 +121,26 @@ export class StepExecutionRuntimeFactory {
       node.stepId,
       modifiedStackFrames
     );
+    const existingStepExecutionRuntime = this.createdStepExecutionRuntimes.get(stepExecutionId);
 
+    if (existingStepExecutionRuntime) {
+      return existingStepExecutionRuntime;
+    }
+
+    const stepExecutionRuntime = this.createNewStepExecutionRuntime(
+      stepExecutionId,
+      node,
+      modifiedStackFrames
+    );
+    this.createdStepExecutionRuntimes.set(stepExecutionId, stepExecutionRuntime);
+    return stepExecutionRuntime;
+  }
+
+  private createNewStepExecutionRuntime(
+    stepExecutionId: string,
+    node: GraphNodeUnion,
+    stackFrames: StackFrame[]
+  ): StepExecutionRuntime {
     const stepLogger = this.params.workflowLogger.createStepLogger(
       stepExecutionId,
       node.stepId,
@@ -123,7 +152,7 @@ export class StepExecutionRuntimeFactory {
       workflowExecutionGraph: this.params.workflowExecutionGraph,
       workflowExecutionState: this.params.workflowExecutionState,
       node,
-      stackFrames: modifiedStackFrames,
+      stackFrames,
       esClient: this.params.esClient,
       fakeRequest: this.params.fakeRequest,
       coreStart: this.params.coreStart,
@@ -134,7 +163,7 @@ export class StepExecutionRuntimeFactory {
       workflowExecutionGraph: this.params.workflowExecutionGraph,
       workflowExecutionState: this.params.workflowExecutionState,
       stepLogger,
-      stackFrames: modifiedStackFrames,
+      stackFrames,
       node,
       contextManager,
     });

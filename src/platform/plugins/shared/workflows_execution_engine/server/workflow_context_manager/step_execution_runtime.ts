@@ -194,6 +194,23 @@ export class StepExecutionRuntime {
     this.logStepFail(executionError);
   }
 
+  public cancelStep(): void {
+    const startedAt = this.stepExecution?.startedAt || new Date().toISOString();
+    const finishedAt = new Date().toISOString();
+    const executionTimeMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+    this.workflowExecutionState.upsertStep({
+      id: this.stepExecutionId,
+      status: ExecutionStatus.CANCELLED,
+      finishedAt,
+      executionTimeMs,
+      output: null,
+      error: {
+        type: 'WorkflowCancelledError',
+        message: 'Workflow cancelled',
+      },
+    });
+  }
+
   public async flushEventLogs(): Promise<void> {
     await this.stepLogger?.flushEvents();
   }

@@ -28,11 +28,7 @@ import {
 } from '@kbn/workflows/common/errors';
 import { ConcurrencyManager } from './concurrency/concurrency_manager';
 import type { WorkflowsExecutionEngineConfig } from './config';
-import {
-  checkAndSkipIfExistingScheduledExecution,
-  resumeWorkflow,
-  runWorkflow,
-} from './execution_functions';
+import { checkAndSkipIfExistingScheduledExecution, runWorkflow } from './execution_functions';
 import { checkLicense } from './lib/check_license';
 import { getAuthenticatedUser } from './lib/get_user';
 import { WorkflowExecutionTelemetryClient } from './lib/telemetry/workflow_execution_telemetry_client';
@@ -54,11 +50,7 @@ import { generateExecutionTaskScope } from './utils';
 import { buildWorkflowContext } from './workflow_context_manager/build_workflow_context';
 import type { ContextDependencies } from './workflow_context_manager/types';
 import { WorkflowEventLoggerService } from './workflow_event_logger';
-import { WORKFLOW_RESUME_TASK_TYPE } from './workflow_task_manager/types';
-import type {
-  ResumeWorkflowExecutionParams,
-  StartWorkflowExecutionParams,
-} from './workflow_task_manager/types';
+import type { StartWorkflowExecutionParams } from './workflow_task_manager/types';
 import { WorkflowTaskManager } from './workflow_task_manager/workflow_task_manager';
 import { createIndexes } from '../common';
 
@@ -187,84 +179,6 @@ export class WorkflowsExecutionEnginePlugin
                 meteringService: this.meteringService,
                 isEventDrivenExecutionEnabled:
                   workflowsExecutionEngine.isEventDrivenExecutionEnabled,
-              });
-            },
-            cancel: async () => {
-              taskAbortController.abort();
-            },
-          };
-        },
-      },
-    });
-    plugins.taskManager.registerTaskDefinitions({
-      [WORKFLOW_RESUME_TASK_TYPE]: {
-        title: 'Resume Workflow',
-        description: 'Resumes a paused workflow',
-        // Set high timeout for long-running workflows.
-        // This is high value to allow long-running workflows.
-        // The workflow timeout logic defined in workflow execution engine logic is the primary control.
-        timeout: '365d',
-        maxAttempts: 1,
-        createTaskRunner: ({ taskInstance, fakeRequest }) => {
-          if (!fakeRequest) {
-            throw new Error('Cannot resume a workflow without Kibana Request');
-          }
-          const taskAbortController = new AbortController();
-          return {
-            run: async () => {
-              const { workflowRunId, spaceId } =
-                taskInstance.params as ResumeWorkflowExecutionParams;
-
-              // Add queue delay metrics to APM trace for observability
-              const now = Date.now();
-              const scheduledAt = taskInstance.scheduledAt
-                ? new Date(taskInstance.scheduledAt).getTime()
-                : null;
-              const runAt = taskInstance.runAt ? new Date(taskInstance.runAt).getTime() : null;
-              const queueDelayMs = scheduledAt ? now - scheduledAt : null;
-              const resumeDelayMs = runAt ? now - runAt : null;
-
-              const { default: apm } = await import('elastic-apm-node');
-              const currentTransaction = apm.currentTransaction;
-              if (currentTransaction) {
-                if (queueDelayMs !== null) {
-                  currentTransaction.setLabel('queue_delay_ms', queueDelayMs);
-                  currentTransaction.setLabel(
-                    'queue_delay_seconds',
-                    Math.round(queueDelayMs / 1000)
-                  );
-                }
-                if (resumeDelayMs !== null) {
-                  currentTransaction.setLabel('resume_delay_ms', resumeDelayMs);
-                }
-                currentTransaction.setLabel('workflow_run_id', workflowRunId);
-                currentTransaction.setLabel('space_id', spaceId);
-              }
-
-              const [coreStart, pluginsStart, workflowsExecutionEngine] =
-                await core.getStartServices();
-              await checkLicense(pluginsStart.licensing);
-
-              await this.initialize(coreStart);
-              const dependencies: ContextDependencies = {
-                ...setupDependencies,
-                coreStart,
-                actions: pluginsStart.actions,
-                taskManager: pluginsStart.taskManager,
-                workflowsExtensions: pluginsStart.workflowsExtensions,
-                config,
-              };
-
-              await resumeWorkflow({
-                workflowRunId,
-                spaceId,
-                taskAbortController,
-                config,
-                logger,
-                fakeRequest,
-                dependencies,
-                workflowsExecutionEngine,
-                meteringService: this.meteringService,
               });
             },
             cancel: async () => {

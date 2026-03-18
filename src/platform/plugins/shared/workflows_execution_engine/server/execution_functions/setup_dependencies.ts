@@ -100,19 +100,7 @@ export async function setupDependencies(
     stepExecutionRepository
   );
 
-  // Create telemetry client
   const telemetryClient = new WorkflowExecutionTelemetryClient(coreStart.analytics, logger);
-
-  // Create workflow runtime first (simpler, fewer dependencies)
-  const workflowRuntime = new WorkflowExecutionRuntimeManager({
-    workflowExecution: workflowExecution as EsWorkflowExecution,
-    workflowExecutionGraph,
-    workflowLogger,
-    workflowExecutionState,
-    coreStart,
-    dependencies,
-    telemetryClient,
-  });
 
   const esClient: ElasticsearchClient =
     coreStart.elasticsearch.client.asScoped(fakeRequest).asCurrentUser;
@@ -139,12 +127,25 @@ export async function setupDependencies(
     dependencies: enhancedDependencies,
   });
 
+  const workflowRuntime = new WorkflowExecutionRuntimeManager({
+    workflowExecution: workflowExecution as EsWorkflowExecution,
+    workflowExecutionGraph,
+    workflowLogger,
+    workflowExecutionState,
+    coreStart,
+    dependencies,
+    stepExecutionRuntimeFactory,
+    telemetryClient,
+    workflowTaskManager,
+    fakeRequest,
+  });
+
   const nodesFactory = new NodesFactory(
     connectorExecutor,
     workflowRuntime,
     workflowLogger,
     workflowExecutionGraph,
-    stepExecutionRuntimeFactory,
+    workflowExecutionState,
     enhancedDependencies
   );
 
