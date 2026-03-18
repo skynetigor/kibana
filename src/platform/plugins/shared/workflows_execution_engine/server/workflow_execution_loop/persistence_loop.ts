@@ -43,20 +43,6 @@ export async function persistenceLoop(
   params: WorkflowExecutionLoopParams,
   persistenceAbortSignal?: AbortSignal
 ) {
-  // Create the abort promise once outside the loop to avoid accumulating
-  // event listeners on each iteration.
-  const persistenceAbortPromise: Promise<void> = persistenceAbortSignal
-    ? new Promise<void>((_, reject) => {
-        if (persistenceAbortSignal.aborted) {
-          reject(new TimeoutAbortedError());
-          return;
-        }
-        persistenceAbortSignal.addEventListener('abort', () => reject(new TimeoutAbortedError()), {
-          once: true,
-        });
-      })
-    : new Promise<void>(() => {});
-
   while (params.workflowRuntime.isExecuting) {
     if (persistenceAbortSignal?.aborted) {
       return;
@@ -65,6 +51,23 @@ export async function persistenceLoop(
     await flushState(params);
 
     try {
+      // Create the abort promise once outside the loop to avoid accumulating
+      // event listeners on each iteration.
+      const persistenceAbortPromise: Promise<void> = persistenceAbortSignal
+        ? new Promise<void>((_, reject) => {
+            if (persistenceAbortSignal.aborted) {
+              reject(new TimeoutAbortedError());
+              return;
+            }
+            persistenceAbortSignal.addEventListener(
+              'abort',
+              () => reject(new TimeoutAbortedError()),
+              {
+                once: true,
+              }
+            );
+          })
+        : new Promise<void>(() => {});
       const waitSpan = apm.startSpan('persistence wait', 'workflow', 'wait');
       await Promise.race([
         abortableTimeout(FLUSH_INTERVAL_MS, params.taskAbortController.signal),

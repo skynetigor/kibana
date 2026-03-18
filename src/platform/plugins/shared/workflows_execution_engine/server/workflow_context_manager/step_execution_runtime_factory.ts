@@ -71,7 +71,7 @@ function removeCurrentNodeFromStackFrames(nodeId: string, stackFrames: StackFram
  *   coreStart
  * });
  *
- * const runtime = factory.createStepExecutionRuntime({
+ * const runtime = factory.getOrCreateStepExecutionRuntime({
  *   node: graphNode,
  *   stackFrames: currentStackFrames
  * });

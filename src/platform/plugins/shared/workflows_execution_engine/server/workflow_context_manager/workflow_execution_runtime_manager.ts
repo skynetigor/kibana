@@ -111,6 +111,7 @@ export class WorkflowExecutionRuntimeManager {
       isExecuting: true,
       currentNodeId: this.nextNodeId,
       scopeStack: this.workflowExecution.scopeStack ?? [],
+      stepExecutionIds: this.workflowExecution.stepExecutionIds ?? [],
     });
     await this.workflowExecutionState.load();
   }
@@ -312,7 +313,7 @@ export class WorkflowExecutionRuntimeManager {
 
       scopeStack = scopeStack.exitScope();
 
-      const scopeStepRuntime = stepExecutionRuntimeFactory.createStepExecutionRuntime({
+      const scopeStepRuntime = stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
         nodeId: currentScope.nodeId,
         stackFrames: scopeStack.stackFrames,
       });

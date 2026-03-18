@@ -43,6 +43,11 @@ export class WorkflowExecutionState {
       );
     }
 
+    if (!this.workflowExecution.stepExecutionIds.length) {
+      // if there are no step execution IDs, we don't need to load anything
+      return;
+    }
+
     const foundSteps = await this.workflowStepExecutionRepository.getStepExecutionsByIds(
       this.workflowExecution.stepExecutionIds
     );
