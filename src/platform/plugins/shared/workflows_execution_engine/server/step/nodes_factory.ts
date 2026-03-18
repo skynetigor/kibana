@@ -211,16 +211,14 @@ export class NodesFactory {
           node as LoopBreakNode,
           stepExecutionRuntime,
           this.workflowRuntime,
-          stepLogger,
-          this.stepExecutionRuntimeFactory
+          stepLogger
         );
       case 'loop-continue':
         return new LoopContinueNodeImpl(
           node as LoopContinueNode,
           stepExecutionRuntime,
           this.workflowRuntime,
-          stepLogger,
-          this.stepExecutionRuntimeFactory
+          stepLogger
         );
       case 'enter-retry':
         return new EnterRetryNodeImpl(

@@ -10,7 +10,6 @@
 import type { LoopContinueNode } from '@kbn/workflows/graph';
 import { isLoopEnterScope } from './is_loop_enter_scope';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
-import type { StepExecutionRuntimeFactory } from '../../workflow_context_manager/step_execution_runtime_factory';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
 import type { IWorkflowEventLogger } from '../../workflow_event_logger';
 import type { NodeImplementation } from '../node_implementation';
@@ -20,8 +19,7 @@ export class LoopContinueNodeImpl implements NodeImplementation {
     private node: LoopContinueNode,
     private stepExecutionRuntime: StepExecutionRuntime,
     private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager,
-    private workflowLogger: IWorkflowEventLogger,
-    private stepExecutionRuntimeFactory: StepExecutionRuntimeFactory
+    private workflowLogger: IWorkflowEventLogger
   ) {}
 
   public run(): void {
@@ -34,7 +32,7 @@ export class LoopContinueNodeImpl implements NodeImplementation {
 
     this.stepExecutionRuntime.finishStep({ navigateToNode: this.node.loopExitNodeId });
 
-    this.wfExecutionRuntimeManager.unwindScopes(this.stepExecutionRuntimeFactory, isLoopEnterScope);
+    this.wfExecutionRuntimeManager.unwindScopes(isLoopEnterScope);
     this.wfExecutionRuntimeManager.navigateToNode(this.node.loopExitNodeId);
   }
 }

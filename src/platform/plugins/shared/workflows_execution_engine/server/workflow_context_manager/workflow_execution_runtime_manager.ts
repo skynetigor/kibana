@@ -294,7 +294,6 @@ export class WorkflowExecutionRuntimeManager {
    * - workflow.output / workflow.fail — unwind the entire stack (no predicate)
    */
   public unwindScopes(
-    stepExecutionRuntimeFactory: StepExecutionRuntimeFactory,
     shouldStop?: (scope: ScopeData) => boolean,
     { inclusive = false }: { inclusive?: boolean } = {}
   ): void {
@@ -313,7 +312,7 @@ export class WorkflowExecutionRuntimeManager {
 
       scopeStack = scopeStack.exitScope();
 
-      const scopeStepRuntime = stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
+      const scopeStepRuntime = this.stepExecutionRuntimeFactory.getOrCreateStepExecutionRuntime({
         nodeId: currentScope.nodeId,
         stackFrames: scopeStack.stackFrames,
       });
