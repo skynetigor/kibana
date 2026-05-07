@@ -12,6 +12,7 @@ import type { EsWorkflowExecution, EsWorkflowStepExecution, StackFrame } from '@
 import { ExecutionStatus } from '@kbn/workflows';
 import type { GraphNodeUnion, WorkflowGraph } from '@kbn/workflows/graph';
 import { ExecutionError } from '@kbn/workflows/server';
+import type { StepMetadataCache } from './step_metadata_cache';
 import type { WorkflowContextManager } from './workflow_context_manager';
 import type { WorkflowExecutionState } from './workflow_execution_state';
 import { WorkflowScopeStack } from './workflow_scope_stack';
@@ -28,6 +29,7 @@ interface StepExecutionRuntimeInit {
   stepExecutionId: string;
   node: GraphNodeUnion;
   stackFrames: StackFrame[];
+  stepMetadataCache: StepMetadataCache;
 }
 
 /**
@@ -51,6 +53,7 @@ interface StepExecutionRuntimeInit {
  */
 export class StepExecutionRuntime {
   private workflowExecutionState: WorkflowExecutionState;
+  private stepMetadataCache: StepMetadataCache;
   private workflowGraph: WorkflowGraph;
   private stackFrames: StackFrame[];
 
@@ -78,6 +81,7 @@ export class StepExecutionRuntime {
 
   constructor(stepExecutionRuntimeInit: StepExecutionRuntimeInit) {
     this.workflowGraph = stepExecutionRuntimeInit.workflowExecutionGraph;
+    this.stepMetadataCache = stepExecutionRuntimeInit.stepMetadataCache;
     this.contextManager = stepExecutionRuntimeInit.contextManager;
 
     // Use workflow execution ID as traceId for APM compatibility
@@ -137,10 +141,7 @@ export class StepExecutionRuntime {
   }
 
   public setInput(input: Record<string, unknown>): void {
-    this.workflowExecutionState.upsertStep({
-      id: this.stepExecutionId,
-      input: input as JsonValue,
-    });
+    this.stepMetadataCache.addToCache(this.stepExecutionId, 'input', input as JsonValue);
   }
 
   public finishStep(stepOutput?: unknown): void {
@@ -158,7 +159,7 @@ export class StepExecutionRuntime {
         new Date(startedStepExecution.startedAt).getTime();
     }
 
-    this.workflowExecutionState.upsertStep(stepExecutionUpdate);
+    this.stepMetadataCache.addToCache(this.stepExecutionId, 'output', stepOutput);
     this.logStepComplete(stepExecutionUpdate);
   }
 
@@ -187,7 +188,7 @@ export class StepExecutionRuntime {
     this.workflowExecutionState.updateWorkflowExecution({
       error: serializedError,
     });
-    this.workflowExecutionState.upsertStep(stepExecutionUpdate);
+    this.stepMetadataCache.addToCache(this.stepExecutionId, 'error', serializedError);
     this.logStepFail(executionError);
   }
 

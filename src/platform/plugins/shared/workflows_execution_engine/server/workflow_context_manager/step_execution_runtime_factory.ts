@@ -19,6 +19,7 @@ import { WorkflowScopeStack } from './workflow_scope_stack';
 import { WorkflowTemplatingEngine } from '../templating_engine';
 import { buildStepExecutionId } from '../utils';
 import type { IWorkflowEventLogger } from '../workflow_event_logger';
+import { StepMetadataCache } from './step_metadata_cache';
 
 /**
  * Guards against duplicate node entries in stack frames by removing the current node if it exists on top.
@@ -92,6 +93,7 @@ export class StepExecutionRuntimeFactory {
       fakeRequest: KibanaRequest;
       coreStart: CoreStart;
       dependencies: ContextDependencies;
+      stepMetadataCache: StepMetadataCache;
     }
   ) {}
 
@@ -133,7 +135,7 @@ export class StepExecutionRuntimeFactory {
       fakeRequest: this.params.fakeRequest,
       coreStart: this.params.coreStart,
       dependencies: this.params.dependencies,
-      stepMetadataCache: this.params.workflowExecutionState.getStepMetadataCache(),
+      stepMetadataCache: this.params.stepMetadataCache,
     });
     return new StepExecutionRuntime({
       stepExecutionId,
@@ -143,6 +145,7 @@ export class StepExecutionRuntimeFactory {
       stackFrames: modifiedStackFrames,
       node,
       contextManager,
+      stepMetadataCache: this.params.stepMetadataCache,
     });
   }
 }

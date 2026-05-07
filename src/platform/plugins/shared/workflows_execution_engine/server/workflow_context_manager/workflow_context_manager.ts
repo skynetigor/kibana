@@ -79,10 +79,6 @@ export class WorkflowContextManager {
     this.stepMetadataCache = init.stepMetadataCache;
   }
 
-  public getStepMetadataCache(): StepMetadataCache {
-    return this.stepMetadataCache;
-  }
-
   // Any change here should be reflected in the 'getContextSchemaForPath' function for frontend validation to work
   // src/platform/plugins/shared/workflows_management/public/features/workflow_context/lib/get_context_for_path.ts
   public getContext(): StepContext {
@@ -689,7 +685,7 @@ export class WorkflowContextManager {
         stepState: stepExecution?.state,
       }));
 
-    const cached = await this.stepMetadataCache.getMetadataForStepExecution(
+    const cached = await this.stepMetadataCache.rehydrateStepMetadata(
       latest.map((x) => x.stepExecutionId)
     );
     const result: Record<
@@ -709,6 +705,8 @@ export class WorkflowContextManager {
     for (const xxx of latest) {
       const cachedStepMetadata = cached[xxx.stepExecutionId];
       result[xxx.stepId] = {
+        stepId: xxx.stepId,
+        stepExecutionId: xxx.stepExecutionId,
         runStepResult: {
           input: cachedStepMetadata?.input,
           output: cachedStepMetadata?.output,

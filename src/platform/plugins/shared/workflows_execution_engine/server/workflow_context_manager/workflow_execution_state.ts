@@ -12,7 +12,6 @@ import {
   type EsWorkflowStepExecution,
   isTerminalStatus,
 } from '@kbn/workflows';
-import type { StepMetadataCache } from './step_metadata_cache';
 import type { StepExecutionRepository } from '../repositories/step_execution_repository';
 import type { WorkflowExecutionRepository } from '../repositories/workflow_execution_repository';
 
@@ -33,14 +32,9 @@ export class WorkflowExecutionState {
   constructor(
     initialWorkflowExecution: EsWorkflowExecution,
     private workflowExecutionRepository: WorkflowExecutionRepository,
-    private workflowStepExecutionRepository: StepExecutionRepository,
-    private readonly stepMetadataCache: StepMetadataCache
+    private workflowStepExecutionRepository: StepExecutionRepository
   ) {
     this.workflowExecution = initialWorkflowExecution;
-  }
-
-  public getStepMetadataCache(): StepMetadataCache {
-    return this.stepMetadataCache;
   }
 
   public async load(): Promise<void> {
@@ -124,16 +118,6 @@ export class WorkflowExecutionState {
     } else {
       this.updateStep(step.id, step);
     }
-
-    const currentStep = this.stepExecutions.get(step.id);
-
-    if (currentStep?.output || currentStep?.error || currentStep?.input) {
-      this.stepMetadataCache.cacheMetadata(step.id, {
-        input: currentStep?.input,
-        output: currentStep?.output,
-        error: currentStep?.error,
-      });
-    }
   }
 
   public async flushStepChanges(): Promise<void> {
@@ -144,28 +128,22 @@ export class WorkflowExecutionState {
 
     this.stepDocumentsChanges.clear();
     await this.workflowStepExecutionRepository.bulkUpsert(stepDocumentsChanges);
-    this.evictFlushedStepPayloadsFromLocalState(stepDocumentsChanges);
+    this.evictFlushedStepPayloadsFromLocalState(Array.from(this.stepDocumentsChanges.keys()));
   }
 
   /**
    * After step documents are persisted, clears input/output/error on matching in-memory
    * step executions to reduce retained context size (payloads remain on ES / metadata cache).
    */
-  private evictFlushedStepPayloadsFromLocalState(
-    flushedSteps: Array<Partial<EsWorkflowStepExecution>>
-  ): void {
-    flushedSteps.forEach((step) => {
-      if (!step.id) {
-        return;
-      }
-
-      const existingStep = this.stepExecutions.get(step.id);
+  private evictFlushedStepPayloadsFromLocalState(flushedStepsIds: string[]): void {
+    flushedStepsIds.forEach((stepId) => {
+      const existingStep = this.stepExecutions.get(stepId);
 
       if (!existingStep || !existingStep.status || isTerminalStatus(existingStep.status)) {
         return;
       }
 
-      this.stepExecutions.set(step.id, {
+      this.stepExecutions.set(stepId, {
         ...existingStep,
         output: undefined,
         error: undefined,

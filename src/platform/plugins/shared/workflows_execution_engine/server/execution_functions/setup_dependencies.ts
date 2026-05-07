@@ -50,7 +50,6 @@ export async function setupDependencies(
 
   const workflowExecutionRepository = new WorkflowExecutionRepository(internalEsClient);
   const stepExecutionRepository = new StepExecutionRepository(internalEsClient);
-  const stepMetadataCache = new StepMetadataCache(stepExecutionRepository);
   const workflowRepository = new WorkflowRepository({
     esClient: internalEsClient,
     logger,
@@ -110,9 +109,9 @@ export async function setupDependencies(
   const workflowExecutionState = new WorkflowExecutionState(
     workflowExecution as EsWorkflowExecution,
     workflowExecutionRepository,
-    stepExecutionRepository,
-    stepMetadataCache
+    stepExecutionRepository
   );
+  const stepMetadataCache = new StepMetadataCache(workflowExecutionState, stepExecutionRepository);
 
   // Create telemetry client
   const telemetryClient = new WorkflowExecutionTelemetryClient(coreStart.analytics, logger);
@@ -151,6 +150,7 @@ export async function setupDependencies(
     fakeRequest,
     coreStart,
     dependencies: enhancedDependencies,
+    stepMetadataCache,
   });
 
   const nodesFactory = new NodesFactory(
@@ -167,6 +167,7 @@ export async function setupDependencies(
     workflowRuntime,
     stepExecutionRuntimeFactory,
     workflowExecutionState,
+    stepMetadataCache,
     workflowLogger,
     workflowTaskManager,
     nodesFactory,

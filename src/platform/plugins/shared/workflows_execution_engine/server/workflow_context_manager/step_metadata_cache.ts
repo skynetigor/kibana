@@ -9,6 +9,7 @@
 import { LRUCache } from 'lru-cache';
 
 import type { SerializedError } from '@kbn/workflows/spec/schema';
+import type { WorkflowExecutionState } from './workflow_execution_state';
 import type { StepExecutionRepository } from '../repositories/step_execution_repository';
 
 interface CacheEntry {
@@ -25,21 +26,27 @@ export class StepMetadataCache {
     ttl: 1000 * 5, // 10 seconds
   });
 
-  constructor(private readonly stepExecutionRepository: StepExecutionRepository) {}
-
-  public cacheMetadata(stepExecutionId: string, cacheEntry: CacheEntry) {
-    this.cache.set(stepExecutionId, cacheEntry);
-  }
+  constructor(
+    private workflowExecutionState: WorkflowExecutionState,
+    private readonly stepExecutionRepository: StepExecutionRepository
+  ) {}
 
   public addToCache(stepExecutionId: string, kind: 'input' | 'output' | 'error', value: unknown) {
+    this.workflowExecutionState.upsertStep({
+      id: stepExecutionId,
+      [kind]: value,
+    });
     this.cache.set(`${stepExecutionId}-${kind}`, { value });
   }
 
-  public async getMetadataForStepExecution(
+  public getStepMetadataValue(stepExecutionId: string, kind: CacheKind): unknown {
+    return this.cache.get(`${stepExecutionId}-${kind}`)?.value;
+  }
+
+  public async rehydrateStepMetadata(
     stepExecutionIds: string[]
   ): Promise<Record<string, CacheEntry>> {
     const metadata: Record<string, CacheEntry> = {};
-    const toFetch: string[] = [];
     const toFetchNEW: Record<string, CacheKind[]> = {};
 
     for (const stepExecutionId of stepExecutionIds) {
@@ -71,7 +78,7 @@ export class StepMetadataCache {
 
       const all = await Promise.all(
         Object.values(mapped).map((x) =>
-          this.stepExecutionRepository.getStepExecutionsByIds(x.ids, ['id', ...x.kinds] as any)
+          this.stepExecutionRepository.getStepExecutionsByIds(x.ids, ['id', ...x.kinds])
         )
       );
 
