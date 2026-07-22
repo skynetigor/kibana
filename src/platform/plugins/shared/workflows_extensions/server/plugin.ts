@@ -7,6 +7,7 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
 import type {
   CoreSetup,
   CoreStart,
@@ -26,10 +27,10 @@ import type {
   WorkflowsExtensionsExperimentalStepsConfig,
 } from './config';
 import { resolveExperimentalStepsConfig } from './config';
+import { getCloudVmConnectorType } from './connectors/cloud_vm';
 import { registerGetStepDefinitionsRoute } from './routes/get_step_definitions';
 import { registerGetTriggerDefinitionsRoute } from './routes/get_trigger_definitions';
 import { ServerStepRegistry } from './step_registry';
-import { getGcpVmConnectorType } from './connectors/gcp_vm';
 import { registerInternalStepDefinitions } from './steps';
 import { TriggerRegistry } from './trigger_registry';
 import { registerInternalTriggerDefinitions } from './triggers';
@@ -58,6 +59,7 @@ export class WorkflowsExtensionsServerPlugin
   private readonly managedWorkflowPluginIds = new Set<string>();
   private workflowsClientProvider: WorkflowsClientProvider | undefined;
   private managedWorkflowsSystemApiProvider: ManagedWorkflowsSystemApiProvider | undefined;
+  private actionsStart: ActionsPluginStartContract | undefined;
 
   constructor(initializerContext: PluginInitializerContext) {
     this.logger = initializerContext.logger.get();
@@ -87,10 +89,11 @@ export class WorkflowsExtensionsServerPlugin
     registerGetStepDefinitionsRoute(router, this.stepRegistry, this.logger);
     registerGetTriggerDefinitionsRoute(router, this.triggerRegistry);
 
-    plugins.actions.registerSubActionConnectorType(getGcpVmConnectorType());
+    plugins.actions.registerSubActionConnectorType(getCloudVmConnectorType());
 
     registerInternalStepDefinitions(this.stepRegistry, {
       experimentalSteps: this.experimentalStepsConfig,
+      getActionsStart: () => this.actionsStart,
     });
     registerInternalTriggerDefinitions(this.triggerRegistry);
 
@@ -124,8 +127,9 @@ export class WorkflowsExtensionsServerPlugin
 
   public start(
     _core: CoreStart,
-    _plugins: WorkflowsExtensionsServerPluginStartDeps
+    plugins: WorkflowsExtensionsServerPluginStartDeps
   ): WorkflowsExtensionsServerPluginStart {
+    this.actionsStart = plugins.actions;
     this.triggerRegistry.freeze();
 
     return {

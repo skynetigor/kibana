@@ -14,7 +14,9 @@ import type { CommonStepDefinition } from '../../step_registry/types';
 
 export const ScriptsJavaScriptStepTypeId = 'code.javascript' as const;
 
-export const ConfigSchema = z.object({});
+export const ConfigSchema = z.object({
+  connectorId: z.string().optional(),
+});
 
 export const CODE_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB template in workflow YAML
 export const CODE_MAX_LENGTH_CHARS = 5 * 1024 * 1024; // 5 MB after Liquid template rendering

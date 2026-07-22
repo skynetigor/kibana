@@ -19,13 +19,13 @@ import {
   dataRegexReplaceStepDefinition,
   dataStringifyJsonStepDefinition,
 } from './data';
-import { scriptsJavaScriptStepDefinition } from './javascript/javascript_step';
+import { createScriptsJavaScriptStepDefinition } from './javascript/javascript_step';
 import type { RegisterInternalStepDefinitionsOptions } from './register_internal_step_definitions_options';
 import type { ServerStepRegistry } from '../step_registry/step_registry';
 
 export const registerInternalStepDefinitions = (
   serverStepRegistry: ServerStepRegistry,
-  { experimentalSteps }: RegisterInternalStepDefinitionsOptions
+  { experimentalSteps, getActionsStart }: RegisterInternalStepDefinitionsOptions
 ) => {
   serverStepRegistry.register(dataMapStepDefinition);
   serverStepRegistry.register(dataDedupeStepDefinition);
@@ -39,6 +39,6 @@ export const registerInternalStepDefinitions = (
   serverStepRegistry.register(dataStringifyJsonStepDefinition);
 
   if (experimentalSteps.javaScriptStep) {
-    serverStepRegistry.register(scriptsJavaScriptStepDefinition);
+    serverStepRegistry.register(createScriptsJavaScriptStepDefinition({ getActionsStart }));
   }
 };

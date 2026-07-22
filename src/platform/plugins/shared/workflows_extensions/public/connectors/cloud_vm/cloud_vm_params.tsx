@@ -7,10 +7,10 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
-import type { WorkflowsExtensionsExperimentalStepsConfig } from '../../common/experimental_steps_config';
+import React from 'react';
 
-export interface RegisterInternalStepDefinitionsOptions {
-  experimentalSteps: WorkflowsExtensionsExperimentalStepsConfig;
-  getActionsStart: () => ActionsPluginStartContract | undefined;
-}
+// Action params are set via workflow YAML, not the alerting UI.
+const CloudVmParamsFields: React.FunctionComponent = () => null;
+
+// eslint-disable-next-line import/no-default-export
+export { CloudVmParamsFields as default };

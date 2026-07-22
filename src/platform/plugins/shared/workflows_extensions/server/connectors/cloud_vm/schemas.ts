@@ -9,29 +9,26 @@
 
 import { z } from '@kbn/zod/v4';
 
-export const GcpVmConfigSchema = z
+export const CloudVmConfigSchema = z
   .object({
-    projectId: z.string().min(1),
-    zone: z.string().min(1),
-    vmName: z.string().min(1),
+    ip: z.string().min(1),
+  })
+  .strict();
+
+export const CloudVmSecretsSchema = z
+  .object({
     username: z.string().min(1),
-    sshKey: z.string().min(1),
+    password: z.string().optional(),
+    sshPrivateKey: z.string().min(1),
   })
   .strict();
 
-// The service account JSON key is sensitive and stored encrypted
-export const GcpVmSecretsSchema = z
-  .object({
-    saKey: z.string().min(1),
-  })
-  .strict();
-
-export const GcpVmSshParamsSchema = z
+export const CloudVmSshParamsSchema = z
   .object({
     bashScript: z.string().min(1),
   })
   .strict();
 
-export type GcpVmConfig = z.infer<typeof GcpVmConfigSchema>;
-export type GcpVmSecrets = z.infer<typeof GcpVmSecretsSchema>;
-export type GcpVmSshParams = z.infer<typeof GcpVmSshParamsSchema>;
+export type CloudVmConfig = z.infer<typeof CloudVmConfigSchema>;
+export type CloudVmSecrets = z.infer<typeof CloudVmSecretsSchema>;
+export type CloudVmSshParams = z.infer<typeof CloudVmSshParamsSchema>;

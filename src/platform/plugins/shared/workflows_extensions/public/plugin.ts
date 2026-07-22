@@ -9,6 +9,7 @@
 
 import type { CoreSetup, CoreStart, Plugin, PluginInitializerContext } from '@kbn/core/public';
 import { PublicStepRegistry } from './step_registry';
+import { getConnectorType as getCloudVmConnectorType } from './connectors/cloud_vm/cloud_vm_connector_type';
 import { registerInternalStepDefinitions } from './steps';
 import { PublicTriggerRegistry } from './trigger_registry';
 import { registerInternalTriggerDefinitions } from './triggers';
@@ -47,8 +48,10 @@ export class WorkflowsExtensionsPublicPlugin
 
   public setup(
     _core: CoreSetup,
-    _plugins: WorkflowsExtensionsPublicPluginSetupDeps
+    plugins: WorkflowsExtensionsPublicPluginSetupDeps
   ): WorkflowsExtensionsPublicPluginSetup {
+    plugins.triggersActionsUi.actionTypeRegistry.register(getCloudVmConnectorType());
+
     registerInternalStepDefinitions(this.stepRegistry, {
       experimentalSteps: this.experimentalStepsConfig,
     });
