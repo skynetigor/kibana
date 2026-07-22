@@ -7,67 +7,16 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { createSign } from 'crypto';
 import { WorkflowsConnectorFeatureId } from '@kbn/actions-plugin/common';
 import type { SubActionConnectorType } from '@kbn/actions-plugin/server/sub_action_framework/types';
+import type { GcpOperation, GcpServiceAccount } from './gcp_utils';
+import { getGcpAccessToken, pollGcpOperation } from './gcp_utils';
 import { GcpVmConnector } from './gcp_vm_connector';
 import { GcpVmConfigSchema, GcpVmSecretsSchema } from './schemas';
 import type { GcpVmConfig, GcpVmSecrets } from './schemas';
 
 export const CONNECTOR_ID = '.gcp-vm';
 export const CONNECTOR_NAME = 'GCP VM';
-
-interface ServiceAccount {
-  client_email: string;
-  private_key: string;
-}
-
-interface GcpOperation {
-  status: 'PENDING' | 'RUNNING' | 'DONE';
-  selfLink: string;
-  error?: { errors: Array<{ code: string; message: string }> };
-}
-
-// --- Helpers (same JWT/OAuth pattern as vm.ts) ---
-
-function base64UrlEncode(str: string | Buffer): string {
-  return Buffer.from(str)
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
-async function getGcpAccessToken(sa: ServiceAccount): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const header = JSON.stringify({ alg: 'RS256', typ: 'JWT' });
-  const claimSet = JSON.stringify({
-    iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now,
-  });
-
-  const signatureInput = `${base64UrlEncode(header)}.${base64UrlEncode(claimSet)}`;
-  const signer = createSign('RSA-SHA256');
-  signer.update(signatureInput);
-  const signature = signer.sign(sa.private_key);
-  const jwt = `${signatureInput}.${base64UrlEncode(signature)}`;
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
-
-  const tokenData = (await response.json()) as { access_token: string };
-  if (!response.ok) throw new Error(`GCP auth failed: ${JSON.stringify(tokenData)}`);
-  return tokenData.access_token;
-}
 
 // --- Connector type factory ---
 
@@ -90,9 +39,9 @@ export const getGcpVmConnectorType = (): SubActionConnectorType<GcpVmConfig, Gcp
     const { projectId, zone, vmName, username, sshKey } = config;
 
     // 1. Parse and authenticate with the service account key
-    let sa: ServiceAccount;
+    let sa: GcpServiceAccount;
     try {
-      sa = JSON.parse(secrets.saKey) as ServiceAccount;
+      sa = JSON.parse(secrets.saKey) as GcpServiceAccount;
     } catch {
       throw new Error('saKey must be valid service account JSON');
     }
@@ -132,15 +81,7 @@ export const getGcpVmConnectorType = (): SubActionConnectorType<GcpVmConfig, Gcp
     }
 
     // 5. Poll the GCP operation until it completes
-    let op = metaOp;
-    while (op.status !== 'DONE') {
-      await new Promise((res) => setTimeout(res, 2000));
-      const opRes = await fetch(op.selfLink, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      op = (await opRes.json()) as GcpOperation;
-      if (op.error) throw new Error(`Metadata operation failed: ${JSON.stringify(op.error)}`);
-    }
+    await pollGcpOperation(metaOp, accessToken);
 
     logger.info(
       `GCP VM connector: SSH key for user "${username}" registered on instance "${vmName}"`
