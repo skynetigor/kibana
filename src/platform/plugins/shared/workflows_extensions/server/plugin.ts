@@ -29,6 +29,7 @@ import { resolveExperimentalStepsConfig } from './config';
 import { registerGetStepDefinitionsRoute } from './routes/get_step_definitions';
 import { registerGetTriggerDefinitionsRoute } from './routes/get_trigger_definitions';
 import { ServerStepRegistry } from './step_registry';
+import { getGcpVmConnectorType } from './connectors/gcp_vm';
 import { registerInternalStepDefinitions } from './steps';
 import { TriggerRegistry } from './trigger_registry';
 import { registerInternalTriggerDefinitions } from './triggers';
@@ -85,6 +86,8 @@ export class WorkflowsExtensionsServerPlugin
 
     registerGetStepDefinitionsRoute(router, this.stepRegistry, this.logger);
     registerGetTriggerDefinitionsRoute(router, this.triggerRegistry);
+
+    plugins.actions.registerSubActionConnectorType(getGcpVmConnectorType());
 
     registerInternalStepDefinitions(this.stepRegistry, {
       experimentalSteps: this.experimentalStepsConfig,
