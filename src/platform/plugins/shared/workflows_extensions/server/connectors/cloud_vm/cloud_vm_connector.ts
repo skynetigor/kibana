@@ -49,7 +49,10 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
       writeSync(fd, keyContent);
       closeSync(fd);
 
-      const escapedScript = bashScript.replace(/"/g, '\\"');
+      // Base64-encode the script so bash variables ($PID, $STATE, etc.) are not expanded
+      // by the local shell when it processes the double-quoted SSH argument.
+      const encodedScript = Buffer.from(bashScript).toString('base64');
+      const remoteCmd = `printf '%s' '${encodedScript}' | base64 -d | bash`;
 
       const sshOpts = [
         `-i "${tempKeyPath}"`,
@@ -65,11 +68,11 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
         // Pass password via SSHPASS env var — safer than -p flag which is visible in ps
         // sshpass -e uses the SSHPASS variable; -o PasswordAuthentication=yes allows fallback
         sshOpts.push('-o PasswordAuthentication=yes');
-        command = `sshpass -e ssh ${sshOpts.join(' ')} ${username}@${ip} "${escapedScript}"`;
+        command = `sshpass -e ssh ${sshOpts.join(' ')} ${username}@${ip} "${remoteCmd}"`;
         env = { ...process.env, SSHPASS: password };
       } else {
         sshOpts.push('-o PasswordAuthentication=no');
-        command = `ssh ${sshOpts.join(' ')} ${username}@${ip} "${escapedScript}"`;
+        command = `ssh ${sshOpts.join(' ')} ${username}@${ip} "${remoteCmd}"`;
         env = process.env;
       }
 

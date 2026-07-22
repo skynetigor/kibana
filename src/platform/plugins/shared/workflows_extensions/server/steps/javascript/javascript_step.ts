@@ -11,6 +11,7 @@ import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/act
 import { z } from '@kbn/zod/v4';
 import {
   executeJsInConnector,
+  killProcessInConnector,
   tryExtractOutputFromConnector,
 } from './execute_script_in_connector/execute_js_in_connector';
 import { executeScriptInIsolate } from './execute_script_in_isolate';
@@ -144,5 +145,23 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
       }
 
       return { output: scriptResult.output };
+    },
+    onCancel: async ({ config, state, contextManager }) => {
+      if (!state || !state.pid) {
+        return;
+      }
+
+      const { connectorId } = config;
+
+      if (!connectorId) {
+        throw new Error('Connector ID is required for cancelling script execution in connector');
+      }
+
+      await killProcessInConnector({
+        connectorId,
+        request: contextManager.getFakeRequest(),
+        actionsStart: getActionsStart(),
+        pid: state.pid,
+      });
     },
   });
