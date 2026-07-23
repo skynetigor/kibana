@@ -7,6 +7,15 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export * from './bash';
-export * from './data';
-export * from './javascript';
+import React from 'react';
+import { scriptsBashStepCommonDefinition } from '../../../common/steps/bash';
+import { createPublicStepDefinition } from '../../step_registry/types';
+
+export const scriptsBashStepDefinition = createPublicStepDefinition({
+  ...scriptsBashStepCommonDefinition,
+  icon: React.lazy(() =>
+    import('@elastic/eui/es/components/icon/assets/console').then(({ icon }) => ({
+      default: icon,
+    }))
+  ),
+});

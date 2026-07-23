@@ -16,7 +16,10 @@ import type { CloudVmConfig, CloudVmSecrets } from './schemas';
 export const CONNECTOR_ID = '.cloud-vm';
 export const CONNECTOR_NAME = 'Cloud VM';
 
-export const getCloudVmConnectorType = (): SubActionConnectorType<CloudVmConfig, CloudVmSecrets> => ({
+export const getCloudVmConnectorType = (): SubActionConnectorType<
+  CloudVmConfig,
+  CloudVmSecrets
+> => ({
   id: CONNECTOR_ID,
   name: CONNECTOR_NAME,
   getService: (params) => new CloudVmConnector(params),

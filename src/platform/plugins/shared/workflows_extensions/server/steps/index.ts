@@ -19,6 +19,7 @@ import {
   dataRegexReplaceStepDefinition,
   dataStringifyJsonStepDefinition,
 } from './data';
+import { createScriptsBashStepDefinition } from './bash/bash_step';
 import { createScriptsJavaScriptStepDefinition } from './javascript/javascript_step';
 import type { RegisterInternalStepDefinitionsOptions } from './register_internal_step_definitions_options';
 import type { ServerStepRegistry } from '../step_registry/step_registry';
@@ -40,5 +41,9 @@ export const registerInternalStepDefinitions = (
 
   if (experimentalSteps.javaScriptStep) {
     serverStepRegistry.register(createScriptsJavaScriptStepDefinition({ getActionsStart }));
+  }
+
+  if (experimentalSteps.bashStep) {
+    serverStepRegistry.register(createScriptsBashStepDefinition({ getActionsStart }));
   }
 };

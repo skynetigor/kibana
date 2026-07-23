@@ -35,7 +35,7 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
   }
 
   public async ssh(params: CloudVmSshParams): Promise<{ stdout: string }> {
-    const { bashScript } = params;
+    const { bashScript, signal } = params;
     const { ip } = this.config;
     const { username, password, sshPrivateKey } = this.secrets;
     const tempKeyPath = join(tmpdir(), `cloud_vm_ssh_${Date.now()}`);
@@ -76,7 +76,7 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
         env = process.env;
       }
 
-      const { stdout } = await execPromise(command, { env });
+      const { stdout } = await execPromise(command, { env, signal });
 
       return { stdout: stdout.trim() };
     } finally {

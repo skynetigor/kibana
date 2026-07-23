@@ -23,11 +23,10 @@ export const CloudVmSecretsSchema = z
   })
   .strict();
 
-export const CloudVmSshParamsSchema = z
-  .object({
-    bashScript: z.string().min(1),
-  })
-  .strict();
+export const CloudVmSshParamsSchema = z.object({
+  bashScript: z.string().min(1),
+  signal: z.any().optional(),
+});
 
 export type CloudVmConfig = z.infer<typeof CloudVmConfigSchema>;
 export type CloudVmSecrets = z.infer<typeof CloudVmSecretsSchema>;

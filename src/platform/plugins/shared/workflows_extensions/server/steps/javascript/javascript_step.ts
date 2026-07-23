@@ -12,8 +12,8 @@ import { z } from '@kbn/zod/v4';
 import {
   executeJsInConnector,
   killProcessInConnector,
-  tryExtractOutputFromConnector,
-} from './execute_script_in_connector/execute_js_in_connector';
+  tryExtractJsOutputFromConnector,
+} from './execute_script_in_connector/execute_js_in_connector_2';
 import { executeScriptInIsolate } from './execute_script_in_isolate';
 import {
   CODE_EXECUTION_TIMEOUT_MS,
@@ -27,9 +27,7 @@ import { createPollServerStepDefinition } from '../../step_registry/types';
 
 const StateSchema = z.object({
   pid: z.string(),
-  scriptPath: z.string(),
-  outputPath: z.string(),
-  logsPath: z.string(),
+  tmpDir: z.string(),
 });
 
 interface Deps {
@@ -89,13 +87,19 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
           jsCode: code,
         });
 
+        if (executeJsResult.stderr) {
+          context.logger.error(executeJsResult.stderr);
+        }
+
+        if (executeJsResult.stdout) {
+          context.logger.info(executeJsResult.stdout);
+        }
+
         if (executeJsResult.status === 'running') {
           return {
             state: {
               pid: executeJsResult.pid,
-              scriptPath: executeJsResult.scriptPath,
-              outputPath: executeJsResult.outputPath,
-              logsPath: executeJsResult.logsPath,
+              tmpDir: executeJsResult.tmpDir,
             },
           };
         }
@@ -120,8 +124,8 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
         };
       }
     },
-    poll: async ({ config, state, contextManager }) => {
-      if (!state || !state.pid || !state.scriptPath || !state.outputPath || !state.logsPath) {
+    poll: async ({ config, state, contextManager, logger }) => {
+      if (!state || !state.pid || !state.tmpDir) {
         throw new Error('Invalid state for polling script execution in connector');
       }
 
@@ -131,20 +135,27 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
         throw new Error('Connector ID is required for polling script execution in connector');
       }
 
-      const scriptResult = await tryExtractOutputFromConnector({
+      const executeJsResult = await tryExtractJsOutputFromConnector({
         connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
         pid: state.pid,
-        scriptPath: state.scriptPath,
-        outputPath: state.outputPath,
+        tmpDir: state.tmpDir,
       });
 
-      if (scriptResult.status === 'running') {
+      if (executeJsResult.stderr) {
+        logger.error(executeJsResult.stderr);
+      }
+
+      if (executeJsResult.stdout) {
+        logger.info(executeJsResult.stdout);
+      }
+
+      if (executeJsResult.status === 'running') {
         return undefined;
       }
 
-      return { output: scriptResult.output };
+      return { output: executeJsResult.output };
     },
     onCancel: async ({ config, state, contextManager }) => {
       if (!state || !state.pid) {

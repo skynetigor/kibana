@@ -48,4 +48,10 @@ export const registerInternalStepDefinitions = (
       import('./javascript/javascript_step').then((m) => m.scriptsJavaScriptStepDefinition)
     );
   }
+
+  if (experimentalSteps.bashStep) {
+    stepRegistry.register(() =>
+      import('./bash/bash_step').then((m) => m.scriptsBashStepDefinition)
+    );
+  }
 };

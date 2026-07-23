@@ -7,6 +7,11 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export * from './bash';
-export * from './data';
-export * from './javascript';
+export {
+  BASH_TEMPLATE_MAX_CHARS,
+  ScriptsBashStepTypeId,
+  scriptsBashStepCommonDefinition,
+  type ScriptsBashStepConfigSchema,
+  type ScriptsBashStepInputSchema,
+  type ScriptsBashStepOutputSchema,
+} from './bash_step';
