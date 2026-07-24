@@ -15,19 +15,27 @@ import { promisify } from 'util';
 import type { ServiceParams } from '@kbn/actions-plugin/server';
 import { SubActionConnector } from '@kbn/actions-plugin/server';
 import type {
+  CloudVmAsyncSshParams,
   CloudVmConfig,
   CloudVmDownloadFileParams,
+  CLoudVmGetAsyncCommandStatusParams,
+  CloudVmKillAsyncCommandParams,
   CloudVmSecrets,
   CloudVmSshParams,
   CloudVmUploadFileParams,
 } from './schemas';
 import {
+  CloudVmAsyncSshParamsSchema,
   CloudVmDownloadFileParamsSchema,
+  CLoudVmGetAsyncCommandStatusParamsSchema,
+  CloudVmKillAsyncCommandParamsSchema,
   CloudVmSshParamsSchema,
   CloudVmUploadFileParamsSchema,
 } from './schemas';
 
 const execPromise = promisify(exec);
+
+export const VM_TEMP_DIR = '/tmp/vm_connector';
 
 export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmSecrets> {
   constructor(params: ServiceParams<CloudVmConfig, CloudVmSecrets>) {
@@ -37,6 +45,18 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
       name: 'ssh',
       method: 'ssh',
       schema: CloudVmSshParamsSchema,
+    });
+
+    this.registerSubAction({
+      name: 'sshAsync',
+      method: 'sshAsync',
+      schema: CloudVmAsyncSshParamsSchema,
+    });
+
+    this.registerSubAction({
+      name: 'getAsyncCommandStatus',
+      method: 'getAsyncCommandStatus',
+      schema: CLoudVmGetAsyncCommandStatusParamsSchema,
     });
 
     this.registerSubAction({
@@ -50,6 +70,12 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
       method: 'uploadFile',
       schema: CloudVmUploadFileParamsSchema,
     });
+
+    this.registerSubAction({
+      name: 'killAsyncCommand',
+      method: 'killAsyncCommand',
+      schema: CloudVmKillAsyncCommandParamsSchema,
+    });
   }
 
   protected getResponseErrorMessage(error: Error & { response?: { data?: unknown } }): string {
@@ -59,10 +85,248 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
   public async ssh(
     params: CloudVmSshParams
   ): Promise<{ stdout: string; stderr: string; code: number }> {
+    return this.execCommand(params);
+  }
+
+  public async sshAsync(params: CloudVmAsyncSshParams): Promise<{
+    commandId: string;
+    status: 'DONE' | 'RUNNING';
+    pid: number;
+    stderr?: string;
+    stdout?: string;
+    exitCode?: number;
+    files?: Array<{ file: string; content: string }>;
+  }> {
+    const commandId = `bash_${new Date().toISOString()}`;
+    const { tmpDir, stdoutFile, stderrFile, codeFile, scriptFile } = this.getCommandData(commandId);
+
+    await this.uploadFile({
+      remotePath: scriptFile,
+      content: Buffer.from(params.bashScript).toString('base64'),
+      encoding: 'base64',
+    });
+
+    const command = `#!/bin/bash
+(COMMAND_TMP_DIR="${tmpDir}" bash "${scriptFile}" < /dev/null > "${stdoutFile}" 2>"${stderrFile}"; echo $? > "${codeFile}") </dev/null >/dev/null 2>&1 &
+PID=$!
+TIMEOUT=20
+COUNT=0
+while [ ! -f "${codeFile}" ] && [ $COUNT -lt $TIMEOUT ]; do
+  sleep 0.1
+  COUNT=$((COUNT + 1))
+done
+if [ -f "${codeFile}" ]; then
+  EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
+  STDOUT=$(base64 -w0 "${stdoutFile}" 2>/dev/null || echo '')
+  STDERR=$(base64 -w0 "${stderrFile}" 2>/dev/null || echo '')
+  echo "STATUS=DONE"
+  echo "PID=$PID"
+  echo "EXIT_CODE=$EXIT_CODE"
+  echo "STDOUT=$STDOUT"
+  echo "STDERR=$STDERR"
+  FILES_LIST=""
+  for _f in "${tmpDir}"/*; do
+    [ -f "$_f" ] || continue
+    _fname=$(basename "$_f")
+    case "$_fname" in
+      script.sh|stdout.txt|stderr.txt|code.txt) continue ;;
+    esac
+    [ -n "$FILES_LIST" ] && FILES_LIST="$FILES_LIST,"
+    FILES_LIST="$FILES_LIST$_fname"
+    _key=$(echo "$_fname" | sed 's/[^a-zA-Z0-9]/_/g')
+    echo "FILE_$\{_key\}=$(base64 -w0 "$_f" 2>/dev/null || echo '')"
+  done
+  echo "FILES=$FILES_LIST"
+  rm -rf "${tmpDir}"
+  exit 0
+fi
+echo "STATUS=RUNNING"
+echo "PID=$PID"
+`;
+
+    const { stdout } = await this.execCommand({ bashScript: command, signal: params.signal });
+    const pid = parseInt(stdout.match(/^PID=(\d+)$/m)?.[1] ?? '0', 10);
+    const status = stdout.match(/^STATUS=(DONE|RUNNING)$/m)?.[1] ?? 'RUNNING';
+
+    if (status === 'DONE') {
+      const exitCode = parseInt(stdout.match(/^EXIT_CODE=(\d+)$/m)?.[1] ?? '0', 10);
+      const stdoutB64 = stdout.match(/^STDOUT=(.*)$/m)?.[1] ?? '';
+      const stderrB64 = stdout.match(/^STDERR=(.*)$/m)?.[1] ?? '';
+      const fileNames = (stdout.match(/^FILES=(.*)$/m)?.[1] ?? '').split(',').filter(Boolean);
+      const files = fileNames.map((name) => {
+        const key = name.replace(/[^a-zA-Z0-9]/g, '_');
+        const b64 = stdout.match(new RegExp(`^FILE_${key}=(.*)$`, 'm'))?.[1] ?? '';
+        return { file: name, content: Buffer.from(b64, 'base64').toString('utf-8') };
+      });
+
+      return {
+        commandId,
+        status: 'DONE',
+        pid,
+        exitCode,
+        stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8'),
+        stderr: Buffer.from(stderrB64, 'base64').toString('utf-8'),
+        files: files.length > 0 ? files : undefined,
+      };
+    }
+
+    return { commandId, status: 'RUNNING', pid };
+  }
+
+  public async getAsyncCommandStatus(params: CLoudVmGetAsyncCommandStatusParams): Promise<{
+    commandId: string;
+    status: 'DONE' | 'RUNNING';
+    stderr?: string;
+    stdout?: string;
+    exitCode?: number;
+    files?: Array<{ file: string; content: string }>;
+  }> {
+    const { commandId, signal } = params;
+    const { tmpDir, stdoutFile, stderrFile, codeFile } = this.getCommandData(commandId);
+
+    const command = `#!/bin/bash
+if [ -f "${codeFile}" ]; then
+  EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
+  STDOUT=$(base64 -w0 "${stdoutFile}" 2>/dev/null || echo '')
+  STDERR=$(base64 -w0 "${stderrFile}" 2>/dev/null || echo '')
+  echo "STATUS=DONE"
+  echo "EXIT_CODE=$EXIT_CODE"
+  echo "STDOUT=$STDOUT"
+  echo "STDERR=$STDERR"
+  FILES_LIST=""
+  for _f in "${tmpDir}"/*; do
+    [ -f "$_f" ] || continue
+    _fname=$(basename "$_f")
+    case "$_fname" in
+      script.sh|stdout.txt|stderr.txt|code.txt) continue ;;
+    esac
+    [ -n "$FILES_LIST" ] && FILES_LIST="$FILES_LIST,"
+    FILES_LIST="$FILES_LIST$_fname"
+    _key=$(echo "$_fname" | sed 's/[^a-zA-Z0-9]/_/g')
+    echo "FILE_${_key}=$(base64 -w0 "$_f" 2>/dev/null || echo '')"
+  done
+  echo "FILES=$FILES_LIST"
+  rm -rf "${tmpDir}"
+else
+  echo "STATUS=RUNNING"
+fi`;
+
+    const { stdout } = await this.execCommand({ bashScript: command, signal });
+    const status = stdout.match(/^STATUS=(DONE|RUNNING)$/m)?.[1] ?? 'RUNNING';
+
+    if (status === 'DONE') {
+      const exitCode = parseInt(stdout.match(/^EXIT_CODE=(\d+)$/m)?.[1] ?? '0', 10);
+      const stdoutB64 = stdout.match(/^STDOUT=(.*)$/m)?.[1] ?? '';
+      const stderrB64 = stdout.match(/^STDERR=(.*)$/m)?.[1] ?? '';
+      const fileNames = (stdout.match(/^FILES=(.*)$/m)?.[1] ?? '').split(',').filter(Boolean);
+      const files = fileNames.map((name) => {
+        const key = name.replace(/[^a-zA-Z0-9]/g, '_');
+        const b64 = stdout.match(new RegExp(`^FILE_${key}=(.*)$`, 'm'))?.[1] ?? '';
+        return { file: name, content: Buffer.from(b64, 'base64').toString('utf-8') };
+      });
+
+      return {
+        commandId,
+        status: 'DONE',
+        exitCode,
+        stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8').trim(),
+        stderr: Buffer.from(stderrB64, 'base64').toString('utf-8').trim(),
+        files: files.length > 0 ? files : undefined,
+      };
+    }
+
+    return { commandId, status: 'RUNNING' };
+  }
+
+  public async killAsyncCommand(params: CloudVmKillAsyncCommandParams): Promise<void> {
+    const { commandId, pid } = params;
+    const { tmpDir } = this.getCommandData(commandId);
+    const killScript = pid
+      ? `kill -9 ${pid} 2>/dev/null || true; rm -rf "${tmpDir}"`
+      : `rm -rf "${tmpDir}"`;
+    await this.execCommand({ bashScript: killScript });
+  }
+
+  public async downloadFile(
+    params: CloudVmDownloadFileParams
+  ): Promise<{ content: string; encoding: 'base64' }> {
+    const { remotePath } = params;
+    const { ip } = this.config;
+    const { username, password, sshPrivateKey } = this.secrets;
+    const tempKeyPath = join(
+      tmpdir(),
+      `cloud_vm_ssh_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    );
+    const tempDownloadPath = join(tmpdir(), `cloud_vm_download_${Date.now()}`);
+
+    try {
+      const keyContent = `${sshPrivateKey.replace(/\r/g, '').trimEnd()}\n`;
+      const fd = openSync(tempKeyPath, 'w', 0o600);
+      writeSync(fd, keyContent);
+      closeSync(fd);
+
+      const controlPath = this.getControlPath();
+      const scpOpts = [
+        `-i "${tempKeyPath}"`,
+        '-o StrictHostKeyChecking=no',
+        '-o UserKnownHostsFile=/dev/null',
+        '-o ConnectTimeout=10',
+        '-o ControlMaster=auto',
+        `-o ControlPath="${controlPath}"`,
+        '-o ControlPersist=60s',
+      ];
+
+      let command: string;
+      let env: NodeJS.ProcessEnv;
+
+      if (password) {
+        scpOpts.push('-o PasswordAuthentication=yes');
+        command = `sshpass -e scp ${scpOpts.join(
+          ' '
+        )} ${username}@${ip}:"${remotePath}" "${tempDownloadPath}"`;
+        env = { ...process.env, SSHPASS: password };
+      } else {
+        scpOpts.push('-o PasswordAuthentication=no');
+        command = `scp ${scpOpts.join(
+          ' '
+        )} ${username}@${ip}:"${remotePath}" "${tempDownloadPath}"`;
+        env = process.env;
+      }
+
+      await execPromise(command, { env });
+
+      const content = readFileSync(tempDownloadPath).toString('base64');
+      return { content, encoding: 'base64' };
+    } finally {
+      if (existsSync(tempKeyPath)) {
+        unlinkSync(tempKeyPath);
+      }
+      if (existsSync(tempDownloadPath)) {
+        unlinkSync(tempDownloadPath);
+      }
+    }
+  }
+
+  public async uploadFile(params: CloudVmUploadFileParams): Promise<void> {
+    const { remotePath, content } = params;
+    const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
+    const mkdirPart = remoteDir ? `mkdir -p "${remoteDir}" && ` : '';
+    await this.execCommand({
+      bashScript: `${mkdirPart}printf '%s' '${content}' | base64 -d > "${remotePath}"`,
+      signal: params.signal,
+    });
+  }
+
+  private async execCommand(
+    params: CloudVmSshParams
+  ): Promise<{ stdout: string; stderr: string; code: number }> {
     const { bashScript, signal } = params;
     const { ip } = this.config;
     const { username, password, sshPrivateKey } = this.secrets;
-    const tempKeyPath = join(tmpdir(), `cloud_vm_ssh_${Date.now()}`);
+    const tempKeyPath = join(
+      tmpdir(),
+      `cloud_vm_ssh_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    );
 
     try {
       // Strip \r so CRLF-pasted keys don't corrupt OpenSSH parsing; ensure trailing newline.
@@ -78,11 +342,15 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
       const encodedScript = Buffer.from(bashScript).toString('base64');
       const remoteCmd = `printf '%s' '${encodedScript}' | base64 -d | bash`;
 
+      const controlPath = this.getControlPath();
       const sshOpts = [
         `-i "${tempKeyPath}"`,
         '-o StrictHostKeyChecking=no',
         '-o UserKnownHostsFile=/dev/null',
         '-o ConnectTimeout=10',
+        '-o ControlMaster=auto',
+        `-o ControlPath="${controlPath}"`,
+        '-o ControlPersist=60s',
       ];
 
       let command: string;
@@ -131,106 +399,22 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
     }
   }
 
-  public async downloadFile(
-    params: CloudVmDownloadFileParams
-  ): Promise<{ content: string; encoding: 'base64' }> {
-    const { remotePath } = params;
+  private getControlPath(): string {
     const { ip } = this.config;
-    const { username, password, sshPrivateKey } = this.secrets;
-    const tempKeyPath = join(tmpdir(), `cloud_vm_ssh_${Date.now()}`);
-    const tempDownloadPath = join(tmpdir(), `cloud_vm_download_${Date.now()}`);
-
-    try {
-      const keyContent = `${sshPrivateKey.replace(/\r/g, '').trimEnd()}\n`;
-      const fd = openSync(tempKeyPath, 'w', 0o600);
-      writeSync(fd, keyContent);
-      closeSync(fd);
-
-      const scpOpts = [
-        `-i "${tempKeyPath}"`,
-        '-o StrictHostKeyChecking=no',
-        '-o UserKnownHostsFile=/dev/null',
-        '-o ConnectTimeout=10',
-      ];
-
-      let command: string;
-      let env: NodeJS.ProcessEnv;
-
-      if (password) {
-        scpOpts.push('-o PasswordAuthentication=yes');
-        command = `sshpass -e scp ${scpOpts.join(
-          ' '
-        )} ${username}@${ip}:"${remotePath}" "${tempDownloadPath}"`;
-        env = { ...process.env, SSHPASS: password };
-      } else {
-        scpOpts.push('-o PasswordAuthentication=no');
-        command = `scp ${scpOpts.join(
-          ' '
-        )} ${username}@${ip}:"${remotePath}" "${tempDownloadPath}"`;
-        env = process.env;
-      }
-
-      await execPromise(command, { env });
-
-      const content = readFileSync(tempDownloadPath).toString('base64');
-      return { content, encoding: 'base64' };
-    } finally {
-      if (existsSync(tempKeyPath)) {
-        unlinkSync(tempKeyPath);
-      }
-      if (existsSync(tempDownloadPath)) {
-        unlinkSync(tempDownloadPath);
-      }
-    }
+    const { username } = this.secrets;
+    const safeId = `${username}_${ip}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return join(tmpdir(), `kbn_cm_${safeId}`);
   }
 
-  public async uploadFile(params: CloudVmUploadFileParams): Promise<void> {
-    const { remotePath, content } = params;
-    const { ip } = this.config;
-    const { username, password, sshPrivateKey } = this.secrets;
-    const tempKeyPath = join(tmpdir(), `cloud_vm_ssh_${Date.now()}`);
-    const tempUploadPath = join(tmpdir(), `cloud_vm_upload_${Date.now()}`);
+  private getCommandData(commandId: string) {
+    const tmpDir = `${VM_TEMP_DIR}/${commandId}`;
 
-    try {
-      const keyContent = `${sshPrivateKey.replace(/\r/g, '').trimEnd()}\n`;
-      const keyFd = openSync(tempKeyPath, 'w', 0o600);
-      writeSync(keyFd, keyContent);
-      closeSync(keyFd);
-
-      const uploadFd = openSync(tempUploadPath, 'w', 0o600);
-      writeSync(uploadFd, Buffer.from(content, 'base64'));
-      closeSync(uploadFd);
-
-      const scpOpts = [
-        `-i "${tempKeyPath}"`,
-        '-o StrictHostKeyChecking=no',
-        '-o UserKnownHostsFile=/dev/null',
-        '-o ConnectTimeout=10',
-      ];
-
-      let command: string;
-      let env: NodeJS.ProcessEnv;
-
-      if (password) {
-        scpOpts.push('-o PasswordAuthentication=yes');
-        command = `sshpass -e scp ${scpOpts.join(
-          ' '
-        )} "${tempUploadPath}" ${username}@${ip}:"${remotePath}"`;
-        env = { ...process.env, SSHPASS: password };
-      } else {
-        scpOpts.push('-o PasswordAuthentication=no');
-        command = `scp ${scpOpts.join(' ')} "${tempUploadPath}" ${username}@${ip}:"${remotePath}"`;
-        env = process.env;
-      }
-
-      await execPromise(command, { env });
-    } finally {
-      if (existsSync(tempKeyPath)) {
-        unlinkSync(tempKeyPath);
-      }
-      if (existsSync(tempUploadPath)) {
-        unlinkSync(tempUploadPath);
-      }
-    }
+    return {
+      tmpDir,
+      scriptFile: `${tmpDir}/script.sh`,
+      stdoutFile: `${tmpDir}/stdout.txt`,
+      stderrFile: `${tmpDir}/stderr.txt`,
+      codeFile: `${tmpDir}/code.txt`,
+    };
   }
 }

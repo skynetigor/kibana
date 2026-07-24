@@ -13,7 +13,7 @@ import {
   executeJsInConnector,
   killProcessInConnector,
   tryExtractJsOutputFromConnector,
-} from './execute_script_in_connector/execute_js_in_connector_2';
+} from './execute_script_in_connector/execute_js_in_connector';
 import { executeScriptInIsolate } from './execute_script_in_isolate';
 import {
   CODE_EXECUTION_TIMEOUT_MS,
@@ -26,8 +26,8 @@ import {
 import { createPollServerStepDefinition } from '../../step_registry/types';
 
 const StateSchema = z.object({
-  pid: z.string(),
-  tmpDir: z.string(),
+  commandId: z.string(),
+  pid: z.number(),
 });
 
 interface Deps {
@@ -98,8 +98,8 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
         if (executeJsResult.status === 'running') {
           return {
             state: {
+              commandId: executeJsResult.commandId,
               pid: executeJsResult.pid,
-              tmpDir: executeJsResult.tmpDir,
             },
           };
         }
@@ -125,7 +125,7 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
       }
     },
     poll: async ({ config, state, contextManager, logger }) => {
-      if (!state || !state.pid || !state.tmpDir) {
+      if (!state || !state.commandId) {
         throw new Error('Invalid state for polling script execution in connector');
       }
 
@@ -139,8 +139,8 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
         connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
+        commandId: state.commandId,
         pid: state.pid,
-        tmpDir: state.tmpDir,
       });
 
       if (executeJsResult.stderr) {
@@ -158,7 +158,7 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
       return { output: executeJsResult.output };
     },
     onCancel: async ({ config, state, contextManager }) => {
-      if (!state || !state.pid) {
+      if (!state || !state.commandId) {
         return;
       }
 
@@ -172,6 +172,7 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
         connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
+        commandId: state.commandId,
         pid: state.pid,
       });
     },

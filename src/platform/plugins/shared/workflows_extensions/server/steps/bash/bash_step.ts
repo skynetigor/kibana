@@ -18,8 +18,8 @@ import { scriptsBashStepCommonDefinition } from '../../../common/steps/bash';
 import { createPollServerStepDefinition } from '../../step_registry/types';
 
 const StateSchema = z.object({
-  pid: z.string(),
-  tmpDir: z.string(),
+  commandId: z.string(),
+  pid: z.number(),
 });
 
 interface Deps {
@@ -58,8 +58,8 @@ export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
       if (result.status === 'running') {
         return {
           state: {
+            commandId: result.commandId,
             pid: result.pid,
-            tmpDir: result.tmpDir,
           },
         };
       }
@@ -67,18 +67,16 @@ export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
       return { output: result.stdout || '' };
     },
     poll: async ({ config, state, contextManager }) => {
-      if (!state || !state.pid || !state.tmpDir) {
+      if (!state || !state.commandId) {
         throw new Error('Invalid state for polling bash execution in connector');
       }
 
-      const { connectorId } = config;
-
       const result = await tryExtractBashOutputFromConnector({
-        connectorId,
+        connectorId: config.connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
+        commandId: state.commandId,
         pid: state.pid,
-        tmpDir: state.tmpDir,
       });
 
       if (result.status === 'running') {
@@ -87,8 +85,11 @@ export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
 
       return { output: result.stdout || '' };
     },
-    onCancel: async ({ config, state, contextManager }) => {
-      if (!state || !state.pid) {
+    onCancel: async (context) => {
+      const { config, contextManager } = context;
+      const state = (context as { state?: z.infer<typeof StateSchema> }).state;
+
+      if (!state?.commandId) {
         return;
       }
 
@@ -96,6 +97,7 @@ export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
         connectorId: config.connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
+        commandId: state.commandId,
         pid: state.pid,
       });
     },
