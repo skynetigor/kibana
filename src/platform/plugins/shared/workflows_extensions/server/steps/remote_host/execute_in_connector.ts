@@ -11,7 +11,7 @@ import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/act
 import type { KibanaRequest } from '@kbn/core/server';
 import { ExecutionError } from '@kbn/workflows/server';
 
-export type ExecuteBashOutput =
+export type RemoteCommandOutput =
   | {
       status: 'running';
       commandId: string;
@@ -59,25 +59,14 @@ export async function executeSubAction<T>(params: {
   return result.data as T;
 }
 
-export function throwIfScriptFailed(stderr: string, exitCode: number): void {
-  if (exitCode !== 0) {
-    throw new ExecutionError({
-      type: 'ScriptExecutionError',
-      message: stderr || `Script exited with code ${exitCode}`,
-      details: { exitCode },
-    });
-  }
-}
-
-export async function executeBashInConnector(params: {
+export async function executeCommandInConnector(params: {
   connectorId: string;
   request: KibanaRequest<unknown, unknown, unknown>;
   actionsStart: ActionsPluginStartContract | undefined;
-  bashCode: string;
-  commandId?: string;
+  bashScript: string;
   abortSignal?: AbortSignal;
-}): Promise<ExecuteBashOutput> {
-  const { connectorId, request, actionsStart, bashCode, commandId, abortSignal } = params;
+}): Promise<RemoteCommandOutput> {
+  const { connectorId, request, actionsStart, bashScript, abortSignal } = params;
 
   const result = await executeSubAction<{
     commandId: string;
@@ -91,16 +80,17 @@ export async function executeBashInConnector(params: {
     request,
     actionsStart,
     subAction: 'sshAsync',
-    subActionParams: { bashScript: bashCode, commandId },
+    subActionParams: { bashScript },
     abortSignal,
   });
 
   if (result.status === 'DONE') {
-    const stdout = result.stdout ?? '';
-    const stderr = result.stderr ?? '';
-    const exitCode = result.exitCode ?? 0;
-    throwIfScriptFailed(stderr, exitCode);
-    return { status: 'terminated', stdout, stderr, exitCode };
+    return {
+      status: 'terminated',
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      exitCode: result.exitCode ?? 0,
+    };
   }
 
   return {
@@ -112,14 +102,14 @@ export async function executeBashInConnector(params: {
   };
 }
 
-export async function tryExtractBashOutputFromConnector(params: {
+export async function tryExtractCommandOutputFromConnector(params: {
   connectorId: string;
   request: KibanaRequest<unknown, unknown, unknown>;
   actionsStart: ActionsPluginStartContract | undefined;
   commandId: string;
   pid: number;
   abortSignal?: AbortSignal;
-}): Promise<ExecuteBashOutput> {
+}): Promise<RemoteCommandOutput> {
   const { connectorId, request, actionsStart, commandId, pid, abortSignal } = params;
 
   const result = await executeSubAction<{
@@ -138,17 +128,18 @@ export async function tryExtractBashOutputFromConnector(params: {
   });
 
   if (result.status === 'DONE') {
-    const stdout = result.stdout ?? '';
-    const stderr = result.stderr ?? '';
-    const exitCode = result.exitCode ?? 0;
-    throwIfScriptFailed(stderr, exitCode);
-    return { status: 'terminated', stdout, stderr, exitCode };
+    return {
+      status: 'terminated',
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      exitCode: result.exitCode ?? 0,
+    };
   }
 
   return { status: 'running', commandId, pid };
 }
 
-export async function killBashProcessInConnector(params: {
+export async function killCommandInConnector(params: {
   connectorId: string;
   request: KibanaRequest<unknown, unknown, unknown>;
   actionsStart: ActionsPluginStartContract | undefined;

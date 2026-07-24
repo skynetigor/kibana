@@ -14,18 +14,23 @@ describe('workflows_extensions config', () => {
     it('enables all experimental steps when set to true', () => {
       expect(resolveExperimentalStepsConfig(true)).toEqual({
         javaScriptStep: true,
+        remoteHostSteps: true,
       });
     });
 
     it('disables all experimental steps when set to false', () => {
       expect(resolveExperimentalStepsConfig(false)).toEqual({
         javaScriptStep: false,
+        remoteHostSteps: false,
       });
     });
 
     it('returns granular settings when an object is provided', () => {
-      expect(resolveExperimentalStepsConfig({ javaScriptStep: true })).toEqual({
+      expect(
+        resolveExperimentalStepsConfig({ javaScriptStep: true, remoteHostSteps: false })
+      ).toEqual({
         javaScriptStep: true,
+        remoteHostSteps: false,
       });
     });
   });
@@ -38,8 +43,10 @@ describe('workflows_extensions config', () => {
     });
 
     it('accepts a granular object value', () => {
-      expect(config.schema.validate({ experimentalSteps: { javaScriptStep: true } })).toEqual({
-        experimentalSteps: { javaScriptStep: true },
+      expect(
+        config.schema.validate({ experimentalSteps: { javaScriptStep: true, remoteHostSteps: true } })
+      ).toEqual({
+        experimentalSteps: { javaScriptStep: true, remoteHostSteps: true },
       });
     });
 
@@ -51,7 +58,7 @@ describe('workflows_extensions config', () => {
 
     it('defaults omitted object keys to false', () => {
       expect(config.schema.validate({ experimentalSteps: {} })).toEqual({
-        experimentalSteps: { javaScriptStep: false },
+        experimentalSteps: { javaScriptStep: false, remoteHostSteps: false },
       });
     });
   });

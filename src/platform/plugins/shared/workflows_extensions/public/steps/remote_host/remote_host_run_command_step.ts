@@ -8,11 +8,11 @@
  */
 
 import React from 'react';
-import { scriptsBashStepCommonDefinition } from '../../../common/steps/bash';
+import { remoteHostRunCommandStepCommonDefinition } from '../../../common/steps/remote_host';
 import { createPublicStepDefinition } from '../../step_registry/types';
 
-export const scriptsBashStepDefinition = createPublicStepDefinition({
-  ...scriptsBashStepCommonDefinition,
+export const remoteHostRunCommandStepDefinition = createPublicStepDefinition({
+  ...remoteHostRunCommandStepCommonDefinition,
   icon: React.lazy(() =>
     import('@elastic/eui/es/components/icon/assets/console').then(({ icon }) => ({
       default: icon,

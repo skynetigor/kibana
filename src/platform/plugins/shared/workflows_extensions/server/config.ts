@@ -25,6 +25,7 @@ export { resolveExperimentalStepsConfig };
 
 const experimentalStepsSchema = schema.object({
   javaScriptStep: schema.boolean({ defaultValue: false }),
+  remoteHostSteps: schema.boolean({ defaultValue: false }),
 });
 
 const experimentalStepsInputSchema = schema.oneOf([schema.boolean(), experimentalStepsSchema], {

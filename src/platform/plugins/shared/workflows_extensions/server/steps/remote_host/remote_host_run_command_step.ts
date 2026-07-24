@@ -9,13 +9,13 @@
 
 import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
 import { z } from '@kbn/zod/v4';
-import {
-  executeBashInConnector,
-  killBashProcessInConnector,
-  tryExtractBashOutputFromConnector,
-} from './execute_bash_in_connector';
-import { scriptsBashStepCommonDefinition } from '../../../common/steps/bash';
+import { remoteHostRunCommandStepCommonDefinition } from '../../../common/steps/remote_host';
 import { createPollServerStepDefinition } from '../../step_registry/types';
+import {
+  executeCommandInConnector,
+  killCommandInConnector,
+  tryExtractCommandOutputFromConnector,
+} from './execute_in_connector';
 
 const StateSchema = z.object({
   commandId: z.string(),
@@ -26,9 +26,9 @@ interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
 }
 
-export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
+export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: Deps) =>
   createPollServerStepDefinition({
-    ...scriptsBashStepCommonDefinition,
+    ...remoteHostRunCommandStepCommonDefinition,
     stateSchema: StateSchema,
     policy: {
       strategy: 'exponential',
@@ -47,31 +47,26 @@ export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
         return { error: new Error('Code is required') };
       }
 
-      const result = await executeBashInConnector({
+      const result = await executeCommandInConnector({
         connectorId,
         request: context.contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
-        bashCode: code,
+        bashScript: code,
         abortSignal: context.abortSignal,
       });
 
       if (result.status === 'running') {
-        return {
-          state: {
-            commandId: result.commandId,
-            pid: result.pid,
-          },
-        };
+        return { state: { commandId: result.commandId, pid: result.pid } };
       }
 
-      return { output: result.stdout || '' };
+      return { output: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode } };
     },
     poll: async ({ config, state, contextManager }) => {
-      if (!state || !state.commandId) {
-        throw new Error('Invalid state for polling bash execution in connector');
+      if (!state?.commandId) {
+        throw new Error('Invalid state for polling remote command execution');
       }
 
-      const result = await tryExtractBashOutputFromConnector({
+      const result = await tryExtractCommandOutputFromConnector({
         connectorId: config.connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
@@ -83,7 +78,7 @@ export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
         return undefined;
       }
 
-      return { output: result.stdout || '' };
+      return { output: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode } };
     },
     onCancel: async (context) => {
       const { config, contextManager } = context;
@@ -93,7 +88,7 @@ export const createScriptsBashStepDefinition = ({ getActionsStart }: Deps) =>
         return;
       }
 
-      await killBashProcessInConnector({
+      await killCommandInConnector({
         connectorId: config.connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),

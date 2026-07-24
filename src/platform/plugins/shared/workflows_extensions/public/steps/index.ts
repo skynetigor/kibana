@@ -49,9 +49,31 @@ export const registerInternalStepDefinitions = (
     );
   }
 
-  if (experimentalSteps.bashStep) {
+  if (experimentalSteps.remoteHostSteps) {
     stepRegistry.register(() =>
-      import('./bash/bash_step').then((m) => m.scriptsBashStepDefinition)
+      import('./remote_host/remote_host_run_command_step').then(
+        (m) => m.remoteHostRunCommandStepDefinition
+      )
+    );
+    stepRegistry.register(() =>
+      import('./remote_host/remote_host_run_javascript_step').then(
+        (m) => m.remoteHostRunJavascriptStepDefinition
+      )
+    );
+    stepRegistry.register(() =>
+      import('./remote_host/remote_host_run_python_step').then(
+        (m) => m.remoteHostRunPythonStepDefinition
+      )
+    );
+    stepRegistry.register(() =>
+      import('./remote_host/remote_host_upload_file_step').then(
+        (m) => m.remoteHostUploadFileStepDefinition
+      )
+    );
+    stepRegistry.register(() =>
+      import('./remote_host/remote_host_download_file_step').then(
+        (m) => m.remoteHostDownloadFileStepDefinition
+      )
     );
   }
 };

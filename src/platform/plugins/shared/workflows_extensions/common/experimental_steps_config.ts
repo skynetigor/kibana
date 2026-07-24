@@ -9,7 +9,7 @@
 
 export interface WorkflowsExtensionsExperimentalStepsConfig {
   readonly javaScriptStep: boolean;
-  readonly bashStep: boolean;
+  readonly remoteHostSteps: boolean;
 }
 
 export type WorkflowsExtensionsExperimentalStepsInputConfig =
@@ -26,7 +26,7 @@ export const resolveExperimentalStepsConfig = (
   if (typeof experimentalSteps === 'boolean') {
     return {
       javaScriptStep: experimentalSteps,
-      bashStep: experimentalSteps,
+      remoteHostSteps: experimentalSteps,
     };
   }
 

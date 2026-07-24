@@ -8,12 +8,6 @@
  */
 
 import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
-import { z } from '@kbn/zod/v4';
-import {
-  executeJsInConnector,
-  killProcessInConnector,
-  tryExtractJsOutputFromConnector,
-} from './execute_script_in_connector/execute_js_in_connector';
 import { executeScriptInIsolate } from './execute_script_in_isolate';
 import {
   CODE_EXECUTION_TIMEOUT_MS,
@@ -23,12 +17,7 @@ import {
   CODE_MEMORY_LIMIT_MB,
   scriptsJavaScriptStepCommonDefinition,
 } from '../../../common/steps/javascript';
-import { createPollServerStepDefinition } from '../../step_registry/types';
-
-const StateSchema = z.object({
-  commandId: z.string(),
-  pid: z.number(),
-});
+import { createServerStepDefinition } from '../../step_registry/types';
 
 interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
@@ -55,13 +44,11 @@ const toExecutionError = (error: unknown, aborted: boolean): Error => {
   return new Error('Script execution failed');
 };
 
-export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps) =>
-  createPollServerStepDefinition({
+export const createScriptsJavaScriptStepDefinition = (_deps: Deps) =>
+  createServerStepDefinition({
     ...scriptsJavaScriptStepCommonDefinition,
-    stateSchema: StateSchema,
-    start: async (context) => {
+    handler: async (context) => {
       const { code } = context.input;
-      const { connectorId } = context.config;
 
       if (typeof code !== 'string' || code.trim().length === 0) {
         return { error: new Error('Code is required') };
@@ -77,34 +64,6 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
             ).toFixed(2)} MB. Reduce interpolated data or split the workflow.`
           ),
         };
-      }
-
-      if (connectorId) {
-        const executeJsResult = await executeJsInConnector({
-          connectorId,
-          request: context.contextManager.getFakeRequest(),
-          actionsStart: getActionsStart(),
-          jsCode: code,
-        });
-
-        if (executeJsResult.stderr) {
-          context.logger.error(executeJsResult.stderr);
-        }
-
-        if (executeJsResult.stdout) {
-          context.logger.info(executeJsResult.stdout);
-        }
-
-        if (executeJsResult.status === 'running') {
-          return {
-            state: {
-              commandId: executeJsResult.commandId,
-              pid: executeJsResult.pid,
-            },
-          };
-        }
-
-        return { output: executeJsResult.output };
       }
 
       try {
@@ -123,57 +82,5 @@ export const createScriptsJavaScriptStepDefinition = ({ getActionsStart }: Deps)
           error: toExecutionError(error, context.abortSignal.aborted),
         };
       }
-    },
-    poll: async ({ config, state, contextManager, logger }) => {
-      if (!state || !state.commandId) {
-        throw new Error('Invalid state for polling script execution in connector');
-      }
-
-      const { connectorId } = config;
-
-      if (!connectorId) {
-        throw new Error('Connector ID is required for polling script execution in connector');
-      }
-
-      const executeJsResult = await tryExtractJsOutputFromConnector({
-        connectorId,
-        request: contextManager.getFakeRequest(),
-        actionsStart: getActionsStart(),
-        commandId: state.commandId,
-        pid: state.pid,
-      });
-
-      if (executeJsResult.stderr) {
-        logger.error(executeJsResult.stderr);
-      }
-
-      if (executeJsResult.stdout) {
-        logger.info(executeJsResult.stdout);
-      }
-
-      if (executeJsResult.status === 'running') {
-        return undefined;
-      }
-
-      return { output: executeJsResult.output };
-    },
-    onCancel: async ({ config, state, contextManager }) => {
-      if (!state || !state.commandId) {
-        return;
-      }
-
-      const { connectorId } = config;
-
-      if (!connectorId) {
-        throw new Error('Connector ID is required for cancelling script execution in connector');
-      }
-
-      await killProcessInConnector({
-        connectorId,
-        request: contextManager.getFakeRequest(),
-        actionsStart: getActionsStart(),
-        commandId: state.commandId,
-        pid: state.pid,
-      });
     },
   });

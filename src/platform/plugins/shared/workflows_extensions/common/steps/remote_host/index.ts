@@ -7,11 +7,8 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export {
-  BASH_TEMPLATE_MAX_CHARS,
-  ScriptsBashStepTypeId,
-  scriptsBashStepCommonDefinition,
-  type ScriptsBashStepConfigSchema,
-  type ScriptsBashStepInputSchema,
-  type ScriptsBashStepOutputSchema,
-} from './bash_step';
+export * from './remote_host_run_command_step';
+export * from './remote_host_run_javascript_step';
+export * from './remote_host_run_python_step';
+export * from './remote_host_upload_file_step';
+export * from './remote_host_download_file_step';

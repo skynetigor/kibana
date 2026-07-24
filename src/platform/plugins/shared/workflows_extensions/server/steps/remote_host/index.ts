@@ -7,6 +7,8 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export * from './data';
-export * from './javascript';
-export * from './remote_host';
+export { createRemoteHostRunCommandStepDefinition } from './remote_host_run_command_step';
+export { createRemoteHostRunJavascriptStepDefinition } from './remote_host_run_javascript_step';
+export { createRemoteHostRunPythonStepDefinition } from './remote_host_run_python_step';
+export { createRemoteHostUploadFileStepDefinition } from './remote_host_upload_file_step';
+export { createRemoteHostDownloadFileStepDefinition } from './remote_host_download_file_step';

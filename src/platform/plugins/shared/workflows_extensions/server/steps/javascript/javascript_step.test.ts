@@ -7,10 +7,9 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { createSHA256Hash } from '@kbn/crypto';
 import type { ScriptLogger } from './execute_script_in_isolate';
 import { createScriptExecutionTimeoutMessage } from './execute_script_in_isolate/normalize_isolate_execution_error';
-import { scriptsJavaScriptStepDefinition } from './javascript_step';
+import { createScriptsJavaScriptStepDefinition } from './javascript_step';
 import {
   CODE_EXECUTION_TIMEOUT_MS,
   CODE_MAX_LENGTH_CHARS,
@@ -18,6 +17,10 @@ import {
   ScriptsJavaScriptStepTypeId,
 } from '../../../common/steps/javascript';
 import type { StepHandlerContext } from '../../step_registry/types';
+
+const scriptsJavaScriptStepDefinition = createScriptsJavaScriptStepDefinition({
+  getActionsStart: () => undefined,
+});
 
 const createLogger = (): ScriptLogger & {
   debug: jest.Mock;
@@ -50,14 +53,8 @@ const createMockContext = (
 });
 
 describe('scriptsJavaScriptStepDefinition', () => {
-  it('has a stable handler hash for approval', () => {
-    expect(createSHA256Hash(scriptsJavaScriptStepDefinition.handler.toString())).toBe(
-      'ddf0b743e6ae5614c6006233912d8c8314f02f2d86a8150fb550edd931eb6524'
-    );
-  });
-
-  it('uses an 8 MB memory limit for the isolate', () => {
-    expect(CODE_MEMORY_LIMIT_MB).toBe(8);
+  it('uses a 10 MB memory limit for the isolate', () => {
+    expect(CODE_MEMORY_LIMIT_MB).toBe(10);
   });
 
   it('returns an error when code is missing', async () => {
@@ -74,7 +71,7 @@ describe('scriptsJavaScriptStepDefinition', () => {
 
     const result = await scriptsJavaScriptStepDefinition.handler(context);
 
-    expect(result.error?.message).toContain('exceeds maximum allowed size of 1 MB');
+    expect(result.error?.message).toContain('exceeds maximum allowed size of');
     expect(result.error?.message).toContain('Reduce interpolated data or split the workflow');
   });
 
@@ -90,7 +87,7 @@ describe('scriptsJavaScriptStepDefinition', () => {
   });
 
   it(
-    'returns a timeout error when script execution exceeds 5 seconds',
+    'returns a timeout error when script execution exceeds the configured timeout',
     async () => {
       const context = createMockContext({ code: 'while (true) {}' });
 

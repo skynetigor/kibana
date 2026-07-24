@@ -7,6 +7,15 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export * from './data';
-export * from './javascript';
-export * from './remote_host';
+import React from 'react';
+import { remoteHostRunPythonStepCommonDefinition } from '../../../common/steps/remote_host';
+import { createPublicStepDefinition } from '../../step_registry/types';
+
+export const remoteHostRunPythonStepDefinition = createPublicStepDefinition({
+  ...remoteHostRunPythonStepCommonDefinition,
+  icon: React.lazy(() =>
+    import('@elastic/eui/es/components/icon/assets/code').then(({ icon }) => ({
+      default: icon,
+    }))
+  ),
+});

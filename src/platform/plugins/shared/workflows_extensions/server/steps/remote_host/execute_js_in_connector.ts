@@ -9,11 +9,8 @@
 
 import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
 import type { KibanaRequest } from '@kbn/core/server';
-import {
-  executeSubAction,
-  killBashProcessInConnector,
-  throwIfScriptFailed,
-} from '../../bash/execute_bash_in_connector';
+import { ExecutionError } from '@kbn/workflows/server';
+import { executeSubAction, killCommandInConnector } from './execute_in_connector';
 
 export type ExecuteJsOutput =
   | {
@@ -42,8 +39,18 @@ ${jsCode}
 function buildBashScript(jsCode: string): string {
   const encodedScript = Buffer.from(jsCode).toString('base64');
   return `#!/bin/bash
-printf '%s' '${encodedScript}' | base64 -d | node
+printf '%s' '${encodedScript}' | openssl base64 -d -A | node
 exit $?`;
+}
+
+function throwIfScriptFailed(stderr: string, exitCode: number): void {
+  if (exitCode !== 0) {
+    throw new ExecutionError({
+      type: 'ScriptExecutionError',
+      message: stderr || `Script exited with code ${exitCode}`,
+      details: { exitCode },
+    });
+  }
 }
 
 function parseJsonOutput(content: string | undefined): unknown {
@@ -145,13 +152,12 @@ export async function tryExtractJsOutputFromConnector(params: {
   };
 }
 
-export async function killProcessInConnector(params: {
+export async function killJsProcessInConnector(params: {
   connectorId: string;
   request: KibanaRequest<unknown, unknown, unknown>;
   actionsStart: ActionsPluginStartContract | undefined;
   commandId: string;
   pid: number;
 }): Promise<void> {
-  const { connectorId, request, actionsStart, commandId, pid } = params;
-  await killBashProcessInConnector({ connectorId, request, actionsStart, commandId, pid });
+  await killCommandInConnector(params);
 }

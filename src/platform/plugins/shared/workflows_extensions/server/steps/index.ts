@@ -19,8 +19,14 @@ import {
   dataRegexReplaceStepDefinition,
   dataStringifyJsonStepDefinition,
 } from './data';
-import { createScriptsBashStepDefinition } from './bash/bash_step';
 import { createScriptsJavaScriptStepDefinition } from './javascript/javascript_step';
+import {
+  createRemoteHostRunCommandStepDefinition,
+  createRemoteHostRunJavascriptStepDefinition,
+  createRemoteHostRunPythonStepDefinition,
+  createRemoteHostUploadFileStepDefinition,
+  createRemoteHostDownloadFileStepDefinition,
+} from './remote_host';
 import type { RegisterInternalStepDefinitionsOptions } from './register_internal_step_definitions_options';
 import type { ServerStepRegistry } from '../step_registry/step_registry';
 
@@ -43,7 +49,11 @@ export const registerInternalStepDefinitions = (
     serverStepRegistry.register(createScriptsJavaScriptStepDefinition({ getActionsStart }));
   }
 
-  if (experimentalSteps.bashStep) {
-    serverStepRegistry.register(createScriptsBashStepDefinition({ getActionsStart }));
+  if (experimentalSteps.remoteHostSteps) {
+    serverStepRegistry.register(createRemoteHostRunCommandStepDefinition({ getActionsStart }));
+    serverStepRegistry.register(createRemoteHostRunJavascriptStepDefinition({ getActionsStart }));
+    serverStepRegistry.register(createRemoteHostRunPythonStepDefinition({ getActionsStart }));
+    serverStepRegistry.register(createRemoteHostUploadFileStepDefinition({ getActionsStart }));
+    serverStepRegistry.register(createRemoteHostDownloadFileStepDefinition({ getActionsStart }));
   }
 };
