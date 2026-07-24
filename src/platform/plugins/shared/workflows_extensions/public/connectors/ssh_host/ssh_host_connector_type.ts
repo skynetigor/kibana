@@ -11,28 +11,28 @@ import { lazy } from 'react';
 import { i18n } from '@kbn/i18n';
 import type { ActionTypeModel as ConnectorTypeModel } from '@kbn/triggers-actions-ui-plugin/public';
 
-export const CONNECTOR_ID = '.cloud-vm';
+export const CONNECTOR_ID = '.ssh-host';
 
 export const getConnectorType = (): ConnectorTypeModel => ({
   id: CONNECTOR_ID,
-  iconClass: 'compute',
-  actionTypeTitle: i18n.translate('workflowsExtensions.cloudVmConnector.actionTypeTitle', {
-    defaultMessage: 'Cloud VM',
+  iconClass: 'consoleApp',
+  actionTypeTitle: i18n.translate('workflowsExtensions.sshHostConnector.actionTypeTitle', {
+    defaultMessage: 'SSH Host',
   }),
-  selectMessage: i18n.translate('workflowsExtensions.cloudVmConnector.selectMessage', {
-    defaultMessage: 'Execute scripts on a cloud VM via SSH.',
+  selectMessage: i18n.translate('workflowsExtensions.sshHostConnector.selectMessage', {
+    defaultMessage: 'Run scripts on any SSH-accessible host (Linux or macOS).',
   }),
   validateParams: async (actionParams) => {
     const errors: Record<string, string[]> = {};
     if (!actionParams?.subActionParams?.bashScript?.trim()) {
       errors.bashScript = [
-        i18n.translate('workflowsExtensions.cloudVmConnector.params.bashScript.requiredError', {
+        i18n.translate('workflowsExtensions.sshHostConnector.params.bashScript.requiredError', {
           defaultMessage: 'Bash script is required.',
         }),
       ];
     }
     return { errors };
   },
-  actionConnectorFields: lazy(() => import('./cloud_vm_connector_fields')),
-  actionParamsFields: lazy(() => import('./cloud_vm_params')),
+  actionConnectorFields: lazy(() => import('./ssh_host_connector_fields')),
+  actionParamsFields: lazy(() => import('./ssh_host_params')),
 });

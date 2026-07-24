@@ -9,13 +9,13 @@
 
 import { z } from '@kbn/zod/v4';
 
-export const CloudVmConfigSchema = z
+export const SshHostConfigSchema = z
   .object({
     ip: z.string().min(1),
   })
   .strict();
 
-export const CloudVmSecretsSchema = z
+export const SshHostSecretsSchema = z
   .object({
     username: z.string().min(1),
     password: z.string().optional(),
@@ -23,46 +23,46 @@ export const CloudVmSecretsSchema = z
   })
   .strict();
 
-export const CloudVmSshParamsSchema = z.object({
+export const SshHostSshParamsSchema = z.object({
   bashScript: z.string().min(1),
   signal: z.any().optional(),
 });
 
-export const CloudVmAsyncSshParamsSchema = z.object({
+export const SshHostAsyncSshParamsSchema = z.object({
   bashScript: z.string().min(1),
   signal: z.any().optional(),
 });
 
-export const CLoudVmGetAsyncCommandStatusParamsSchema = z.object({
+export const SshHostGetAsyncCommandStatusParamsSchema = z.object({
   commandId: z.string().min(1),
   signal: z.any().optional(),
 });
 
-export const CloudVmDownloadFileParamsSchema = z.object({
+export const SshHostDownloadFileParamsSchema = z.object({
   remotePath: z.string().min(1),
   signal: z.any().optional(),
 });
 
-export const CloudVmUploadFileParamsSchema = z.object({
+export const SshHostUploadFileParamsSchema = z.object({
   remotePath: z.string().min(1),
   content: z.string().min(1),
   encoding: z.literal('base64'),
   signal: z.any().optional(),
 });
 
-export const CloudVmKillAsyncCommandParamsSchema = z.object({
+export const SshHostKillAsyncCommandParamsSchema = z.object({
   commandId: z.string().min(1),
   pid: z.number().optional(),
   signal: z.any().optional(),
 });
 
-export type CloudVmConfig = z.infer<typeof CloudVmConfigSchema>;
-export type CloudVmSecrets = z.infer<typeof CloudVmSecretsSchema>;
-export type CloudVmSshParams = z.infer<typeof CloudVmSshParamsSchema>;
-export type CloudVmDownloadFileParams = z.infer<typeof CloudVmDownloadFileParamsSchema>;
-export type CloudVmUploadFileParams = z.infer<typeof CloudVmUploadFileParamsSchema>;
-export type CloudVmAsyncSshParams = z.infer<typeof CloudVmAsyncSshParamsSchema>;
-export type CLoudVmGetAsyncCommandStatusParams = z.infer<
-  typeof CLoudVmGetAsyncCommandStatusParamsSchema
+export type SshHostConfig = z.infer<typeof SshHostConfigSchema>;
+export type SshHostSecrets = z.infer<typeof SshHostSecretsSchema>;
+export type SshHostSshParams = z.infer<typeof SshHostSshParamsSchema>;
+export type SshHostDownloadFileParams = z.infer<typeof SshHostDownloadFileParamsSchema>;
+export type SshHostUploadFileParams = z.infer<typeof SshHostUploadFileParamsSchema>;
+export type SshHostAsyncSshParams = z.infer<typeof SshHostAsyncSshParamsSchema>;
+export type SshHostGetAsyncCommandStatusParams = z.infer<
+  typeof SshHostGetAsyncCommandStatusParamsSchema
 >;
-export type CloudVmKillAsyncCommandParams = z.infer<typeof CloudVmKillAsyncCommandParamsSchema>;
+export type SshHostKillAsyncCommandParams = z.infer<typeof SshHostKillAsyncCommandParamsSchema>;

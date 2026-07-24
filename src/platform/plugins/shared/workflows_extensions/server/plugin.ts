@@ -27,7 +27,7 @@ import type {
   WorkflowsExtensionsExperimentalStepsConfig,
 } from './config';
 import { resolveExperimentalStepsConfig } from './config';
-import { getCloudVmConnectorType } from './connectors/cloud_vm';
+import { getSshHostConnectorType } from './connectors/ssh_host';
 import { registerGetStepDefinitionsRoute } from './routes/get_step_definitions';
 import { registerGetTriggerDefinitionsRoute } from './routes/get_trigger_definitions';
 import { ServerStepRegistry } from './step_registry';
@@ -89,7 +89,7 @@ export class WorkflowsExtensionsServerPlugin
     registerGetStepDefinitionsRoute(router, this.stepRegistry, this.logger);
     registerGetTriggerDefinitionsRoute(router, this.triggerRegistry);
 
-    plugins.actions.registerSubActionConnectorType(getCloudVmConnectorType());
+    plugins.actions.registerSubActionConnectorType(getSshHostConnectorType());
 
     registerInternalStepDefinitions(this.stepRegistry, {
       experimentalSteps: this.experimentalStepsConfig,

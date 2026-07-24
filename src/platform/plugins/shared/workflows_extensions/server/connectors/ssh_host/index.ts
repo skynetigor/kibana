@@ -9,23 +9,23 @@
 
 import { WorkflowsConnectorFeatureId } from '@kbn/actions-plugin/common';
 import type { SubActionConnectorType } from '@kbn/actions-plugin/server/sub_action_framework/types';
-import { CloudVmConnector } from './cloud_vm_connector';
-import { CloudVmConfigSchema, CloudVmSecretsSchema } from './schemas';
-import type { CloudVmConfig, CloudVmSecrets } from './schemas';
+import { SshHostConnector } from './ssh_host_connector';
+import { SshHostConfigSchema, SshHostSecretsSchema } from './schemas';
+import type { SshHostConfig, SshHostSecrets } from './schemas';
 
-export const CONNECTOR_ID = '.cloud-vm';
-export const CONNECTOR_NAME = 'Cloud VM';
+export const CONNECTOR_ID = '.ssh-host';
+export const CONNECTOR_NAME = 'SSH Host';
 
-export const getCloudVmConnectorType = (): SubActionConnectorType<
-  CloudVmConfig,
-  CloudVmSecrets
+export const getSshHostConnectorType = (): SubActionConnectorType<
+  SshHostConfig,
+  SshHostSecrets
 > => ({
   id: CONNECTOR_ID,
   name: CONNECTOR_NAME,
-  getService: (params) => new CloudVmConnector(params),
+  getService: (params) => new SshHostConnector(params),
   schema: {
-    config: CloudVmConfigSchema,
-    secrets: CloudVmSecretsSchema,
+    config: SshHostConfigSchema,
+    secrets: SshHostSecretsSchema,
   },
   supportedFeatureIds: [WorkflowsConnectorFeatureId],
   minimumLicenseRequired: 'basic' as const,

@@ -42,12 +42,12 @@ export const scriptsBashStepCommonDefinition: CommonStepDefinition<
     defaultMessage: 'Run Bash',
   }),
   description: i18n.translate('workflowsExtensions.scriptsBashStep.description', {
-    defaultMessage: 'Execute a Bash script on a remote VM and return its stdout',
+    defaultMessage: 'Execute a Bash script on a remote host and return its stdout',
   }),
   documentation: {
     details: `# Run Bash
 
-Execute a Bash script on a remote VM via a Cloud VM connector and return its raw stdout.
+Execute a Bash script on a remote host via an SSH Host connector and return its raw stdout.
 
 ## Basic Usage
 
@@ -55,7 +55,7 @@ Execute a Bash script on a remote VM via a Cloud VM connector and return its raw
 - name: run-script
   type: code.bash
   config:
-    connectorId: my-cloud-vm-connector
+    connectorId: my-ssh-host-connector
   with:
     code: |
       echo "Hello, World"
@@ -63,7 +63,7 @@ Execute a Bash script on a remote VM via a Cloud VM connector and return its raw
 
 ## Inputs
 
-- **code** (required): Bash script to execute on the remote VM.
+- **code** (required): Bash script to execute on the remote host.
 
 ## Output
 

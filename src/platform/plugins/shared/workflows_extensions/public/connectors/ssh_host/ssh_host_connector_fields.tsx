@@ -16,7 +16,7 @@ import type {
 import { SimpleConnectorForm } from '@kbn/triggers-actions-ui-plugin/public';
 
 const configFormSchema: ConfigFieldSchema[] = [
-  { id: 'ip', label: 'VM IP Address', isRequired: true },
+  { id: 'ip', label: 'Host IP Address', isRequired: true },
 ];
 
 const secretsFormSchema: SecretsFieldSchema[] = [
@@ -25,7 +25,7 @@ const secretsFormSchema: SecretsFieldSchema[] = [
   { id: 'sshPrivateKey', label: 'SSH Private Key', isRequired: true, type: 'TEXTAREA' },
 ];
 
-const CloudVmConnectorFields: React.FunctionComponent<ActionConnectorFieldsProps> = ({
+const SshHostConnectorFields: React.FunctionComponent<ActionConnectorFieldsProps> = ({
   readOnly,
   isEdit,
 }) => (
@@ -38,4 +38,4 @@ const CloudVmConnectorFields: React.FunctionComponent<ActionConnectorFieldsProps
 );
 
 // eslint-disable-next-line import/no-default-export
-export { CloudVmConnectorFields as default };
+export { SshHostConnectorFields as default };

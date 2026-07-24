@@ -9,7 +9,7 @@
 
 import type { CoreSetup, CoreStart, Plugin, PluginInitializerContext } from '@kbn/core/public';
 import { PublicStepRegistry } from './step_registry';
-import { getConnectorType as getCloudVmConnectorType } from './connectors/cloud_vm/cloud_vm_connector_type';
+import { getConnectorType as getSshHostConnectorType } from './connectors/ssh_host/ssh_host_connector_type';
 import { registerInternalStepDefinitions } from './steps';
 import { PublicTriggerRegistry } from './trigger_registry';
 import { registerInternalTriggerDefinitions } from './triggers';
@@ -50,7 +50,7 @@ export class WorkflowsExtensionsPublicPlugin
     _core: CoreSetup,
     plugins: WorkflowsExtensionsPublicPluginSetupDeps
   ): WorkflowsExtensionsPublicPluginSetup {
-    plugins.triggersActionsUi.actionTypeRegistry.register(getCloudVmConnectorType());
+    plugins.triggersActionsUi.actionTypeRegistry.register(getSshHostConnectorType());
 
     registerInternalStepDefinitions(this.stepRegistry, {
       experimentalSteps: this.experimentalStepsConfig,
