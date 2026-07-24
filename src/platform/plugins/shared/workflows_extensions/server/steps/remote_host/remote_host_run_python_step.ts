@@ -9,13 +9,13 @@
 
 import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
 import { z } from '@kbn/zod/v4';
+import {
+  executePythonInConnector,
+  killPythonProcessInConnector,
+  tryExtractPythonOutputFromConnector,
+} from './execute_python_in_connector';
 import { remoteHostRunPythonStepCommonDefinition } from '../../../common/steps/remote_host';
 import { createPollServerStepDefinition } from '../../step_registry/types';
-import {
-  executeCommandInConnector,
-  killCommandInConnector,
-  tryExtractCommandOutputFromConnector,
-} from './execute_in_connector';
 
 const StateSchema = z.object({
   commandId: z.string(),
@@ -25,13 +25,6 @@ const StateSchema = z.object({
 interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
 }
-
-const buildPythonBashScript = (pythonCode: string): string => {
-  const encoded = Buffer.from(pythonCode).toString('base64');
-  return `#!/bin/bash
-printf '%s' '${encoded}' | openssl base64 -d -A | python3 -
-exit $?`;
-};
 
 export const createRemoteHostRunPythonStepDefinition = ({ getActionsStart }: Deps) =>
   createPollServerStepDefinition({
@@ -54,26 +47,34 @@ export const createRemoteHostRunPythonStepDefinition = ({ getActionsStart }: Dep
         return { error: new Error('Code is required') };
       }
 
-      const result = await executeCommandInConnector({
+      const result = await executePythonInConnector({
         connectorId,
         request: context.contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
-        bashScript: buildPythonBashScript(code),
+        pythonCode: code,
         abortSignal: context.abortSignal,
       });
+
+      if (result.stderr) {
+        context.logger.error(result.stderr);
+      }
+
+      if (result.stdout) {
+        context.logger.info(result.stdout);
+      }
 
       if (result.status === 'running') {
         return { state: { commandId: result.commandId, pid: result.pid } };
       }
 
-      return { output: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode } };
+      return { output: result.output };
     },
-    poll: async ({ config, state, contextManager }) => {
+    poll: async ({ config, state, contextManager, logger }) => {
       if (!state?.commandId) {
         throw new Error('Invalid state for polling remote Python execution');
       }
 
-      const result = await tryExtractCommandOutputFromConnector({
+      const result = await tryExtractPythonOutputFromConnector({
         connectorId: config.connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
@@ -81,11 +82,19 @@ export const createRemoteHostRunPythonStepDefinition = ({ getActionsStart }: Dep
         pid: state.pid,
       });
 
+      if (result.stderr) {
+        logger.error(result.stderr);
+      }
+
+      if (result.stdout) {
+        logger.info(result.stdout);
+      }
+
       if (result.status === 'running') {
         return undefined;
       }
 
-      return { output: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode } };
+      return { output: result.output };
     },
     onCancel: async (context) => {
       const { config, contextManager } = context;
@@ -95,7 +104,7 @@ export const createRemoteHostRunPythonStepDefinition = ({ getActionsStart }: Dep
         return;
       }
 
-      await killCommandInConnector({
+      await killPythonProcessInConnector({
         connectorId: config.connectorId,
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),

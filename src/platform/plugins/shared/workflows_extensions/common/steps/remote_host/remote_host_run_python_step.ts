@@ -24,11 +24,7 @@ export const InputSchema = z.object({
   code: z.string().max(REMOTE_HOST_PYTHON_TEMPLATE_MAX_CHARS),
 });
 
-export const OutputSchema = z.object({
-  stdout: z.string(),
-  stderr: z.string(),
-  exitCode: z.number(),
-});
+export const OutputSchema = z.unknown();
 
 export type RemoteHostRunPythonStepConfigSchema = typeof ConfigSchema;
 export type RemoteHostRunPythonStepInputSchema = typeof InputSchema;
@@ -46,13 +42,12 @@ export const remoteHostRunPythonStepCommonDefinition: CommonStepDefinition<
     defaultMessage: 'Run Python',
   }),
   description: i18n.translate('workflowsExtensions.remoteHostRunPythonStep.description', {
-    defaultMessage: 'Execute a Python script on a remote host via SSH and return its output',
+    defaultMessage: 'Execute a Python script on a remote host via SSH and return its result',
   }),
   documentation: {
     details: `# Run Python
 
-Execute a Python script on a remote host via an SSH Host connector and return stdout, stderr,
-and exit code.
+Execute a Python script on a remote host via an SSH Host connector and return its result to downstream steps.
 
 **Requires Python 3 to be installed on the remote host.**
 
@@ -66,8 +61,28 @@ and exit code.
   with:
     code: |
       import platform
-      print(platform.node())
+      return {"node": platform.node(), "system": platform.system()}
 \`\`\`
+
+The script runs inside a wrapper function — use \`return\` to produce the step output. The return value must be JSON-serializable (dict, list, str, int, float, bool, or None).
+
+Use Liquid in \`with.code\` to embed workflow data before execution:
+
+\`\`\`yaml
+  - name: process
+    type: remoteHost.runPython
+    config:
+      connectorId: my-ssh-host-connector
+    with:
+      code: |
+        count = {{ steps.fetch.output | size }}
+        return {"count": count, "label": "{{ consts.label }}"}
+\`\`\`
+
+## Requirements
+
+- Python 3 must be installed on the remote host.
+- The return value must be JSON-serializable; non-serializable types (e.g. \`datetime\`) raise an error.
 
 ## Inputs
 
@@ -75,10 +90,7 @@ and exit code.
 
 ## Output
 
-Returns an object with:
-- **stdout**: Standard output from the script.
-- **stderr**: Standard error from the script.
-- **exitCode**: Exit code of the script.
+Returns the value produced by the \`return\` statement. The output schema is dynamic and depends on what the code returns.
 `,
   },
   inputSchema: InputSchema,
