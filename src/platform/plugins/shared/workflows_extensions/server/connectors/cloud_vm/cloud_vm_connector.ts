@@ -56,7 +56,9 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
     return (error.response?.data as { message?: string })?.message ?? error.message;
   }
 
-  public async ssh(params: CloudVmSshParams): Promise<{ stdout: string }> {
+  public async ssh(
+    params: CloudVmSshParams
+  ): Promise<{ stdout: string; stderr: string; code?: number }> {
     const { bashScript, signal } = params;
     const { ip } = this.config;
     const { username, password, sshPrivateKey } = this.secrets;
@@ -98,9 +100,30 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
         env = process.env;
       }
 
-      const { stdout } = await execPromise(command, { env, signal });
+      const { stdout, stderr } = await execPromise(command, { env, signal });
 
-      return { stdout: stdout.trim() };
+      const sanitizedStdout = stdout.replace(command, '').trim(); // Remove echoed command from stdout
+      const sanitizedStderr = stderr.replace(command, '').trim(); // Remove echoed command from stderr
+
+      return { stdout: sanitizedStdout, stderr: sanitizedStderr, code: 0 };
+    } catch (error) {
+      const ischildProcessError =
+        error instanceof Error && 'stdout' in error && 'stderr' in error && 'code' in error;
+
+      if (
+        ischildProcessError &&
+        typeof error.stdout === 'string' &&
+        typeof error.stderr === 'string' &&
+        typeof error.code === 'number'
+      ) {
+        return {
+          stdout: error.stdout.trim(),
+          stderr: error.stderr.trim(),
+          code: error.code,
+        };
+      }
+
+      throw error;
     } finally {
       if (existsSync(tempKeyPath)) {
         unlinkSync(tempKeyPath);

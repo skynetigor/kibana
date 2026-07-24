@@ -22,7 +22,17 @@ export const getConnectorType = (): ConnectorTypeModel => ({
   selectMessage: i18n.translate('workflowsExtensions.cloudVmConnector.selectMessage', {
     defaultMessage: 'Execute scripts on a cloud VM via SSH.',
   }),
-  validateParams: async () => ({ errors: {} }),
+  validateParams: async (actionParams) => {
+    const errors: Record<string, string[]> = {};
+    if (!actionParams?.subActionParams?.bashScript?.trim()) {
+      errors.bashScript = [
+        i18n.translate('workflowsExtensions.cloudVmConnector.params.bashScript.requiredError', {
+          defaultMessage: 'Bash script is required.',
+        }),
+      ];
+    }
+    return { errors };
+  },
   actionConnectorFields: lazy(() => import('./cloud_vm_connector_fields')),
   actionParamsFields: lazy(() => import('./cloud_vm_params')),
 });
