@@ -28,6 +28,18 @@ export const CloudVmSshParamsSchema = z.object({
   signal: z.any().optional(),
 });
 
+export const CloudVmDownloadFileParamsSchema = z.object({
+  remotePath: z.string().min(1),
+});
+
+export const CloudVmUploadFileParamsSchema = z.object({
+  remotePath: z.string().min(1),
+  content: z.string().min(1),
+  encoding: z.literal('base64'),
+});
+
 export type CloudVmConfig = z.infer<typeof CloudVmConfigSchema>;
 export type CloudVmSecrets = z.infer<typeof CloudVmSecretsSchema>;
 export type CloudVmSshParams = z.infer<typeof CloudVmSshParamsSchema>;
+export type CloudVmDownloadFileParams = z.infer<typeof CloudVmDownloadFileParamsSchema>;
+export type CloudVmUploadFileParams = z.infer<typeof CloudVmUploadFileParamsSchema>;
