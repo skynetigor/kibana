@@ -58,7 +58,7 @@ export class CloudVmConnector extends SubActionConnector<CloudVmConfig, CloudVmS
 
   public async ssh(
     params: CloudVmSshParams
-  ): Promise<{ stdout: string; stderr: string; code?: number }> {
+  ): Promise<{ stdout: string; stderr: string; code: number }> {
     const { bashScript, signal } = params;
     const { ip } = this.config;
     const { username, password, sshPrivateKey } = this.secrets;
