@@ -181,8 +181,8 @@ echo "PID=$PID"
         status: 'DONE',
         pid,
         exitCode,
-        stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8'),
-        stderr: Buffer.from(stderrB64, 'base64').toString('utf-8'),
+        stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8').trim(),
+        stderr: Buffer.from(stderrB64, 'base64').toString('utf-8').trim(),
         files: files.length > 0 ? files : undefined,
       };
     }

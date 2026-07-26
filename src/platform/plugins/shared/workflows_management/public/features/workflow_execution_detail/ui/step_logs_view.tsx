@@ -10,13 +10,9 @@
 import { EuiCodeBlock, EuiLoadingSpinner, EuiText } from '@elastic/eui';
 import React, { useEffect, useState } from 'react';
 import { i18n } from '@kbn/i18n';
-import type { WorkflowStepExecutionDto } from '@kbn/workflows/types/latest';
 import { ExecutionStatus } from '@kbn/workflows';
-import type {
-  StepLogEntry,
-  StepLogsApi,
-  StepLogsConfig,
-} from '@kbn/workflows-extensions/public';
+import type { WorkflowStepExecutionDto } from '@kbn/workflows/types/latest';
+import type { StepLogEntry, StepLogsApi, StepLogsConfig } from '@kbn/workflows-extensions/public';
 
 interface StepLogsViewProps {
   stepExecution: WorkflowStepExecutionDto;
@@ -68,7 +64,7 @@ export const StepLogsView: React.FC<StepLogsViewProps> = ({ stepExecution, confi
   }
 
   return (
-    <EuiCodeBlock language="text" transparentBackground overflowHeight={400} isCopyable>
+    <EuiCodeBlock css={{ height: '100%' }} language="text" transparentBackground isCopyable>
       {entries.map((e) => e.message).join('\n')}
     </EuiCodeBlock>
   );
