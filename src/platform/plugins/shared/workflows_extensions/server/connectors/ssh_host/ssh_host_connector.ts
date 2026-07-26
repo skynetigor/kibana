@@ -108,9 +108,20 @@ export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostS
     const commandId = `bash_${new Date().toISOString()}`;
     const { tmpDir, stdoutFile, stderrFile, codeFile, scriptFile } = this.getCommandData(commandId);
 
+    const wrappedScript = `#!/bin/bash
+SCRIPT_OUTPUT=''
+_capture_output() {
+  if [ -n "$SCRIPT_OUTPUT" ]; then
+    printf '%s' "$SCRIPT_OUTPUT" > "$COMMAND_TMP_DIR/output.txt"
+  fi
+}
+trap '_capture_output' EXIT
+
+${params.script}`;
+
     await this.uploadFile({
       remotePath: scriptFile,
-      content: Buffer.from(params.script).toString('base64'),
+      content: Buffer.from(wrappedScript).toString('base64'),
       encoding: 'base64',
     });
 

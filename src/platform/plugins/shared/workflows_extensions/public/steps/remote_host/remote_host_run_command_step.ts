@@ -31,9 +31,5 @@ export const remoteHostRunCommandStepDefinition = createPublicStepDefinition({
   },
   logs: {
     enabled: true,
-    getLogs: ({ stepExecution }) => {
-      const stdout = (stepExecution.output as { stdout?: string } | null)?.stdout;
-      return stdout ? [{ message: stdout }] : [];
-    },
   },
 });

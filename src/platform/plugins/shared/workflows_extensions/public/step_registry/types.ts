@@ -21,7 +21,7 @@ export interface StepLogsApi {
 export interface StepLogEntry {
   message: string;
   timestamp?: string;
-  level?: 'info' | 'warn' | 'error';
+  level?: 'trace' | 'debug' | 'info' | 'warn' | 'error';
 }
 
 export interface StepLogsConfig {

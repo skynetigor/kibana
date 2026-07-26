@@ -24,11 +24,7 @@ export const InputSchema = z.object({
   code: z.string().max(REMOTE_HOST_COMMAND_TEMPLATE_MAX_CHARS),
 });
 
-export const OutputSchema = z.object({
-  stdout: z.string(),
-  stderr: z.string(),
-  exitCode: z.number(),
-});
+export const OutputSchema = z.unknown();
 
 export type RemoteHostRunCommandStepConfigSchema = typeof ConfigSchema;
 export type RemoteHostRunCommandStepInputSchema = typeof InputSchema;
@@ -51,18 +47,33 @@ export const remoteHostRunCommandStepCommonDefinition: CommonStepDefinition<
   documentation: {
     details: `# Run Command
 
-Execute a shell command on a remote host via an SSH Host connector and return stdout, stderr, and exit code.
+Execute a shell command on a remote host via an SSH Host connector. The script can set
+\`SCRIPT_OUTPUT\` to a string or JSON value — that value becomes the step output.
+Standard output and stderr are captured to logs.
 
 ## Basic Usage
 
 \`\`\`yaml
-- name: check-disk
+- name: get-hostname
   type: remoteHost.runCommand
   config:
     connector-id: my-ssh-host-connector
   with:
     code: |
-      df -h /
+      SCRIPT_OUTPUT=$(hostname -f)
+\`\`\`
+
+## Structured Output
+
+\`\`\`yaml
+- name: disk-info
+  type: remoteHost.runCommand
+  config:
+    connector-id: my-ssh-host-connector
+  with:
+    code: |
+      AVAILABLE=$(df -BG / | awk 'NR==2{print $4}')
+      SCRIPT_OUTPUT="{\"available\": \"$AVAILABLE\"}"
 \`\`\`
 
 ## Inputs
@@ -71,10 +82,9 @@ Execute a shell command on a remote host via an SSH Host connector and return st
 
 ## Output
 
-Returns an object with:
-- **stdout**: Standard output from the command.
-- **stderr**: Standard error from the command.
-- **exitCode**: Exit code of the command.
+Returns the value of \`SCRIPT_OUTPUT\` set by the script. If the value is valid JSON it is
+parsed into an object; otherwise it is returned as a string. Returns \`null\` when
+\`SCRIPT_OUTPUT\` is not set.
 `,
   },
   inputSchema: InputSchema,

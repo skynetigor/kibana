@@ -7,7 +7,7 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { EuiCodeBlock, EuiLoadingSpinner, EuiText } from '@elastic/eui';
+import { EuiLoadingSpinner, EuiText, useEuiTheme } from '@elastic/eui';
 import React, { useEffect, useState } from 'react';
 import { i18n } from '@kbn/i18n';
 import { ExecutionStatus } from '@kbn/workflows';
@@ -21,6 +21,7 @@ interface StepLogsViewProps {
 }
 
 export const StepLogsView: React.FC<StepLogsViewProps> = ({ stepExecution, config, logsApi }) => {
+  const { euiTheme } = useEuiTheme();
   const [entries, setEntries] = useState<StepLogEntry[] | null>(null);
 
   useEffect(() => {
@@ -63,9 +64,38 @@ export const StepLogsView: React.FC<StepLogsViewProps> = ({ stepExecution, confi
     );
   }
 
+  const levelColor = (level: StepLogEntry['level']): string => {
+    switch (level) {
+      case 'warn':
+        return euiTheme.colors.textWarning;
+      case 'error':
+        return euiTheme.colors.textDanger;
+      case 'debug':
+        return euiTheme.colors.textSubdued;
+      default:
+        return 'inherit';
+    }
+  };
+
   return (
-    <EuiCodeBlock css={{ height: '100%' }} language="text" transparentBackground isCopyable>
-      {entries.map((e) => e.message).join('\n')}
-    </EuiCodeBlock>
+    <pre
+      css={{
+        height: '100%',
+        overflowY: 'auto',
+        margin: 0,
+        padding: euiTheme.size.s,
+        fontFamily: euiTheme.font.familyCode,
+        fontSize: euiTheme.size.m,
+        lineHeight: `${euiTheme.base * 1.5}px`,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-all',
+      }}
+    >
+      {entries.map((e, i) => (
+        <div key={i} css={{ color: levelColor(e.level) }}>
+          {e.message}
+        </div>
+      ))}
+    </pre>
   );
 };

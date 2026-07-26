@@ -24,6 +24,8 @@ export type RemoteCommandOutput =
       stdout: string;
       stderr: string;
       exitCode: number;
+      /** Content of output.txt written by the script via SCRIPT_OUTPUT= */
+      output?: string;
     };
 
 export async function executeSubAction<T>(params: {
@@ -75,6 +77,7 @@ export async function executeCommandInConnector(params: {
     stdout?: string;
     stderr?: string;
     exitCode?: number;
+    files?: Array<{ file: string; content: string }>;
   }>({
     connectorId,
     request,
@@ -85,11 +88,13 @@ export async function executeCommandInConnector(params: {
   });
 
   if (result.status === 'DONE') {
+    const outputFile = result.files?.find((f) => f.file === 'output.txt');
     return {
       status: 'terminated',
       stdout: result.stdout ?? '',
       stderr: result.stderr ?? '',
       exitCode: result.exitCode ?? 0,
+      output: outputFile?.content,
     };
   }
 
@@ -118,6 +123,7 @@ export async function tryExtractCommandOutputFromConnector(params: {
     stdout?: string;
     stderr?: string;
     exitCode?: number;
+    files?: Array<{ file: string; content: string }>;
   }>({
     connectorId,
     request,
@@ -128,11 +134,13 @@ export async function tryExtractCommandOutputFromConnector(params: {
   });
 
   if (result.status === 'DONE') {
+    const outputFile = result.files?.find((f) => f.file === 'output.txt');
     return {
       status: 'terminated',
       stdout: result.stdout ?? '',
       stderr: result.stderr ?? '',
       exitCode: result.exitCode ?? 0,
+      output: outputFile?.content,
     };
   }
 

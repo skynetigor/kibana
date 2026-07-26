@@ -22,6 +22,15 @@ const StateSchema = z.object({
   pid: z.number(),
 });
 
+const parseScriptOutput = (raw: string | undefined): unknown => {
+  if (raw === undefined || raw === '') return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+};
+
 interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
 }
@@ -59,9 +68,12 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         return { state: { commandId: result.commandId, pid: result.pid } };
       }
 
-      return { output: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode } };
+      if (result.stdout) context.logger.info(result.stdout);
+      if (result.stderr) context.logger.warn(result.stderr);
+      return { output: parseScriptOutput(result.output) };
     },
-    poll: async ({ config, state, contextManager }) => {
+    poll: async (context) => {
+      const { config, state, contextManager } = context;
       if (!state?.commandId) {
         throw new Error('Invalid state for polling remote command execution');
       }
@@ -78,7 +90,9 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         return undefined;
       }
 
-      return { output: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode } };
+      if (result.stdout) context.logger.info(result.stdout);
+      if (result.stderr) context.logger.warn(result.stderr);
+      return { output: parseScriptOutput(result.output) };
     },
     onCancel: async (context) => {
       const { config, contextManager } = context;
