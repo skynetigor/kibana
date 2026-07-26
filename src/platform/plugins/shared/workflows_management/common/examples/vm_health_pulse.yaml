@@ -1,0 +1,206 @@
+version: '1'
+name: VM Polyglot Health Pulse
+description: |
+  Audits a remote VM by orchestrating shell commands, Python metric analysis,
+  and Node.js report formatting. Scores health across memory, disk, load, and
+  CPU dimensions. Uploads a JSON report back to the VM and confirms the round-trip.
+tags:
+  - devops
+  - monitoring
+  - remote-host
+triggers:
+  - type: manual
+
+steps:
+  # ── Step 1: Raw system snapshot via shell ────────────────────────────────────
+  - name: collect_raw_metrics
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        echo "=== MEM ===" && free -m
+        echo "=== DISK ===" && df -h --output=target,pcent
+        echo "=== LOAD ===" && uptime
+        echo "=== PROCS ===" && ps aux --sort=-%cpu | head -16
+
+  # ── Step 2: Pull 1/5/15-min load averages with regex ─────────────────────────
+  - name: extract_load
+    type: data.regexExtract
+    source: "${{ steps.collect_raw_metrics.output.stdout }}"
+    with:
+      pattern: "load average:\\s*(?<load1>[\\d.]+),\\s*(?<load5>[\\d.]+),\\s*(?<load15>[\\d.]+)"
+      fields:
+        load_1m: "load1"
+        load_5m: "load5"
+        load_15m: "load15"
+
+  # ── Step 3: Python — compute health scores for each dimension ─────────────────
+  - name: analyse_metrics
+    type: remoteHost.runPython
+    connector-id: ihor-vm
+    with:
+      code: |
+        import re, subprocess
+
+        def mem():
+            out = subprocess.check_output(['free', '-m']).decode()
+            parts = out.split('\n')[1].split()
+            total, used = int(parts[1]), int(parts[2])
+            return {'total_mb': total, 'used_mb': used, 'pct': round(used / total * 100, 1)}
+
+        def disk():
+            out = subprocess.check_output(['df', '-h', '--output=target,pcent']).decode()
+            mounts = []
+            for line in out.strip().split('\n')[1:]:
+                parts = line.split()
+                if len(parts) == 2:
+                    mounts.append({'mount': parts[0], 'used_pct': int(parts[1].rstrip('%'))})
+            return mounts
+
+        def load_avg():
+            out = subprocess.check_output(['uptime']).decode()
+            m = re.search(r'load average:\s*([\d.]+)', out)
+            return float(m.group(1)) if m else 0.0
+
+        def top_procs():
+            out = subprocess.check_output(['ps', 'aux', '--sort=-%cpu']).decode()
+            result = []
+            for line in out.strip().split('\n')[1:16]:
+                p = line.split(None, 10)
+                if len(p) >= 11:
+                    result.append({
+                        'user': p[0], 'pid': int(p[1]),
+                        'cpu': float(p[2]), 'mem': float(p[3]),
+                        'command': p[10][:60],
+                    })
+            return result
+
+        mem_data   = mem()
+        disk_data  = disk()
+        load_data  = load_avg()
+        procs_data = top_procs()
+        max_disk   = max((d['used_pct'] for d in disk_data), default=0)
+
+        return {
+            'memory':        mem_data,
+            'disks':         disk_data,
+            'load_1m':       load_data,
+            'top_processes': procs_data,
+            'scores': {
+                'memory': round(max(0.0, 100 - mem_data['pct']), 1),
+                'disk':   round(max(0.0, 100 - max_disk), 1),
+                'load':   round(max(0.0, 100 - min(load_data * 25, 100)), 1),
+                'cpu':    round(max(0.0, 100 - (procs_data[0]['cpu'] if procs_data else 0)), 1),
+            },
+        }
+
+  # ── Step 4: Node.js — grade, recommendations, structured report ───────────────
+  - name: format_report
+    type: remoteHost.runJavascript
+    connector-id: ihor-vm
+    with:
+      code: |
+        const m = {{ steps.analyse_metrics.output | json }};
+        const s = m.scores;
+        const composite = Math.round((s.memory + s.disk + s.load + s.cpu) / 4);
+        const grade = composite >= 90 ? 'A'
+                    : composite >= 75 ? 'B'
+                    : composite >= 60 ? 'C'
+                    : composite >= 40 ? 'D' : 'F';
+        const tips = [];
+        if (s.memory < 50) tips.push('Memory pressure — reduce resident set sizes or add RAM');
+        if (s.disk   < 50) tips.push('Disk usage critical — prune logs or expand storage');
+        if (s.load   < 50) tips.push('High load average — investigate scheduled or runaway jobs');
+        if (s.cpu    < 50) tips.push('CPU hog detected — review top_processes for culprit');
+        return { grade, composite, dimensions: s, recommendations: tips, raw: m };
+
+  # ── Step 5: Keep only processes burning more than 5% CPU ─────────────────────
+  - name: hot_processes
+    type: data.filter
+    items: "${{ steps.analyse_metrics.output.top_processes }}"
+    with:
+      condition: "cpu > 5"
+
+  # ── Step 6: Reshape hot processes for a clean display format ─────────────────
+  - name: hot_processes_display
+    type: data.map
+    items: "${{ steps.hot_processes.output }}"
+    with:
+      fields:
+        process: "${{ item.command }}"
+        cpu_pct: "${{ item.cpu }}"
+        mem_pct: "${{ item.mem }}"
+        owner:   "${{ item.user }}"
+
+  # ── Step 7: Aggregate disk usage per mount point ──────────────────────────────
+  - name: disk_summary
+    type: data.aggregate
+    items: "${{ steps.analyse_metrics.output.disks }}"
+    with:
+      group_by:
+        - mount
+      metrics:
+        - name: used_pct
+          operation: max
+          field: used_pct
+      order_by: used_pct
+      order: desc
+
+  # ── Step 8: In-Kibana JS — composite score + status label ────────────────────
+  - name: health_score
+    type: code.javascript
+    with:
+      code: |
+        const report = {{ steps.format_report.output | json }};
+        const hot    = {{ steps.hot_processes_display.output | json }};
+        const disks  = {{ steps.disk_summary.output | json }};
+        const maxDisk = disks.reduce((max, d) => Math.max(max, d.used_pct), 0);
+        return {
+          grade:           report.grade,
+          score:           report.composite,
+          status:          report.composite >= 75 ? 'healthy'
+                         : report.composite >= 50 ? 'degraded' : 'critical',
+          hotProcessCount: hot.length,
+          maxDiskUsedPct:  maxDisk,
+          load1m:          '{{ steps.extract_load.output.load_1m }}',
+          recommendations: report.recommendations,
+        };
+
+  # ── Step 9: Write the full report JSON back to the VM ────────────────────────
+  - name: upload_report
+    type: remoteHost.uploadFile
+    connector-id: ihor-vm
+    with:
+      remotePath: /tmp/kibana_health_report.json
+      content: '{{ steps.format_report.output | json }}'
+
+  # ── Step 10: Read it back — confirms the round-trip ──────────────────────────
+  - name: verify_report
+    type: remoteHost.downloadFile
+    connector-id: ihor-vm
+    with:
+      remotePath: /tmp/kibana_health_report.json
+
+  # ── Step 11: Print human-readable summary ─────────────────────────────────────
+  - name: summary
+    type: console
+    with:
+      message: |
+        ═══════════════════════════════════════════
+          VM Health Pulse — Complete
+        ═══════════════════════════════════════════
+          Grade   : {{ steps.health_score.output.grade }}
+          Score   : {{ steps.health_score.output.score }}/100
+          Status  : {{ steps.health_score.output.status }}
+          Load 1m : {{ steps.health_score.output.load1m }}
+          Hot procs: {{ steps.health_score.output.hotProcessCount }}
+          Max disk : {{ steps.health_score.output.maxDiskUsedPct }}%
+        {% if steps.health_score.output.recommendations.size > 0 %}
+          Recommendations:
+          {% for tip in steps.health_score.output.recommendations %}  • {{ tip }}
+          {% endfor %}
+        {% else %}
+          All dimensions healthy — no action needed.
+        {% endif %}
+          Report   : /tmp/kibana_health_report.json
+        ═══════════════════════════════════════════

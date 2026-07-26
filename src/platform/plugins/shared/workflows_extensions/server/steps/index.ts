@@ -49,11 +49,9 @@ export const registerInternalStepDefinitions = (
     serverStepRegistry.register(createScriptsJavaScriptStepDefinition({ getActionsStart }));
   }
 
-  if (experimentalSteps.remoteHostSteps) {
-    serverStepRegistry.register(createRemoteHostRunCommandStepDefinition({ getActionsStart }));
-    serverStepRegistry.register(createRemoteHostRunJavascriptStepDefinition({ getActionsStart }));
-    serverStepRegistry.register(createRemoteHostRunPythonStepDefinition({ getActionsStart }));
-    serverStepRegistry.register(createRemoteHostUploadFileStepDefinition({ getActionsStart }));
-    serverStepRegistry.register(createRemoteHostDownloadFileStepDefinition({ getActionsStart }));
-  }
+  serverStepRegistry.register(createRemoteHostRunCommandStepDefinition({ getActionsStart }));
+  serverStepRegistry.register(createRemoteHostRunJavascriptStepDefinition({ getActionsStart }));
+  serverStepRegistry.register(createRemoteHostRunPythonStepDefinition({ getActionsStart }));
+  serverStepRegistry.register(createRemoteHostUploadFileStepDefinition({ getActionsStart }));
+  serverStepRegistry.register(createRemoteHostDownloadFileStepDefinition({ getActionsStart }));
 };

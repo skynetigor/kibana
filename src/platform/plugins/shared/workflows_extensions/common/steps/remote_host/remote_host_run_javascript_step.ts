@@ -17,7 +17,7 @@ export const RemoteHostRunJavascriptStepTypeId = 'remoteHost.runJavascript' as c
 export const REMOTE_HOST_JS_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB
 
 export const ConfigSchema = z.object({
-  connectorId: z.string().min(1),
+  'connector-id': z.string().min(1),
 });
 
 export const InputSchema = z.object({
@@ -58,7 +58,7 @@ script becomes the step output and is available to downstream steps.
 - name: compute
   type: remoteHost.runJavascript
   config:
-    connectorId: my-ssh-host-connector
+    connector-id: my-ssh-host-connector
   with:
     code: |
       const os = require('os');

@@ -17,7 +17,7 @@ export const RemoteHostRunPythonStepTypeId = 'remoteHost.runPython' as const;
 export const REMOTE_HOST_PYTHON_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB
 
 export const ConfigSchema = z.object({
-  connectorId: z.string().min(1),
+  'connector-id': z.string().min(1),
 });
 
 export const InputSchema = z.object({
@@ -57,7 +57,7 @@ Execute a Python script on a remote host via an SSH Host connector and return it
 - name: analyze
   type: remoteHost.runPython
   config:
-    connectorId: my-ssh-host-connector
+    connector-id: my-ssh-host-connector
   with:
     code: |
       import platform
@@ -72,7 +72,7 @@ Use Liquid in \`with.code\` to embed workflow data before execution:
   - name: process
     type: remoteHost.runPython
     config:
-      connectorId: my-ssh-host-connector
+      connector-id: my-ssh-host-connector
     with:
       code: |
         count = {{ steps.fetch.output | size }}

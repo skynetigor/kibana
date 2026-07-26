@@ -9,13 +9,24 @@
 
 import React from 'react';
 import { remoteHostDownloadFileStepCommonDefinition } from '../../../common/steps/remote_host';
+import { CONNECTOR_ID as SSH_HOST_CONNECTOR_ID } from '../../connectors/ssh_host/ssh_host_connector_type';
 import { createPublicStepDefinition } from '../../step_registry/types';
 
 export const remoteHostDownloadFileStepDefinition = createPublicStepDefinition({
   ...remoteHostDownloadFileStepCommonDefinition,
   icon: React.lazy(() =>
-    import('@elastic/eui/es/components/icon/assets/importAction').then(({ icon }) => ({
+    import('@elastic/eui/es/components/icon/assets/download').then(({ icon }) => ({
       default: icon,
     }))
   ),
+  editorHandlers: {
+    config: {
+      'connector-id': {
+        connectorIdSelection: {
+          connectorTypes: [SSH_HOST_CONNECTOR_ID],
+          enableCreation: true,
+        },
+      },
+    },
+  },
 });

@@ -17,7 +17,7 @@ export const RemoteHostRunCommandStepTypeId = 'remoteHost.runCommand' as const;
 export const REMOTE_HOST_COMMAND_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB
 
 export const ConfigSchema = z.object({
-  connectorId: z.string().min(1),
+  'connector-id': z.string().min(1),
 });
 
 export const InputSchema = z.object({
@@ -41,7 +41,7 @@ export const remoteHostRunCommandStepCommonDefinition: CommonStepDefinition<
 > = {
   id: RemoteHostRunCommandStepTypeId,
   category: StepCategory.Kibana,
-  stability: 'tech_preview',
+  // stability: 'tech_preview',
   label: i18n.translate('workflowsExtensions.remoteHostRunCommandStep.label', {
     defaultMessage: 'Run Command',
   }),
@@ -59,7 +59,7 @@ Execute a shell command on a remote host via an SSH Host connector and return st
 - name: check-disk
   type: remoteHost.runCommand
   config:
-    connectorId: my-ssh-host-connector
+    connector-id: my-ssh-host-connector
   with:
     code: |
       df -h /

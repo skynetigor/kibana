@@ -41,7 +41,7 @@ export const createRemoteHostRunPythonStepDefinition = ({ getActionsStart }: Dep
     },
     start: async (context) => {
       const { code } = context.input;
-      const { connectorId } = context.config;
+      const connectorId = context.config['connector-id'];
 
       if (typeof code !== 'string' || code.trim().length === 0) {
         return { error: new Error('Code is required') };
@@ -75,7 +75,7 @@ export const createRemoteHostRunPythonStepDefinition = ({ getActionsStart }: Dep
       }
 
       const result = await tryExtractPythonOutputFromConnector({
-        connectorId: config.connectorId,
+        connectorId: config['connector-id'],
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
         commandId: state.commandId,
@@ -105,7 +105,7 @@ export const createRemoteHostRunPythonStepDefinition = ({ getActionsStart }: Dep
       }
 
       await killPythonProcessInConnector({
-        connectorId: config.connectorId,
+        connectorId: config['connector-id'],
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
         commandId: state.commandId,

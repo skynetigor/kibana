@@ -24,7 +24,7 @@ describe('registerInternalStepDefinitions', () => {
     const registry = new ServerStepRegistry(loggerMock.create());
 
     registerInternalStepDefinitions(registry, {
-      experimentalSteps: { javaScriptStep: false, remoteHostSteps: false },
+      experimentalSteps: { javaScriptStep: false },
     });
 
     expect(registry.has(ScriptsJavaScriptStepTypeId)).toBe(false);
@@ -34,31 +34,17 @@ describe('registerInternalStepDefinitions', () => {
     const registry = new ServerStepRegistry(loggerMock.create());
 
     registerInternalStepDefinitions(registry, {
-      experimentalSteps: { javaScriptStep: true, remoteHostSteps: false },
+      experimentalSteps: { javaScriptStep: true },
     });
 
     expect(registry.has(ScriptsJavaScriptStepTypeId)).toBe(true);
   });
 
-  it('does not register remoteHost steps when remoteHostSteps is disabled', () => {
+  it('always registers all remoteHost steps', () => {
     const registry = new ServerStepRegistry(loggerMock.create());
 
     registerInternalStepDefinitions(registry, {
-      experimentalSteps: { javaScriptStep: false, remoteHostSteps: false },
-    });
-
-    expect(registry.has(RemoteHostRunCommandStepTypeId)).toBe(false);
-    expect(registry.has(RemoteHostRunJavascriptStepTypeId)).toBe(false);
-    expect(registry.has(RemoteHostRunPythonStepTypeId)).toBe(false);
-    expect(registry.has(RemoteHostUploadFileStepTypeId)).toBe(false);
-    expect(registry.has(RemoteHostDownloadFileStepTypeId)).toBe(false);
-  });
-
-  it('registers all remoteHost steps when remoteHostSteps is enabled', () => {
-    const registry = new ServerStepRegistry(loggerMock.create());
-
-    registerInternalStepDefinitions(registry, {
-      experimentalSteps: { javaScriptStep: false, remoteHostSteps: true },
+      experimentalSteps: { javaScriptStep: false },
     });
 
     expect(registry.has(RemoteHostRunCommandStepTypeId)).toBe(true);

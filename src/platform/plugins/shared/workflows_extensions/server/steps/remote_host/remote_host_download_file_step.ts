@@ -21,7 +21,7 @@ export const createRemoteHostDownloadFileStepDefinition = ({ getActionsStart }: 
     ...remoteHostDownloadFileStepCommonDefinition,
     handler: async (context) => {
       const { remotePath } = context.input;
-      const { connectorId } = context.config;
+      const connectorId = context.config['connector-id'];
 
       const result = await executeSubAction<{ content: string; encoding: 'base64' }>({
         connectorId,

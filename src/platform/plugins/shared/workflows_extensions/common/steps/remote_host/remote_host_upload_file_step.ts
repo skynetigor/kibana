@@ -15,7 +15,7 @@ import type { CommonStepDefinition } from '../../step_registry/types';
 export const RemoteHostUploadFileStepTypeId = 'remoteHost.uploadFile' as const;
 
 export const ConfigSchema = z.object({
-  connectorId: z.string().min(1),
+  'connector-id': z.string().min(1),
 });
 
 export const InputSchema = z.object({
@@ -54,7 +54,7 @@ Upload a file to a remote host via an SSH Host connector.
 - name: deploy-config
   type: remoteHost.uploadFile
   config:
-    connectorId: my-ssh-host-connector
+    connector-id: my-ssh-host-connector
   with:
     remotePath: /etc/myapp/config.json
     content: '{{ steps.build_config.output | json }}'

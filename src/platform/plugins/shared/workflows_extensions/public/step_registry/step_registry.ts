@@ -36,15 +36,14 @@ export class PublicStepRegistry {
   >(definitionOrLoader: PublicStepDefinitionOrLoader<Input, Output, Config>): void {
     if (typeof definitionOrLoader === 'function') {
       this.pending.push(async () => {
-        definitionOrLoader()
-          .then((definition) => {
-            if (definition) {
-              this.addToRegistry(definition);
-            }
-          })
-          .catch((error) => {
-            this.logger.error('Failed to register step definition', { error });
-          });
+        try {
+          const definition = await definitionOrLoader();
+          if (definition) {
+            this.addToRegistry(definition);
+          }
+        } catch (error) {
+          this.logger.error('Failed to register step definition', { error });
+        }
       });
     } else {
       this.addToRegistry(definitionOrLoader);

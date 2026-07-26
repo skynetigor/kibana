@@ -117,8 +117,9 @@ while [ ! -f "${codeFile}" ] && [ $COUNT -lt $TIMEOUT ]; do
 done
 if [ -f "${codeFile}" ]; then
   EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
-  STDOUT=$(openssl base64 -A "${stdoutFile}" 2>/dev/null || echo '')
-  STDERR=$(openssl base64 -A "${stderrFile}" 2>/dev/null || echo '')
+  _b64() { base64 -w 0 "$1" 2>/dev/null || openssl base64 -A "$1" 2>/dev/null || echo ''; }
+  STDOUT=$(_b64 "${stdoutFile}")
+  STDERR=$(_b64 "${stderrFile}")
   echo "STATUS=DONE"
   echo "PID=$PID"
   echo "EXIT_CODE=$EXIT_CODE"
@@ -134,7 +135,7 @@ if [ -f "${codeFile}" ]; then
     [ -n "$FILES_LIST" ] && FILES_LIST="$FILES_LIST,"
     FILES_LIST="$FILES_LIST$_fname"
     _key=$(echo "$_fname" | sed 's/[^a-zA-Z0-9]/_/g')
-    echo "FILE_\${_key}=$(openssl base64 -A "$_f" 2>/dev/null || echo '')"
+    echo "FILE_\${_key}=$(_b64 "$_f")"
   done
   echo "FILES=$FILES_LIST"
   rm -rf "${tmpDir}"
@@ -144,7 +145,15 @@ echo "STATUS=RUNNING"
 echo "PID=$PID"
 `;
 
-    const { stdout } = await this.execCommand({ bashScript: command, signal: params.signal });
+    const { stdout, stderr, code } = await this.execCommand({
+      bashScript: command,
+      signal: params.signal,
+    });
+
+    if (code !== 0) {
+      throw new Error(`Failed to execute async command: ${stderr}`);
+    }
+
     const pid = parseInt(stdout.match(/^PID=(\d+)$/m)?.[1] ?? '0', 10);
     const status = stdout.match(/^STATUS=(DONE|RUNNING)$/m)?.[1] ?? 'RUNNING';
 
@@ -187,8 +196,9 @@ echo "PID=$PID"
     const command = `#!/bin/bash
 if [ -f "${codeFile}" ]; then
   EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
-  STDOUT=$(openssl base64 -A "${stdoutFile}" 2>/dev/null || echo '')
-  STDERR=$(openssl base64 -A "${stderrFile}" 2>/dev/null || echo '')
+  _b64() { base64 -w 0 "$1" 2>/dev/null || openssl base64 -A "$1" 2>/dev/null || echo ''; }
+  STDOUT=$(_b64 "${stdoutFile}")
+  STDERR=$(_b64 "${stderrFile}")
   echo "STATUS=DONE"
   echo "EXIT_CODE=$EXIT_CODE"
   echo "STDOUT=$STDOUT"
@@ -203,7 +213,7 @@ if [ -f "${codeFile}" ]; then
     [ -n "$FILES_LIST" ] && FILES_LIST="$FILES_LIST,"
     FILES_LIST="$FILES_LIST$_fname"
     _key=$(echo "$_fname" | sed 's/[^a-zA-Z0-9]/_/g')
-    echo "FILE_\${_key}=$(openssl base64 -A "$_f" 2>/dev/null || echo '')"
+    echo "FILE_\${_key}=$(_b64 "$_f")"
   done
   echo "FILES=$FILES_LIST"
   rm -rf "${tmpDir}"
@@ -311,10 +321,13 @@ fi`;
     const { remotePath, content } = params;
     const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
     const mkdirPart = remoteDir ? `mkdir -p "${remoteDir}" && ` : '';
-    await this.execCommand({
+    const { code, stderr } = await this.execCommand({
       bashScript: `${mkdirPart}printf '%s' '${content}' | openssl base64 -d -A > "${remotePath}"`,
       signal: params.signal,
     });
+    if (code !== 0) {
+      throw new Error(`Failed to upload file to ${remotePath}: ${stderr}`);
+    }
   }
 
   private async execCommand(

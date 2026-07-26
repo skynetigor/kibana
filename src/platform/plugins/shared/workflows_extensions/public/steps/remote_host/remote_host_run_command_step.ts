@@ -9,6 +9,7 @@
 
 import React from 'react';
 import { remoteHostRunCommandStepCommonDefinition } from '../../../common/steps/remote_host';
+import { CONNECTOR_ID as SSH_HOST_CONNECTOR_ID } from '../../connectors/ssh_host/ssh_host_connector_type';
 import { createPublicStepDefinition } from '../../step_registry/types';
 
 export const remoteHostRunCommandStepDefinition = createPublicStepDefinition({
@@ -18,4 +19,14 @@ export const remoteHostRunCommandStepDefinition = createPublicStepDefinition({
       default: icon,
     }))
   ),
+  editorHandlers: {
+    config: {
+      'connector-id': {
+        connectorIdSelection: {
+          connectorTypes: [SSH_HOST_CONNECTOR_ID],
+          enableCreation: true,
+        },
+      },
+    },
+  },
 });

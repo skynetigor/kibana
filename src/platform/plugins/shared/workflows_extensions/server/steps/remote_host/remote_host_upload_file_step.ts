@@ -8,9 +8,9 @@
  */
 
 import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
+import { executeSubAction } from './execute_in_connector';
 import { remoteHostUploadFileStepCommonDefinition } from '../../../common/steps/remote_host';
 import { createServerStepDefinition } from '../../step_registry/types';
-import { executeSubAction } from './execute_in_connector';
 
 interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
@@ -21,7 +21,7 @@ export const createRemoteHostUploadFileStepDefinition = ({ getActionsStart }: De
     ...remoteHostUploadFileStepCommonDefinition,
     handler: async (context) => {
       const { remotePath, content } = context.input;
-      const { connectorId } = context.config;
+      const connectorId = context.config['connector-id'];
 
       await executeSubAction({
         connectorId,

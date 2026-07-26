@@ -15,7 +15,7 @@ import type { CommonStepDefinition } from '../../step_registry/types';
 export const RemoteHostDownloadFileStepTypeId = 'remoteHost.downloadFile' as const;
 
 export const ConfigSchema = z.object({
-  connectorId: z.string().min(1),
+  'connector-id': z.string().min(1),
 });
 
 export const InputSchema = z.object({
@@ -55,7 +55,7 @@ Download a file from a remote host via an SSH Host connector.
 - name: fetch-log
   type: remoteHost.downloadFile
   config:
-    connectorId: my-ssh-host-connector
+    connector-id: my-ssh-host-connector
   with:
     remotePath: /var/log/myapp/app.log
 \`\`\`

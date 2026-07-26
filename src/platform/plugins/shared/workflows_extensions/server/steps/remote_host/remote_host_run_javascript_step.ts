@@ -32,7 +32,7 @@ export const createRemoteHostRunJavascriptStepDefinition = ({ getActionsStart }:
     stateSchema: StateSchema,
     start: async (context) => {
       const { code } = context.input;
-      const { connectorId } = context.config;
+      const connectorId = context.config['connector-id'];
 
       if (typeof code !== 'string' || code.trim().length === 0) {
         return { error: new Error('Code is required') };
@@ -66,7 +66,7 @@ export const createRemoteHostRunJavascriptStepDefinition = ({ getActionsStart }:
       }
 
       const result = await tryExtractJsOutputFromConnector({
-        connectorId: config.connectorId,
+        connectorId: config['connector-id'],
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
         commandId: state.commandId,
@@ -96,7 +96,7 @@ export const createRemoteHostRunJavascriptStepDefinition = ({ getActionsStart }:
       }
 
       await killJsProcessInConnector({
-        connectorId: config.connectorId,
+        connectorId: config['connector-id'],
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
         commandId: state.commandId,
