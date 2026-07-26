@@ -36,13 +36,6 @@ ${jsCode}
 });`;
 }
 
-function buildBashScript(jsCode: string): string {
-  const encodedScript = Buffer.from(jsCode).toString('base64');
-  return `#!/bin/bash
-printf '%s' '${encodedScript}' | openssl base64 -d -A | node
-exit $?`;
-}
-
 function throwIfScriptFailed(stderr: string, exitCode: number): void {
   if (exitCode !== 0) {
     throw new ExecutionError({
@@ -71,7 +64,6 @@ export async function executeJsInConnector(params: {
 }): Promise<ExecuteJsOutput> {
   const { connectorId, request, actionsStart, jsCode, abortSignal } = params;
   const wrappedJs = buildUserScript(jsCode);
-  const bashCode = buildBashScript(wrappedJs);
 
   const result = await executeSubAction<{
     commandId: string;
@@ -85,8 +77,8 @@ export async function executeJsInConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'execAsync',
-    subActionParams: { script: bashCode },
+    subAction: 'execFileAsync',
+    subActionParams: { executable: 'node', args: ['-e', wrappedJs] },
     abortSignal,
   });
 

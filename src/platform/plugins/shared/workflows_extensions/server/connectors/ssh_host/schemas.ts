@@ -50,6 +50,15 @@ export const SshHostUploadFileParamsSchema = z.object({
   signal: z.any().optional(),
 });
 
+export const SshHostExecFileAsyncParamsSchema = z.object({
+  executable: z.string().min(1),
+  args: z.array(z.string()).default([]),
+  env: z.record(z.string(), z.unknown()).optional(),
+  cwd: z.string().optional(),
+  outputFiles: z.array(z.string()).optional(),
+  signal: z.any().optional(),
+});
+
 export const SshHostKillExecParamsSchema = z.object({
   commandId: z.string().min(1),
   pid: z.number().optional(),
@@ -63,4 +72,5 @@ export type SshHostDownloadFileParams = z.infer<typeof SshHostDownloadFileParams
 export type SshHostUploadFileParams = z.infer<typeof SshHostUploadFileParamsSchema>;
 export type SshHostExecAsyncParams = z.infer<typeof SshHostExecAsyncParamsSchema>;
 export type SshHostGetExecStatusParams = z.infer<typeof SshHostGetExecStatusParamsSchema>;
+export type SshHostExecFileAsyncParams = z.infer<typeof SshHostExecFileAsyncParamsSchema>;
 export type SshHostKillExecParams = z.infer<typeof SshHostKillExecParamsSchema>;

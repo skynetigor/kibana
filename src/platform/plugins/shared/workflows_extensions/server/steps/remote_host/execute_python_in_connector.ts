@@ -44,13 +44,6 @@ except Exception as _e:
 `;
 }
 
-function buildBashScript(pythonCode: string): string {
-  const encoded = Buffer.from(pythonCode).toString('base64');
-  return `#!/bin/bash
-printf '%s' '${encoded}' | openssl base64 -d -A | python3 -
-exit $?`;
-}
-
 function throwIfScriptFailed(stderr: string, exitCode: number): void {
   if (exitCode !== 0) {
     throw new ExecutionError({
@@ -79,7 +72,6 @@ export async function executePythonInConnector(params: {
 }): Promise<ExecutePythonOutput> {
   const { connectorId, request, actionsStart, pythonCode, abortSignal } = params;
   const wrappedPython = buildUserPythonScript(pythonCode);
-  const script = buildBashScript(wrappedPython);
 
   const result = await executeSubAction<{
     commandId: string;
@@ -93,8 +85,8 @@ export async function executePythonInConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'execAsync',
-    subActionParams: { script },
+    subAction: 'execFileAsync',
+    subActionParams: { executable: 'python3', args: ['-c', wrappedPython] },
     abortSignal,
   });
 

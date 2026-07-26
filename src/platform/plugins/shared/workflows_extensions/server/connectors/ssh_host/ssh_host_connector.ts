@@ -18,6 +18,7 @@ import type {
   SshHostConfig,
   SshHostDownloadFileParams,
   SshHostExecAsyncParams,
+  SshHostExecFileAsyncParams,
   SshHostExecParams,
   SshHostGetExecStatusParams,
   SshHostKillExecParams,
@@ -27,6 +28,7 @@ import type {
 import {
   SshHostDownloadFileParamsSchema,
   SshHostExecAsyncParamsSchema,
+  SshHostExecFileAsyncParamsSchema,
   SshHostExecParamsSchema,
   SshHostGetExecStatusParamsSchema,
   SshHostKillExecParamsSchema,
@@ -69,6 +71,12 @@ export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostS
       name: 'uploadFile',
       method: 'uploadFile',
       schema: SshHostUploadFileParamsSchema,
+    });
+
+    this.registerSubAction({
+      name: 'execFileAsync',
+      method: 'execFileAsync',
+      schema: SshHostExecFileAsyncParamsSchema,
     });
 
     this.registerSubAction({
@@ -180,6 +188,30 @@ echo "PID=$PID"
     }
 
     return { commandId, status: 'RUNNING', pid };
+  }
+
+  public async execFileAsync(
+    params: SshHostExecFileAsyncParams
+  ): ReturnType<typeof this.execAsync> {
+    const { executable, args, env = {}, cwd, outputFiles, signal } = params;
+
+    const b64 = (s: string) => Buffer.from(s).toString('base64');
+    const dec = (b: string) => `"$(printf '%s' '${b}' | openssl base64 -d -A)"`;
+
+    const envLines = Object.entries(env)
+      .map(([k, v]) => `export ${k}=${dec(b64(String(v)))}`)
+      .join('\n');
+    const cdLine = cwd ? `cd ${dec(b64(cwd))}` : '';
+    const invocation = [executable, ...args].map((a) => dec(b64(a))).join(' ');
+    const collectLines = (outputFiles ?? [])
+      .map((f) => `cp ${dec(b64(f))} "$COMMAND_TMP_DIR/$(basename ${dec(b64(f))})"`)
+      .join('\n');
+
+    const script = ['#!/bin/bash', 'set -e', envLines, cdLine, invocation, collectLines]
+      .filter(Boolean)
+      .join('\n');
+
+    return this.execAsync({ script, signal });
   }
 
   public async getExecStatus(params: SshHostGetExecStatusParams): Promise<{
