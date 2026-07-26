@@ -1,0 +1,164 @@
+version: '1'
+name: Install n8n on Remote Host
+description: |
+  Clean-installs n8n on a Debian/Ubuntu remote host using Docker. If an n8n
+  container already exists (running or stopped), it is removed and recreated
+  from scratch. Checks Docker prerequisite and reports the access URL.
+tags:
+  - devops
+  - setup
+  - remote-host
+  - n8n
+  - docker
+triggers:
+  - type: manual
+
+steps:
+  # ── Step 1: Check environment and current n8n container state ─────────────
+  - name: check_environment
+    type: remoteHost.runJavascript
+    connector-id: my-ssh-connector
+    with:
+      code: |
+        const { execSync } = require('child_process');
+        const run = (cmd) => {
+          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim() || null; }
+          catch { return null; }
+        };
+        return {
+          docker:          run('docker --version'),
+          n8nImage:        run('docker images -q n8nio/n8n'),
+          containerExists: run('docker ps -aq -f name=^n8n$'),
+          containerStatus: run('docker inspect -f "{{.State.Status}}" n8n 2>/dev/null'),
+          host:            run('hostname -I | awk \'{print $1}\''),
+        };
+
+  # ── Step 2: Install Docker if missing ────────────────────────────────────
+  - name: install_docker
+    type: remoteHost.runCommand
+    connector-id: my-ssh-connector
+    if: "${{ steps.check_environment.output.docker == null }}"
+    with:
+      code: |
+        . /etc/os-release
+        sudo apt-get install -y ca-certificates curl gnupg
+        sudo install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL "https://download.docker.com/linux/${ID}/gpg" \
+          | sudo gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+          https://download.docker.com/linux/${ID} \
+          ${VERSION_CODENAME} stable" \
+          | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update -qq
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+        sudo usermod -aG docker "$USER"
+        docker --version
+
+  # ── Step 3: Stop the container if it is running ───────────────────────────
+  - name: stop_container
+    type: remoteHost.runCommand
+    connector-id: my-ssh-connector
+    if: "${{ steps.check_environment.output.containerStatus == 'running' }}"
+    with:
+      code: |
+        docker stop n8n
+        echo "Container stopped"
+
+  # ── Step 4: Remove the container if it exists ─────────────────────────────
+  - name: remove_container
+    type: remoteHost.runCommand
+    connector-id: my-ssh-connector
+    if: "${{ steps.check_environment.output.containerExists != null }}"
+    with:
+      code: |
+        docker rm n8n
+        echo "Container removed"
+
+  # ── Step 5: Remove data directory for a clean slate ───────────────────────
+  - name: remove_data
+    type: remoteHost.runCommand
+    connector-id: my-ssh-connector
+    with:
+      code: |
+        sudo rm -rf /var/lib/n8n
+        echo "Data directory removed"
+
+  # ── Step 6: Pull the latest n8n image ─────────────────────────────────────
+  - name: pull_image
+    type: remoteHost.runCommand
+    connector-id: my-ssh-connector
+    with:
+      code: |
+        docker pull n8nio/n8n
+        docker images n8nio/n8n --format "Pulled: {{.Repository}}:{{.Tag}} ({{.Size}})"
+
+  # ── Step 7: Create data directory with correct ownership ──────────────────
+  - name: create_data_dir
+    type: remoteHost.runCommand
+    connector-id: my-ssh-connector
+    with:
+      code: |
+        sudo mkdir -p /var/lib/n8n
+        # n8n container runs as uid 1000 (node user)
+        sudo chown 1000:1000 /var/lib/n8n
+        echo "Data directory ready"
+
+  # ── Step 8: Run n8n container ─────────────────────────────────────────────
+  - name: run_n8n
+    type: remoteHost.runCommand
+    connector-id: my-ssh-connector
+    with:
+      code: |
+        docker run -d \
+          --name n8n \
+          --restart unless-stopped \
+          -p 5678:5678 \
+          -v /var/lib/n8n:/home/node/.n8n \
+          -e N8N_PORT=5678 \
+          -e N8N_PROTOCOL=http \
+          -e N8N_SECURE_COOKIE=false \
+          n8nio/n8n
+        sleep 3
+        docker inspect -f "{{.State.Status}}" n8n
+
+  # ── Step 9: Verify n8n is responding ──────────────────────────────────────
+  - name: verify_n8n
+    type: remoteHost.runJavascript
+    connector-id: my-ssh-connector
+    with:
+      code: |
+        const { execSync } = require('child_process');
+        const run = (cmd) => {
+          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim() || null; }
+          catch { return null; }
+        };
+        return {
+          containerStatus: run('docker inspect -f "{{.State.Status}}" n8n'),
+          image:           run('docker inspect -f "{{.Config.Image}}" n8n'),
+          port:            run('docker port n8n 5678'),
+          n8nVersion:      run('docker exec n8n n8n --version'),
+          docker:          run('docker --version'),
+        };
+
+  # ── Step 10: Summary ──────────────────────────────────────────────────────
+  - name: summary
+    type: console
+    with:
+      message: |
+        ═══════════════════════════════════════════
+          n8n Installation Complete
+        ═══════════════════════════════════════════
+          Version : {{ steps.verify_n8n.output.n8nVersion }}
+          Status  : {{ steps.verify_n8n.output.containerStatus }}
+          Image   : {{ steps.verify_n8n.output.image }}
+          URL     : http://{{ steps.check_environment.output.host }}:5678
+        ───────────────────────────────────────────
+          Docker  : {{ steps.verify_n8n.output.docker }}
+          Previous container: {% if steps.check_environment.output.containerExists != null %}removed ({{ steps.check_environment.output.containerStatus }}){% else %}none{% endif %}
+        ───────────────────────────────────────────
+          Data dir : /var/lib/n8n
+          Logs     : docker logs -f n8n
+          Stop     : docker stop n8n
+          Start    : docker start n8n
+        ═══════════════════════════════════════════

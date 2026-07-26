@@ -1,0 +1,146 @@
+version: '1'
+name: Install Dev Tools on Remote Host
+description: |
+  Checks whether Node.js, Git, and Docker are already installed on a Debian/Ubuntu
+  remote host, installs only the missing ones, and reports all tool versions
+  (including Python) in a final summary.
+tags:
+  - devops
+  - setup
+  - remote-host
+triggers:
+  - type: manual
+
+steps:
+  # ── Step 1: Check which tools are already installed ───────────────────────
+  - name: check_tools
+    type: remoteHost.runJavascript
+    connector-id: ihor-vm
+    with:
+      code: |
+        const { execSync } = require('child_process');
+        const run = (cmd) => {
+          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim(); }
+          catch { return null; }
+        };
+        return {
+          git:    run('git --version'),
+          node:   run('node --version'),
+          npm:    run('npm --version'),
+          docker: run('docker --version'),
+          python: run('python3 --version'),
+        };
+
+  # ── Step 2: Install Git (skipped if already present) ──────────────────────
+  - name: install_git
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: "${{ steps.check_tools.output.git == null }}"
+    with:
+      code: |
+        sudo apt-get update -qq
+        sudo apt-get install -y git
+        git --version
+
+  # ── Step 3: Install Node.js via NodeSource LTS (skipped if present) ───────
+  - name: install_nodejs
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: "${{ steps.check_tools.output.node == null }}"
+    with:
+      code: |
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+        node --version
+        npm --version
+
+  # ── Step 4: Install Docker via official repo (skipped if present) ─────────
+  - name: install_docker
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: "${{ steps.check_tools.output.docker == null }}"
+    with:
+      code: |
+        #!/bin/bash
+
+        # Exit immediately if a command exits with a non-zero status
+        set -e
+
+        echo "=== 1. Cleaning up any incorrect repositories or old packages ==="
+        sudo rm -f /etc/apt/sources.list.d/docker.list
+        for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
+            sudo apt-get remove -y $pkg || true
+        done
+
+        echo "=== 2. Updating package index and installing prerequisites ==="
+        sudo apt-get update
+        sudo apt-get install -y ca-certificates curl
+
+        echo "=== 3. Setting up Docker's official GPG key ==="
+        sudo install -m 0755 -d /etc/apt/keyrings
+        sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.gpg
+        sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+        echo "=== 4. Setting up the correct Debian stable repository ==="
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+        echo "=== 5. Updating package index with the fixed repository ==="
+        sudo apt-get update
+
+        echo "=== 6. Installing Docker Engine and Plugins ==="
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+        echo "=== 7. Starting and enabling Docker service ==="
+        sudo systemctl start docker
+        sudo systemctl enable docker
+
+        echo "=== 8. Adding current user to the 'docker' group ==="
+        sudo usermod -aG docker $USER
+
+        echo "=== Docker installation completed successfully! ==="
+        echo "NOTE: To run docker without sudo in your current terminal session, run: newgrp docker"
+
+
+  # ── Step 5: Collect final versions of all tools ───────────────────────────
+  - name: collect_versions
+    type: remoteHost.runJavascript
+    connector-id: ihor-vm
+    with:
+      code: |
+        const { execSync } = require('child_process');
+        const run = (cmd) => {
+          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim(); }
+          catch { return 'not found'; }
+        };
+        return {
+          git:    run('git --version'),
+          node:   run('node --version'),
+          npm:    run('npm --version'),
+          docker: run('docker --version'),
+          python: run('python3 --version'),
+        };
+
+  # ── Step 6: Print summary ─────────────────────────────────────────────────
+  - name: summary
+    type: console
+    with:
+      message: |
+        ═══════════════════════════════════════════
+          Dev Tools — Installation Complete
+        ═══════════════════════════════════════════
+          Git    : {{ steps.collect_versions.output.git }}
+          Node   : {{ steps.collect_versions.output.node }}
+          npm    : {{ steps.collect_versions.output.npm }}
+          Docker : {{ steps.collect_versions.output.docker }}
+          Python : {{ steps.collect_versions.output.python }}
+        ───────────────────────────────────────────
+          Skipped (already installed):
+          {% if steps.check_tools.output.git != null %}  • git{% endif %}
+          {% if steps.check_tools.output.node != null %}  • node{% endif %}
+          {% if steps.check_tools.output.docker != null %}  • docker{% endif %}
+        ═══════════════════════════════════════════
+          Note: re-login to apply docker group membership
+        ═══════════════════════════════════════════

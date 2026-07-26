@@ -1,0 +1,145 @@
+version: '1'
+name: CI/CD — LiquidJS
+description: |
+  Clones (or updates) the LiquidJS repository on a remote host, runs the full
+  Jest test suite, and builds the rollup artifact. Reports test results,
+  build outputs, and artifact sizes.
+tags:
+  - cicd
+  - nodejs
+  - remote-host
+triggers:
+  - type: manual
+
+inputs:
+  additionalProperties: false
+  properties:
+    branch:
+      type: string
+      description: Branch to clone and build. Defaults to 'master'.
+      default: master
+
+steps:
+  # ── Step 1: Check prerequisites and repo state ────────────────────────────
+  - name: check_environment
+    type: remoteHost.runJavascript
+    connector-id: ihor-vm
+    with:
+      code: |
+        const { execSync } = require('child_process');
+        const run = (cmd) => {
+          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim() || null; }
+          catch { return null; }
+        };
+        const repoDir = '/opt/liquidjs';
+        return {
+          node:      run('node --version'),
+          npm:       run('npm --version'),
+          git:       run('git --version'),
+          repoExists: run(`test -d ${repoDir}/.git && echo yes`),
+          repoDir,
+        };
+
+  # ── Step 2: Abort if Node.js or Git is missing ───────────────────────────
+  - name: require_prerequisites
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: "${{ steps.check_environment.output.node == null or steps.check_environment.output.git == null }}"
+    with:
+      code: |
+        [ -z "$(which node)" ] && echo "ERROR: Node.js not installed" >&2
+        [ -z "$(which git)"  ] && echo "ERROR: Git not installed" >&2
+        echo "Run the 'Install Dev Tools' workflow first." >&2
+        exit 1
+
+  # ── Step 3: Clone or update the repository ───────────────────────────────
+  - name: fetch_source
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        REPO_DIR="{{ steps.check_environment.output.repoDir }}"
+        BRANCH="{{ inputs.branch }}"
+        if [ "{{ steps.check_environment.output.repoExists }}" = "yes" ]; then
+          echo "=== Updating existing clone ==="
+          git -C "$REPO_DIR" fetch --prune
+          git -C "$REPO_DIR" checkout "$BRANCH"
+          git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
+          git -C "$REPO_DIR" clean -fdx
+        else
+          echo "=== Cloning liquidjs ==="
+          sudo mkdir -p "$REPO_DIR"
+          sudo chown "$USER:$USER" "$REPO_DIR"
+          git clone --branch "$BRANCH" https://github.com/harttle/liquidjs.git "$REPO_DIR"
+        fi
+        git -C "$REPO_DIR" log -1 --format="%H %s (%ai)"
+
+  # ── Step 4: Install dependencies ─────────────────────────────────────────
+  - name: install_deps
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        cd {{ steps.check_environment.output.repoDir }}
+        npm ci --prefer-offline 2>&1 | tail -5
+        echo "Installed $(ls node_modules | wc -l) packages"
+
+  # ── Step 5: Run tests ─────────────────────────────────────────────────────
+  - name: run_tests
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        cd {{ steps.check_environment.output.repoDir }}
+        npm test -- --ci --reporters=default 2>&1
+
+  # ── Step 6: Build artifact ────────────────────────────────────────────────
+  - name: build
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        cd {{ steps.check_environment.output.repoDir }}
+        npm run build 2>&1
+
+  # ── Step 7: Collect artifact metadata ────────────────────────────────────
+  - name: collect_artifacts
+    type: remoteHost.runJavascript
+    connector-id: ihor-vm
+    with:
+      code: |
+        const { execSync } = require('child_process');
+        const run = (cmd) => {
+          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim() || null; }
+          catch { return null; }
+        };
+        const dir = '{{ steps.check_environment.output.repoDir }}';
+        const commit  = run(`git -C ${dir} log -1 --format="%H"`);
+        const subject = run(`git -C ${dir} log -1 --format="%s"`);
+        const version = run(`node -e "console.log(require('${dir}/package.json').version)"`);
+        const files   = run(`ls ${dir}/dist 2>/dev/null`);
+        const sizes   = run(`du -sh ${dir}/dist/* 2>/dev/null`);
+        return { commit, subject, version, files, sizes };
+
+  # ── Step 8: Summary ───────────────────────────────────────────────────────
+  - name: summary
+    type: console
+    with:
+      message: |
+        ═══════════════════════════════════════════
+          CI/CD — LiquidJS
+        ═══════════════════════════════════════════
+          Version : {{ steps.collect_artifacts.output.version }}
+          Branch  : {{ inputs.branch }}
+          Commit  : {{ steps.collect_artifacts.output.commit }}
+          Subject : {{ steps.collect_artifacts.output.subject }}
+        ───────────────────────────────────────────
+          Node    : {{ steps.check_environment.output.node }}
+          npm     : {{ steps.check_environment.output.npm }}
+        ───────────────────────────────────────────
+          Tests   : ✓ passed
+          Build   : ✓ completed
+        ───────────────────────────────────────────
+          Artifacts (dist/):
+          {{ steps.collect_artifacts.output.sizes }}
+        ═══════════════════════════════════════════
