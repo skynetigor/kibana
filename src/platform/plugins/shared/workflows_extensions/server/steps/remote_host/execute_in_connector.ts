@@ -63,10 +63,10 @@ export async function executeCommandInConnector(params: {
   connectorId: string;
   request: KibanaRequest<unknown, unknown, unknown>;
   actionsStart: ActionsPluginStartContract | undefined;
-  bashScript: string;
+  script: string;
   abortSignal?: AbortSignal;
 }): Promise<RemoteCommandOutput> {
-  const { connectorId, request, actionsStart, bashScript, abortSignal } = params;
+  const { connectorId, request, actionsStart, script, abortSignal } = params;
 
   const result = await executeSubAction<{
     commandId: string;
@@ -79,8 +79,8 @@ export async function executeCommandInConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'sshAsync',
-    subActionParams: { bashScript },
+    subAction: 'execAsync',
+    subActionParams: { script },
     abortSignal,
   });
 
@@ -122,7 +122,7 @@ export async function tryExtractCommandOutputFromConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'getAsyncCommandStatus',
+    subAction: 'getExecStatus',
     subActionParams: { commandId },
     abortSignal,
   });
@@ -151,7 +151,7 @@ export async function killCommandInConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'killAsyncCommand',
+    subAction: 'killExec',
     subActionParams: { commandId, pid },
   });
 }

@@ -51,7 +51,7 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         connectorId,
         request: context.contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
-        bashScript: code,
+        script: code,
         abortSignal: context.abortSignal,
       });
 

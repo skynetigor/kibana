@@ -23,17 +23,17 @@ export const SshHostSecretsSchema = z
   })
   .strict();
 
-export const SshHostSshParamsSchema = z.object({
-  bashScript: z.string().min(1),
+export const SshHostExecParamsSchema = z.object({
+  script: z.string().min(1),
   signal: z.any().optional(),
 });
 
-export const SshHostAsyncSshParamsSchema = z.object({
-  bashScript: z.string().min(1),
+export const SshHostExecAsyncParamsSchema = z.object({
+  script: z.string().min(1),
   signal: z.any().optional(),
 });
 
-export const SshHostGetAsyncCommandStatusParamsSchema = z.object({
+export const SshHostGetExecStatusParamsSchema = z.object({
   commandId: z.string().min(1),
   signal: z.any().optional(),
 });
@@ -50,7 +50,7 @@ export const SshHostUploadFileParamsSchema = z.object({
   signal: z.any().optional(),
 });
 
-export const SshHostKillAsyncCommandParamsSchema = z.object({
+export const SshHostKillExecParamsSchema = z.object({
   commandId: z.string().min(1),
   pid: z.number().optional(),
   signal: z.any().optional(),
@@ -58,11 +58,9 @@ export const SshHostKillAsyncCommandParamsSchema = z.object({
 
 export type SshHostConfig = z.infer<typeof SshHostConfigSchema>;
 export type SshHostSecrets = z.infer<typeof SshHostSecretsSchema>;
-export type SshHostSshParams = z.infer<typeof SshHostSshParamsSchema>;
+export type SshHostExecParams = z.infer<typeof SshHostExecParamsSchema>;
 export type SshHostDownloadFileParams = z.infer<typeof SshHostDownloadFileParamsSchema>;
 export type SshHostUploadFileParams = z.infer<typeof SshHostUploadFileParamsSchema>;
-export type SshHostAsyncSshParams = z.infer<typeof SshHostAsyncSshParamsSchema>;
-export type SshHostGetAsyncCommandStatusParams = z.infer<
-  typeof SshHostGetAsyncCommandStatusParamsSchema
->;
-export type SshHostKillAsyncCommandParams = z.infer<typeof SshHostKillAsyncCommandParamsSchema>;
+export type SshHostExecAsyncParams = z.infer<typeof SshHostExecAsyncParamsSchema>;
+export type SshHostGetExecStatusParams = z.infer<typeof SshHostGetExecStatusParamsSchema>;
+export type SshHostKillExecParams = z.infer<typeof SshHostKillExecParamsSchema>;

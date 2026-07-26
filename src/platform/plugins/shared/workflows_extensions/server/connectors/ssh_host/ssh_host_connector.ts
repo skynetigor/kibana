@@ -15,21 +15,21 @@ import { promisify } from 'util';
 import type { ServiceParams } from '@kbn/actions-plugin/server';
 import { SubActionConnector } from '@kbn/actions-plugin/server';
 import type {
-  SshHostAsyncSshParams,
   SshHostConfig,
   SshHostDownloadFileParams,
-  SshHostGetAsyncCommandStatusParams,
-  SshHostKillAsyncCommandParams,
+  SshHostExecAsyncParams,
+  SshHostExecParams,
+  SshHostGetExecStatusParams,
+  SshHostKillExecParams,
   SshHostSecrets,
-  SshHostSshParams,
   SshHostUploadFileParams,
 } from './schemas';
 import {
-  SshHostAsyncSshParamsSchema,
   SshHostDownloadFileParamsSchema,
-  SshHostGetAsyncCommandStatusParamsSchema,
-  SshHostKillAsyncCommandParamsSchema,
-  SshHostSshParamsSchema,
+  SshHostExecAsyncParamsSchema,
+  SshHostExecParamsSchema,
+  SshHostGetExecStatusParamsSchema,
+  SshHostKillExecParamsSchema,
   SshHostUploadFileParamsSchema,
 } from './schemas';
 
@@ -42,21 +42,21 @@ export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostS
     super(params);
 
     this.registerSubAction({
-      name: 'ssh',
-      method: 'ssh',
-      schema: SshHostSshParamsSchema,
+      name: 'exec',
+      method: 'exec',
+      schema: SshHostExecParamsSchema,
     });
 
     this.registerSubAction({
-      name: 'sshAsync',
-      method: 'sshAsync',
-      schema: SshHostAsyncSshParamsSchema,
+      name: 'execAsync',
+      method: 'execAsync',
+      schema: SshHostExecAsyncParamsSchema,
     });
 
     this.registerSubAction({
-      name: 'getAsyncCommandStatus',
-      method: 'getAsyncCommandStatus',
-      schema: SshHostGetAsyncCommandStatusParamsSchema,
+      name: 'getExecStatus',
+      method: 'getExecStatus',
+      schema: SshHostGetExecStatusParamsSchema,
     });
 
     this.registerSubAction({
@@ -72,9 +72,9 @@ export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostS
     });
 
     this.registerSubAction({
-      name: 'killAsyncCommand',
-      method: 'killAsyncCommand',
-      schema: SshHostKillAsyncCommandParamsSchema,
+      name: 'killExec',
+      method: 'killExec',
+      schema: SshHostKillExecParamsSchema,
     });
   }
 
@@ -82,13 +82,13 @@ export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostS
     return (error.response?.data as { message?: string })?.message ?? error.message;
   }
 
-  public async ssh(
-    params: SshHostSshParams
+  public async exec(
+    params: SshHostExecParams
   ): Promise<{ stdout: string; stderr: string; code: number }> {
     return this.execCommand(params);
   }
 
-  public async sshAsync(params: SshHostAsyncSshParams): Promise<{
+  public async execAsync(params: SshHostExecAsyncParams): Promise<{
     commandId: string;
     status: 'DONE' | 'RUNNING';
     pid: number;
@@ -102,7 +102,7 @@ export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostS
 
     await this.uploadFile({
       remotePath: scriptFile,
-      content: Buffer.from(params.bashScript).toString('base64'),
+      content: Buffer.from(params.script).toString('base64'),
       encoding: 'base64',
     });
 
@@ -146,7 +146,7 @@ echo "PID=$PID"
 `;
 
     const { stdout, stderr, code } = await this.execCommand({
-      bashScript: command,
+      script: command,
       signal: params.signal,
     });
 
@@ -182,7 +182,7 @@ echo "PID=$PID"
     return { commandId, status: 'RUNNING', pid };
   }
 
-  public async getAsyncCommandStatus(params: SshHostGetAsyncCommandStatusParams): Promise<{
+  public async getExecStatus(params: SshHostGetExecStatusParams): Promise<{
     commandId: string;
     status: 'DONE' | 'RUNNING';
     stderr?: string;
@@ -221,7 +221,7 @@ else
   echo "STATUS=RUNNING"
 fi`;
 
-    const { stdout } = await this.execCommand({ bashScript: command, signal });
+    const { stdout } = await this.execCommand({ script: command, signal });
     const status = stdout.match(/^STATUS=(DONE|RUNNING)$/m)?.[1] ?? 'RUNNING';
 
     if (status === 'DONE') {
@@ -248,13 +248,13 @@ fi`;
     return { commandId, status: 'RUNNING' };
   }
 
-  public async killAsyncCommand(params: SshHostKillAsyncCommandParams): Promise<void> {
+  public async killExec(params: SshHostKillExecParams): Promise<void> {
     const { commandId, pid } = params;
     const { tmpDir } = this.getCommandData(commandId);
     const killScript = pid
       ? `kill -9 ${pid} 2>/dev/null || true; rm -rf "${tmpDir}"`
       : `rm -rf "${tmpDir}"`;
-    await this.execCommand({ bashScript: killScript });
+    await this.execCommand({ script: killScript });
   }
 
   public async downloadFile(
@@ -322,7 +322,7 @@ fi`;
     const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
     const mkdirPart = remoteDir ? `mkdir -p "${remoteDir}" && ` : '';
     const { code, stderr } = await this.execCommand({
-      bashScript: `${mkdirPart}printf '%s' '${content}' | openssl base64 -d -A > "${remotePath}"`,
+      script: `${mkdirPart}printf '%s' '${content}' | openssl base64 -d -A > "${remotePath}"`,
       signal: params.signal,
     });
     if (code !== 0) {
@@ -331,9 +331,9 @@ fi`;
   }
 
   private async execCommand(
-    params: SshHostSshParams
+    params: SshHostExecParams
   ): Promise<{ stdout: string; stderr: string; code: number }> {
-    const { bashScript, signal } = params;
+    const { script, signal } = params;
     const { ip } = this.config;
     const { username, password, sshPrivateKey } = this.secrets;
     const tempKeyPath = join(
@@ -352,7 +352,7 @@ fi`;
 
       // Base64-encode the script so bash variables ($PID, $STATE, etc.) are not expanded
       // by the local shell when it processes the double-quoted SSH argument.
-      const encodedScript = Buffer.from(bashScript).toString('base64');
+      const encodedScript = Buffer.from(script).toString('base64');
       const remoteCmd = `printf '%s' '${encodedScript}' | openssl base64 -d -A | bash`;
 
       const controlPath = this.getControlPath();

@@ -79,7 +79,7 @@ export async function executePythonInConnector(params: {
 }): Promise<ExecutePythonOutput> {
   const { connectorId, request, actionsStart, pythonCode, abortSignal } = params;
   const wrappedPython = buildUserPythonScript(pythonCode);
-  const bashScript = buildBashScript(wrappedPython);
+  const script = buildBashScript(wrappedPython);
 
   const result = await executeSubAction<{
     commandId: string;
@@ -93,8 +93,8 @@ export async function executePythonInConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'sshAsync',
-    subActionParams: { bashScript },
+    subAction: 'execAsync',
+    subActionParams: { script },
     abortSignal,
   });
 
@@ -140,7 +140,7 @@ export async function tryExtractPythonOutputFromConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'getAsyncCommandStatus',
+    subAction: 'getExecStatus',
     subActionParams: { commandId },
   });
 

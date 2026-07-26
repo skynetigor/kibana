@@ -85,8 +85,8 @@ export async function executeJsInConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'sshAsync',
-    subActionParams: { bashScript: bashCode },
+    subAction: 'execAsync',
+    subActionParams: { script: bashCode },
     abortSignal,
   });
 
@@ -132,7 +132,7 @@ export async function tryExtractJsOutputFromConnector(params: {
     connectorId,
     request,
     actionsStart,
-    subAction: 'getAsyncCommandStatus',
+    subAction: 'getExecStatus',
     subActionParams: { commandId },
   });
 
