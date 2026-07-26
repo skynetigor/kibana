@@ -96,6 +96,7 @@ export const WorkflowStepExecutionDetails = React.memo<WorkflowStepExecutionDeta
           if (!stepExecution?.id) return [];
           const response = await api.getExecutionLogs(workflowExecutionId, {
             stepExecutionId: stepExecution.id,
+            sortOrder: 'asc',
           });
           return response.logs;
         },
