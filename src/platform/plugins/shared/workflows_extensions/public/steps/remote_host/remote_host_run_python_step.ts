@@ -29,4 +29,7 @@ export const remoteHostRunPythonStepDefinition = createPublicStepDefinition({
       },
     },
   },
+  logs: {
+    enabled: true,
+  },
 });
