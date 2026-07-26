@@ -8,9 +8,19 @@
  */
 
 import type { AtomicGraphNode } from '@kbn/workflows/graph';
-import type { StepHandlerContext } from '@kbn/workflows-extensions/server';
+import type { StepHandlerContext, StepLogMeta } from '@kbn/workflows-extensions/server';
 import type { StepExecutionRuntime } from '../../../workflow_context_manager/step_execution_runtime';
 import type { IWorkflowEventLogger } from '../../../workflow_event_logger';
+import type { WorkflowLogEvent } from '../../../repositories/logs_repository';
+
+const toLogEvent = (meta: StepLogMeta | undefined): Partial<WorkflowLogEvent> | undefined => {
+  if (!meta) return undefined;
+  const { collapseId, ...rest } = meta;
+  return {
+    ...(rest as Partial<WorkflowLogEvent>),
+    ...(collapseId ? { workflow: { collapse_id: collapseId } } : {}),
+  };
+};
 
 export function createBaseHandlerContext(
   input: unknown,
@@ -48,9 +58,9 @@ export function createBaseHandlerContext(
       },
     },
     logger: {
-      debug: (message, meta) => workflowLogger.logDebug(message, meta),
-      info: (message, meta) => workflowLogger.logInfo(message, meta),
-      warn: (message, meta) => workflowLogger.logWarn(message, meta),
+      debug: (message, meta) => workflowLogger.logDebug(message, toLogEvent(meta)),
+      info: (message, meta) => workflowLogger.logInfo(message, toLogEvent(meta)),
+      warn: (message, meta) => workflowLogger.logWarn(message, toLogEvent(meta)),
       error: (message, error) => workflowLogger.logError(message, error),
     },
     abortSignal: stepExecutionRuntime.abortController.signal,

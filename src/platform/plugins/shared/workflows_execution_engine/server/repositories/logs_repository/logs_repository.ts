@@ -115,12 +115,24 @@ export class LogsRepository {
       ...query,
     });
 
+    const logs = response.hits.hits.flatMap((hit) => (hit._source ? [hit._source] : []));
+
+    // Keep only the last occurrence of each collapse_id; entries without one pass through unchanged.
+    const lastIndex = new Map<string, number>();
+    logs.forEach((log, i) => {
+      if (log.workflow?.collapse_id) lastIndex.set(log.workflow.collapse_id, i);
+    });
+    const collapsed = logs.filter((log, i) => {
+      const cid = log.workflow?.collapse_id;
+      return !cid || lastIndex.get(cid) === i;
+    });
+
     return {
       total:
         typeof response.hits.total === 'number'
           ? response.hits.total
           : response.hits.total?.value || 0,
-      logs: response.hits.hits.flatMap((hit) => (hit._source ? [hit._source] : [])),
+      logs: collapsed,
     };
   }
 }

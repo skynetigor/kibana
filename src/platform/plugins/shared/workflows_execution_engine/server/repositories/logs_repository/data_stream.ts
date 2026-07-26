@@ -17,7 +17,7 @@ import { WORKFLOWS_EXECUTION_LOGS_DATA_STREAM } from './constants';
 export const initializeLogsRepositoryDataStream = (coreDataStreams: DataStreamsSetup) => {
   return coreDataStreams.registerDataStream({
     name: WORKFLOWS_EXECUTION_LOGS_DATA_STREAM,
-    version: 3,
+    version: 4,
     template: {
       mappings: logsRepositoryMappings,
     },
@@ -38,6 +38,7 @@ const logsRepositoryMappings = {
         execution_id: mappings.keyword(),
         step_id: mappings.keyword(),
         step_execution_id: mappings.keyword(),
+        collapse_id: mappings.keyword(),
       },
     }),
   },
@@ -56,6 +57,7 @@ export interface WorkflowLogEvent extends GetFieldsOf<typeof logsRepositoryMappi
     step_execution_id?: string;
     step_name?: string;
     step_type?: string;
+    collapse_id?: string;
   };
   event?: {
     action?: string;
@@ -102,7 +104,7 @@ export type LogsRepositoryDataStreamClient = IDataStreamClient<
  * This is independent of `registerDataStream({ version })` above (template lifecycle) and from
  * `WORKFLOWS_EVENTS_MANAGED_INDEX_MAPPINGS_VERSION` — logs and events streams can bump separately.
  */
-export const WORKFLOWS_LOGS_MANAGED_INDEX_MAPPINGS_VERSION = 2;
+export const WORKFLOWS_LOGS_MANAGED_INDEX_MAPPINGS_VERSION = 3;
 
 export const initializeDataStreamClient = (
   coreDataStreams: DataStreamsStart
