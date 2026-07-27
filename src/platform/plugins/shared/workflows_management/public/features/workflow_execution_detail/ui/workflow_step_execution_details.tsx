@@ -314,7 +314,15 @@ export const WorkflowStepExecutionDetails = React.memo<WorkflowStepExecutionDeta
               ))}
             </EuiTabs>
           </EuiFlexItem>
-          {isFinished ? (
+          {selectedTabId === 'logs' && logsConfig ? (
+            <EuiFlexItem css={{ overflowY: 'auto' }}>
+              <StepLogsView
+                stepExecution={stepExecution}
+                config={logsConfig}
+                logsApi={logsApi}
+              />
+            </EuiFlexItem>
+          ) : isFinished ? (
             <EuiFlexItem css={{ overflowY: 'auto' }}>
               {isLoadingStepData ? (
                 <EuiPanel hasShadow={false} paddingSize="m">
@@ -350,13 +358,6 @@ export const WorkflowStepExecutionDetails = React.memo<WorkflowStepExecutionDeta
                       )}
                       <StepExecutionDataView stepExecution={stepExecution} mode="output" />
                     </>
-                  )}
-                  {selectedTabId === 'logs' && logsConfig && (
-                    <StepLogsView
-                      stepExecution={stepExecution}
-                      config={logsConfig}
-                      logsApi={logsApi}
-                    />
                   )}
                   {selectedTabId === 'input' && (
                     <>

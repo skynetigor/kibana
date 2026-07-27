@@ -1,9 +1,9 @@
 version: '1'
 name: Install Dev Tools on Remote Host
 description: |
-  Checks whether Node.js, Git, and Docker are already installed on a Debian/Ubuntu
-  remote host, installs only the missing ones, and reports all tool versions
-  (including Python) in a final summary.
+  Checks whether NVM, Node.js, Yarn, Git, and Docker are already installed on a
+  Debian/Ubuntu remote host, installs only the missing ones, and reports all tool
+  versions (including Python) in a final summary.
 tags:
   - devops
   - setup
@@ -24,14 +24,29 @@ steps:
           catch { return null; }
         };
         return {
+          nvm:    run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm --version\''),
           git:    run('git --version'),
           node:   run('node --version'),
           npm:    run('npm --version'),
+          yarn:   run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null; yarn --version\''),
           docker: run('docker --version'),
           python: run('python3 --version'),
         };
 
-  # ── Step 2: Install Git (skipped if already present) ──────────────────────
+  # ── Step 2: Install NVM (skipped if already present) ──────────────────────
+  - name: install_nvm
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: "${{ steps.check_tools.output.nvm == null }}"
+    with:
+      code: |
+        NVM_VERSION="0.40.3"
+        curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh" | bash
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        echo "NVM $(nvm --version) installed"
+
+  # ── Step 3: Install Git (skipped if already present) ──────────────────────
   - name: install_git
     type: remoteHost.runCommand
     connector-id: ihor-vm
@@ -42,19 +57,40 @@ steps:
         sudo apt-get install -y git
         git --version
 
-  # ── Step 3: Install Node.js via NodeSource LTS (skipped if present) ───────
+  # ── Step 4: Install Node.js via NVM LTS (skipped if present) ─────────────
   - name: install_nodejs
     type: remoteHost.runCommand
     connector-id: ihor-vm
     if: "${{ steps.check_tools.output.node == null }}"
     with:
       code: |
-        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-        sudo apt-get install -y nodejs
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        if command -v nvm >/dev/null 2>&1; then
+          nvm install --lts
+          nvm use --lts
+          nvm alias default node
+        else
+          # Fallback: NodeSource if NVM was not installed
+          curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+        fi
         node --version
         npm --version
 
-  # ── Step 4: Install Docker via official repo (skipped if present) ─────────
+  # ── Step 5: Install Yarn via npm (skipped if already present) ───────────────
+  - name: install_yarn
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: "${{ steps.check_tools.output.yarn == null }}"
+    with:
+      code: |
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        npm install -g yarn
+        yarn --version
+
+  # ── Step 6: Install Docker via official repo (skipped if present) ─────────
   - name: install_docker
     type: remoteHost.runCommand
     connector-id: ihor-vm
@@ -104,7 +140,7 @@ steps:
         echo "NOTE: To run docker without sudo in your current terminal session, run: newgrp docker"
 
 
-  # ── Step 5: Collect final versions of all tools ───────────────────────────
+  # ── Step 6: Collect final versions of all tools ───────────────────────────
   - name: collect_versions
     type: remoteHost.runJavascript
     connector-id: ihor-vm
@@ -116,14 +152,16 @@ steps:
           catch { return 'not found'; }
         };
         return {
+          nvm:    run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm --version\''),
           git:    run('git --version'),
           node:   run('node --version'),
           npm:    run('npm --version'),
+          yarn:   run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null; yarn --version\''),
           docker: run('docker --version'),
           python: run('python3 --version'),
         };
 
-  # ── Step 6: Print summary ─────────────────────────────────────────────────
+  # ── Step 7: Print summary ─────────────────────────────────────────────────
   - name: summary
     type: console
     with:
@@ -131,15 +169,19 @@ steps:
         ═══════════════════════════════════════════
           Dev Tools — Installation Complete
         ═══════════════════════════════════════════
+          NVM    : {{ steps.collect_versions.output.nvm }}
           Git    : {{ steps.collect_versions.output.git }}
           Node   : {{ steps.collect_versions.output.node }}
           npm    : {{ steps.collect_versions.output.npm }}
+          Yarn   : {{ steps.collect_versions.output.yarn }}
           Docker : {{ steps.collect_versions.output.docker }}
           Python : {{ steps.collect_versions.output.python }}
         ───────────────────────────────────────────
           Skipped (already installed):
+          {% if steps.check_tools.output.nvm != null %}  • nvm{% endif %}
           {% if steps.check_tools.output.git != null %}  • git{% endif %}
           {% if steps.check_tools.output.node != null %}  • node{% endif %}
+          {% if steps.check_tools.output.yarn != null %}  • yarn{% endif %}
           {% if steps.check_tools.output.docker != null %}  • docker{% endif %}
         ═══════════════════════════════════════════
           Note: re-login to apply docker group membership

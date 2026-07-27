@@ -11,22 +11,15 @@ import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/act
 import type { KibanaRequest } from '@kbn/core/server';
 import { ExecutionError } from '@kbn/workflows/server';
 
-export type RemoteCommandOutput =
-  | {
-      status: 'running';
-      commandId: string;
-      pid: number;
-      stdout?: string;
-      stderr?: string;
-    }
-  | {
-      status: 'terminated';
-      stdout: string;
-      stderr: string;
-      exitCode: number;
-      /** Content of output.txt written by the script via SCRIPT_OUTPUT= */
-      output?: string;
-    };
+export interface RemoteCommandOutput {
+  status: 'terminated' | 'running';
+  commandId: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  /** Content of output.txt written by the script via SCRIPT_OUTPUT= */
+  output?: string;
+}
 
 export async function executeSubAction<T>(params: {
   connectorId: string;
@@ -73,7 +66,6 @@ export async function executeCommandInConnector(params: {
   const result = await executeSubAction<{
     commandId: string;
     status: 'DONE' | 'RUNNING';
-    pid: number;
     stdout?: string;
     stderr?: string;
     exitCode?: number;
@@ -87,23 +79,14 @@ export async function executeCommandInConnector(params: {
     abortSignal,
   });
 
-  if (result.status === 'DONE') {
-    const outputFile = result.files?.find((f) => f.file === 'output.txt');
-    return {
-      status: 'terminated',
-      stdout: result.stdout ?? '',
-      stderr: result.stderr ?? '',
-      exitCode: result.exitCode ?? 0,
-      output: outputFile?.content,
-    };
-  }
-
+  const outputFile = result.files?.find((f) => f.file === 'output.txt');
   return {
-    status: 'running',
+    status: result.status === 'RUNNING' ? 'running' : 'terminated',
     commandId: result.commandId,
-    pid: result.pid,
-    stdout: result.stdout,
-    stderr: result.stderr,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+    exitCode: result.exitCode ?? 0,
+    output: outputFile?.content,
   };
 }
 
@@ -112,10 +95,9 @@ export async function tryExtractCommandOutputFromConnector(params: {
   request: KibanaRequest<unknown, unknown, unknown>;
   actionsStart: ActionsPluginStartContract | undefined;
   commandId: string;
-  pid: number;
   abortSignal?: AbortSignal;
 }): Promise<RemoteCommandOutput> {
-  const { connectorId, request, actionsStart, commandId, pid, abortSignal } = params;
+  const { connectorId, request, actionsStart, commandId, abortSignal } = params;
 
   const result = await executeSubAction<{
     commandId: string;
@@ -133,18 +115,15 @@ export async function tryExtractCommandOutputFromConnector(params: {
     abortSignal,
   });
 
-  if (result.status === 'DONE') {
-    const outputFile = result.files?.find((f) => f.file === 'output.txt');
-    return {
-      status: 'terminated',
-      stdout: result.stdout ?? '',
-      stderr: result.stderr ?? '',
-      exitCode: result.exitCode ?? 0,
-      output: outputFile?.content,
-    };
-  }
-
-  return { status: 'running', commandId, pid };
+  const outputFile = result.files?.find((f) => f.file === 'output.txt');
+  return {
+    commandId,
+    status: result.status === 'DONE' ? 'terminated' : 'running',
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+    exitCode: result.exitCode ?? 0,
+    output: outputFile?.content,
+  };
 }
 
 export async function killCommandInConnector(params: {
@@ -152,14 +131,13 @@ export async function killCommandInConnector(params: {
   request: KibanaRequest<unknown, unknown, unknown>;
   actionsStart: ActionsPluginStartContract | undefined;
   commandId: string;
-  pid: number;
 }): Promise<void> {
-  const { connectorId, request, actionsStart, commandId, pid } = params;
+  const { connectorId, request, actionsStart, commandId } = params;
   await executeSubAction({
     connectorId,
     request,
     actionsStart,
     subAction: 'killExec',
-    subActionParams: { commandId, pid },
+    subActionParams: { commandId },
   });
 }

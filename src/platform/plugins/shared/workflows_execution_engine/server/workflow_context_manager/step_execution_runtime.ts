@@ -467,7 +467,7 @@ export class StepExecutionRuntime {
 
   private logStepStart(stepId: string, stepExecutionId: string): void {
     this.stepLogger?.logInfo(`Step '${stepId}' started`, {
-      workflow: { step_id: stepId, step_execution_id: stepExecutionId },
+      workflow: { step_id: stepId, step_execution_id: stepExecutionId, collapse_id: 'start_step' },
       event: { action: 'step-start', category: ['workflow', 'step'] },
       tags: ['workflow', 'step', 'start'],
       labels: {
@@ -483,7 +483,7 @@ export class StepExecutionRuntime {
     const isSuccess = step?.status === ExecutionStatus.COMPLETED;
     const stepId = this.node.stepId;
     this.stepLogger?.logInfo(`Step '${stepId}' ${isSuccess ? 'completed' : 'failed'}`, {
-      workflow: { step_id: stepId, step_execution_id: step.id },
+      workflow: { step_id: stepId, step_execution_id: step.id, collapse_id: 'complete_step' },
       event: {
         action: 'step-complete',
         category: ['workflow', 'step'],
@@ -515,7 +515,11 @@ export class StepExecutionRuntime {
     }
 
     this.stepLogger?.logError(message, executionError, {
-      workflow: { step_id: this.node.stepId, step_execution_id: this.stepExecutionId },
+      workflow: {
+        step_id: this.node.stepId,
+        step_execution_id: this.stepExecutionId,
+        collapse_id: 'fail_step',
+      },
       event: { action: 'step-fail', category: ['workflow', 'step'] },
       tags,
       labels: {

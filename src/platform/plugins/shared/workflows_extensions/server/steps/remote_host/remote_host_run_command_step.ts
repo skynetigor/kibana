@@ -16,10 +16,10 @@ import {
   killCommandInConnector,
   tryExtractCommandOutputFromConnector,
 } from './execute_in_connector';
+import { ExecutionError } from '@kbn/workflows/server';
 
 const StateSchema = z.object({
   commandId: z.string(),
-  pid: z.number(),
 });
 
 const parseScriptOutput = (raw: string | undefined): unknown => {
@@ -64,12 +64,21 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         abortSignal: context.abortSignal,
       });
 
+      if (result.stdout) context.logger.info(result.stdout, { collapseId: 'stdout' });
+      if (result.stderr) context.logger.warn(result.stderr, { collapseId: 'stderr' });
+
       if (result.status === 'running') {
-        return { state: { commandId: result.commandId, pid: result.pid } };
+        return { state: { commandId: result.commandId } };
       }
 
-      if (result.stdout) context.logger.info(result.stdout);
-      if (result.stderr) context.logger.warn(result.stderr);
+      if (result.exitCode !== 0) {
+        throw new ExecutionError({
+          type: 'ScriptExecutionError',
+          message: result.stderr || `Script exited with code ${result.exitCode}`,
+          details: { exitCode: result.exitCode },
+        });
+      }
+
       return { output: parseScriptOutput(result.output) };
     },
     poll: async (context) => {
@@ -83,15 +92,23 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
         commandId: state.commandId,
-        pid: state.pid,
       });
+
+      if (result.stdout) context.logger.info(result.stdout, { collapseId: 'stdout' });
+      if (result.stderr) context.logger.warn(result.stderr, { collapseId: 'stderr' });
 
       if (result.status === 'running') {
         return undefined;
       }
 
-      if (result.stdout) context.logger.info(result.stdout);
-      if (result.stderr) context.logger.warn(result.stderr);
+      if (result.exitCode !== 0) {
+        throw new ExecutionError({
+          type: 'ScriptExecutionError',
+          message: result.stderr || `Script exited with code ${result.exitCode}`,
+          details: { exitCode: result.exitCode },
+        });
+      }
+
       return { output: parseScriptOutput(result.output) };
     },
     onCancel: async (context) => {
@@ -107,7 +124,6 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         request: contextManager.getFakeRequest(),
         actionsStart: getActionsStart(),
         commandId: state.commandId,
-        pid: state.pid,
       });
     },
   });

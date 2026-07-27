@@ -47,11 +47,11 @@ export const createRemoteHostRunJavascriptStepDefinition = ({ getActionsStart }:
       });
 
       if (result.stderr) {
-        context.logger.error(result.stderr);
+        context.logger.warn(result.stderr, { collapseId: 'stderr' });
       }
 
       if (result.stdout) {
-        context.logger.info(result.stdout);
+        context.logger.info(result.stdout, { collapseId: 'stdout' });
       }
 
       if (result.status === 'running') {
@@ -74,11 +74,11 @@ export const createRemoteHostRunJavascriptStepDefinition = ({ getActionsStart }:
       });
 
       if (result.stderr) {
-        logger.error(result.stderr);
+        logger.warn(result.stderr, { collapseId: 'stderr' });
       }
 
       if (result.stdout) {
-        logger.info(result.stdout);
+        logger.info(result.stdout, { collapseId: 'stdout' });
       }
 
       if (result.status === 'running') {

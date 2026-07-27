@@ -61,7 +61,6 @@ export const SshHostExecFileAsyncParamsSchema = z.object({
 
 export const SshHostKillExecParamsSchema = z.object({
   commandId: z.string().min(1),
-  pid: z.number().optional(),
   signal: z.any().optional(),
 });
 

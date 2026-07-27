@@ -7,18 +7,19 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import uuid from 'uuid';
 import type { AtomicGraphNode } from '@kbn/workflows/graph';
 import type { StepHandlerContext, StepLogMeta } from '@kbn/workflows-extensions/server';
+import type { WorkflowLogEvent } from '../../../repositories/logs_repository';
 import type { StepExecutionRuntime } from '../../../workflow_context_manager/step_execution_runtime';
 import type { IWorkflowEventLogger } from '../../../workflow_event_logger';
-import type { WorkflowLogEvent } from '../../../repositories/logs_repository';
 
 const toLogEvent = (meta: StepLogMeta | undefined): Partial<WorkflowLogEvent> | undefined => {
   if (!meta) return undefined;
   const { collapseId, ...rest } = meta;
   return {
     ...(rest as Partial<WorkflowLogEvent>),
-    ...(collapseId ? { workflow: { collapse_id: collapseId } } : {}),
+    ...{ workflow: { collapse_id: collapseId ? collapseId : uuid.v4() } },
   };
 };
 

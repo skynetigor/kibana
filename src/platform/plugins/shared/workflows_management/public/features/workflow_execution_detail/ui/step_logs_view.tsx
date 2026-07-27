@@ -8,11 +8,13 @@
  */
 
 import { EuiLoadingSpinner, EuiText, useEuiTheme } from '@elastic/eui';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { i18n } from '@kbn/i18n';
 import { ExecutionStatus } from '@kbn/workflows';
 import type { WorkflowStepExecutionDto } from '@kbn/workflows/types/latest';
 import type { StepLogEntry, StepLogsApi, StepLogsConfig } from '@kbn/workflows-extensions/public';
+
+const POLL_INTERVAL_MS = 2000;
 
 interface StepLogsViewProps {
   stepExecution: WorkflowStepExecutionDto;
@@ -24,39 +26,65 @@ export const StepLogsView: React.FC<StepLogsViewProps> = ({ stepExecution, confi
   const { euiTheme } = useEuiTheme();
   const [entries, setEntries] = useState<StepLogEntry[] | null>(null);
 
+  // Refs keep the latest prop values accessible inside the effect without
+  // requiring them as deps — prevents restarting the poll interval on every
+  // parent re-render while stepExecution.id and isRunning stay the same.
+  const stepExecutionRef = useRef(stepExecution);
+  stepExecutionRef.current = stepExecution;
+  const configRef = useRef(config);
+  configRef.current = config;
+  const logsApiRef = useRef(logsApi);
+  logsApiRef.current = logsApi;
+
+  const isRunning = stepExecution.status === ExecutionStatus.RUNNING;
+
   useEffect(() => {
     let cancelled = false;
 
-    const resolve: Promise<StepLogEntry[]> = config.getLogs
-      ? Promise.resolve(config.getLogs({ stepExecution, logsApi }))
-      : logsApi
-          .fetchLogs()
-          .then((raw) =>
-            raw.map((e) => ({ message: e.message, timestamp: e.timestamp, level: e.level }))
-          );
-
-    resolve.then((result) => {
+    const doFetch = async () => {
+      if (cancelled) return;
+      const cfg = configRef.current;
+      const api = logsApiRef.current;
+      const exec = stepExecutionRef.current;
+      const result = cfg.getLogs
+        ? await Promise.resolve(cfg.getLogs({ stepExecution: exec, logsApi: api }))
+        : await api
+            .fetchLogs()
+            .then((raw) =>
+              raw.map((e) => ({ message: e.message, timestamp: e.timestamp, level: e.level }))
+            );
       if (!cancelled) setEntries(result);
-    });
+    };
+
+    doFetch();
+
+    if (isRunning) {
+      const interval = setInterval(doFetch, POLL_INTERVAL_MS);
+      return () => {
+        cancelled = true;
+        clearInterval(interval);
+      };
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [stepExecution, config, logsApi]);
+    // stepExecution.id resets the effect (and any active interval) when the
+    // selected step changes. isRunning toggles polling on/off.
+  }, [isRunning, stepExecution.id]);
 
   if (entries === null) {
     return <EuiLoadingSpinner size="m" />;
   }
 
   if (entries.length === 0) {
-    const message =
-      stepExecution.status === ExecutionStatus.RUNNING
-        ? i18n.translate('workflowsManagement.stepLogsView.runningPlaceholder', {
-            defaultMessage: 'Logs available when step completes.',
-          })
-        : i18n.translate('workflowsManagement.stepLogsView.emptyPlaceholder', {
-            defaultMessage: 'No logs.',
-          });
+    const message = isRunning
+      ? i18n.translate('workflowsManagement.stepLogsView.runningPlaceholder', {
+          defaultMessage: 'Waiting for logs…',
+        })
+      : i18n.translate('workflowsManagement.stepLogsView.emptyPlaceholder', {
+          defaultMessage: 'No logs.',
+        });
     return (
       <EuiText color="subdued" size="s">
         <p>{message}</p>

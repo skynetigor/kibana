@@ -99,7 +99,6 @@ export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostS
   public async execAsync(params: SshHostExecAsyncParams): Promise<{
     commandId: string;
     status: 'DONE' | 'RUNNING';
-    pid: number;
     stderr?: string;
     stdout?: string;
     exitCode?: number;
@@ -128,6 +127,7 @@ ${params.script}`;
     const command = `#!/bin/bash
 (COMMAND_TMP_DIR="${tmpDir}" bash "${scriptFile}" < /dev/null > "${stdoutFile}" 2>"${stderrFile}"; echo $? > "${codeFile}") </dev/null >/dev/null 2>&1 &
 PID=$!
+echo $PID > "${tmpDir}/pid.txt"
 TIMEOUT=20
 COUNT=0
 while [ ! -f "${codeFile}" ] && [ $COUNT -lt $TIMEOUT ]; do
@@ -140,7 +140,6 @@ if [ -f "${codeFile}" ]; then
   STDOUT=$(_b64 "${stdoutFile}")
   STDERR=$(_b64 "${stderrFile}")
   echo "STATUS=DONE"
-  echo "PID=$PID"
   echo "EXIT_CODE=$EXIT_CODE"
   echo "STDOUT=$STDOUT"
   echo "STDERR=$STDERR"
@@ -161,7 +160,6 @@ if [ -f "${codeFile}" ]; then
   exit 0
 fi
 echo "STATUS=RUNNING"
-echo "PID=$PID"
 `;
 
     const { stdout, stderr, code } = await this.execCommand({
@@ -173,32 +171,25 @@ echo "PID=$PID"
       throw new Error(`Failed to execute async command: ${stderr}`);
     }
 
-    const pid = parseInt(stdout.match(/^PID=(\d+)$/m)?.[1] ?? '0', 10);
     const status = stdout.match(/^STATUS=(DONE|RUNNING)$/m)?.[1] ?? 'RUNNING';
+    const exitCode = parseInt(stdout.match(/^EXIT_CODE=(\d+)$/m)?.[1] ?? '0', 10);
+    const stdoutB64 = stdout.match(/^STDOUT=(.*)$/m)?.[1] ?? '';
+    const stderrB64 = stdout.match(/^STDERR=(.*)$/m)?.[1] ?? '';
+    const fileNames = (stdout.match(/^FILES=(.*)$/m)?.[1] ?? '').split(',').filter(Boolean);
+    const files = fileNames.map((name) => {
+      const key = name.replace(/[^a-zA-Z0-9]/g, '_');
+      const b64 = stdout.match(new RegExp(`^FILE_${key}=(.*)$`, 'm'))?.[1] ?? '';
+      return { file: name, content: Buffer.from(b64, 'base64').toString('utf-8') };
+    });
 
-    if (status === 'DONE') {
-      const exitCode = parseInt(stdout.match(/^EXIT_CODE=(\d+)$/m)?.[1] ?? '0', 10);
-      const stdoutB64 = stdout.match(/^STDOUT=(.*)$/m)?.[1] ?? '';
-      const stderrB64 = stdout.match(/^STDERR=(.*)$/m)?.[1] ?? '';
-      const fileNames = (stdout.match(/^FILES=(.*)$/m)?.[1] ?? '').split(',').filter(Boolean);
-      const files = fileNames.map((name) => {
-        const key = name.replace(/[^a-zA-Z0-9]/g, '_');
-        const b64 = stdout.match(new RegExp(`^FILE_${key}=(.*)$`, 'm'))?.[1] ?? '';
-        return { file: name, content: Buffer.from(b64, 'base64').toString('utf-8') };
-      });
-
-      return {
-        commandId,
-        status: 'DONE',
-        pid,
-        exitCode,
-        stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8').trim(),
-        stderr: Buffer.from(stderrB64, 'base64').toString('utf-8').trim(),
-        files: files.length > 0 ? files : undefined,
-      };
-    }
-
-    return { commandId, status: 'RUNNING', pid };
+    return {
+      commandId,
+      status: status === 'DONE' ? 'DONE' : 'RUNNING',
+      exitCode,
+      stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8').trim(),
+      stderr: Buffer.from(stderrB64, 'base64').toString('utf-8').trim(),
+      files: files.length > 0 ? files : undefined,
+    };
   }
 
   public async execFileAsync(
@@ -237,9 +228,9 @@ echo "PID=$PID"
     const { tmpDir, stdoutFile, stderrFile, codeFile } = this.getCommandData(commandId);
 
     const command = `#!/bin/bash
+_b64() { base64 -w 0 "$1" 2>/dev/null || openssl base64 -A "$1" 2>/dev/null || echo ''; }
 if [ -f "${codeFile}" ]; then
   EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
-  _b64() { base64 -w 0 "$1" 2>/dev/null || openssl base64 -A "$1" 2>/dev/null || echo ''; }
   STDOUT=$(_b64 "${stdoutFile}")
   STDERR=$(_b64 "${stderrFile}")
   echo "STATUS=DONE"
@@ -261,42 +252,46 @@ if [ -f "${codeFile}" ]; then
   echo "FILES=$FILES_LIST"
   rm -rf "${tmpDir}"
 else
+  STDOUT=$(_b64 "${stdoutFile}")
+  STDERR=$(_b64 "${stderrFile}")
   echo "STATUS=RUNNING"
+  echo "STDOUT=$STDOUT"
+  echo "STDERR=$STDERR"
 fi`;
 
     const { stdout } = await this.execCommand({ script: command, signal });
     const status = stdout.match(/^STATUS=(DONE|RUNNING)$/m)?.[1] ?? 'RUNNING';
+    const exitCode = parseInt(stdout.match(/^EXIT_CODE=(\d+)$/m)?.[1] ?? '0', 10);
+    const stdoutB64 = stdout.match(/^STDOUT=(.*)$/m)?.[1] ?? '';
+    const stderrB64 = stdout.match(/^STDERR=(.*)$/m)?.[1] ?? '';
+    const fileNames = (stdout.match(/^FILES=(.*)$/m)?.[1] ?? '').split(',').filter(Boolean);
+    const files = fileNames.map((name) => {
+      const key = name.replace(/[^a-zA-Z0-9]/g, '_');
+      const b64 = stdout.match(new RegExp(`^FILE_${key}=(.*)$`, 'm'))?.[1] ?? '';
+      return { file: name, content: Buffer.from(b64, 'base64').toString('utf-8') };
+    });
 
-    if (status === 'DONE') {
-      const exitCode = parseInt(stdout.match(/^EXIT_CODE=(\d+)$/m)?.[1] ?? '0', 10);
-      const stdoutB64 = stdout.match(/^STDOUT=(.*)$/m)?.[1] ?? '';
-      const stderrB64 = stdout.match(/^STDERR=(.*)$/m)?.[1] ?? '';
-      const fileNames = (stdout.match(/^FILES=(.*)$/m)?.[1] ?? '').split(',').filter(Boolean);
-      const files = fileNames.map((name) => {
-        const key = name.replace(/[^a-zA-Z0-9]/g, '_');
-        const b64 = stdout.match(new RegExp(`^FILE_${key}=(.*)$`, 'm'))?.[1] ?? '';
-        return { file: name, content: Buffer.from(b64, 'base64').toString('utf-8') };
-      });
-
-      return {
-        commandId,
-        status: 'DONE',
-        exitCode,
-        stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8').trim(),
-        stderr: Buffer.from(stderrB64, 'base64').toString('utf-8').trim(),
-        files: files.length > 0 ? files : undefined,
-      };
-    }
-
-    return { commandId, status: 'RUNNING' };
+    return {
+      commandId,
+      status: status === 'DONE' ? 'DONE' : 'RUNNING',
+      exitCode,
+      stdout: Buffer.from(stdoutB64, 'base64').toString('utf-8').trim(),
+      stderr: Buffer.from(stderrB64, 'base64').toString('utf-8').trim(),
+      files: files.length > 0 ? files : undefined,
+    };
   }
 
   public async killExec(params: SshHostKillExecParams): Promise<void> {
-    const { commandId, pid } = params;
+    const { commandId } = params;
     const { tmpDir } = this.getCommandData(commandId);
-    const killScript = pid
-      ? `kill -9 ${pid} 2>/dev/null || true; rm -rf "${tmpDir}"`
-      : `rm -rf "${tmpDir}"`;
+    const killScript = `
+TMP_DIR="${tmpDir}"
+if [ -f "$TMP_DIR/pid.txt" ]; then
+  PID=$(cat "$TMP_DIR/pid.txt");
+  kill -9 $PID 2>/dev/null || true;
+fi
+rm -rf "$TMP_DIR"
+`;
     await this.execCommand({ script: killScript });
   }
 
@@ -424,7 +419,11 @@ fi`;
         env = process.env;
       }
 
-      const { stdout, stderr } = await execPromise(command, { env, signal });
+      const { stdout, stderr } = await execPromise(command, {
+        env,
+        signal,
+        maxBuffer: 100 * 1024 * 1024,
+      });
 
       const sanitizedStdout = stdout.replace(command, '').trim();
       const sanitizedStderr = stderr.replace(command, '').trim();

@@ -1,0 +1,189 @@
+version: '1'
+name: CI/CD — Kibana Workflows Plugins
+description: |
+  Clones (or updates) the Kibana repository on a remote host, bootstraps
+  dependencies, then runs unit tests, integration tests, and ESLint for the
+  workflows_management, workflows_execution_engine, and workflows_extensions plugins.
+tags:
+  - cicd
+  - kibana
+  - remote-host
+
+consts:
+  plugins:
+    - workflows_management
+    - workflows_execution_engine
+    - workflows_extensions
+
+triggers:
+  - type: manual
+    inputs:
+      additionalProperties: false
+      properties:
+        branch:
+          type: string
+          description: Branch to clone and test.
+          default: main
+        fork_url:
+          type: string
+          description: Repository URL to clone from.
+          default: https://github.com/elastic/kibana
+        fresh:
+          type: boolean
+          default: false
+
+steps:
+  # ── Step 1: Check prerequisites and repo state ────────────────────────────
+  - name: check_environment
+    type: remoteHost.runJavascript
+    connector-id: ihor-vm
+    with:
+      code: |
+        const { execSync } = require('child_process');
+        const run = (cmd) => {
+          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim() || null; }
+          catch { return null; }
+        };
+        const repoDir = '/opt/kibana-ci';
+        return {
+          node:        run('node --version'),
+          npm:         run('npm --version'),
+          yarn:        run('yarn --version'),
+          git:         run('git --version'),
+          repoExists:  run(`test -d ${repoDir}/.git && echo yes`),
+          repoDir,
+        };
+
+  # ── Step 2: Abort if Node.js or Git is missing ───────────────────────────
+  - name: require_prerequisites
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: "${{ steps.check_environment.output.node == null or steps.check_environment.output.git == null }}"
+    with:
+      code: |
+        [ -z "$(which node)" ] && echo "ERROR: Node.js not installed" >&2
+        [ -z "$(which git)"  ] && echo "ERROR: Git not installed" >&2
+        echo "Run the 'Install Dev Tools' workflow first." >&2
+        exit 1
+  
+  - name: delete_repo
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    if: '${{inputs.fresh == true and steps.check_environment.output.repoExists == true}}'
+    with:
+      code: sudo rm -rf "{{ steps.check_environment.output.repoDir }}"
+
+  # ── Step 3: Clone or update the repository ───────────────────────────────
+  - name: fetch_source
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        REPO_DIR="{{ steps.check_environment.output.repoDir }}"
+        FORK_URL="{{ inputs.fork_url }}"
+        BRANCH="{{ inputs.branch }}"
+
+        # If .git exists but HEAD is invalid (partial/cancelled clone), wipe and re-clone
+        if [ -d "$REPO_DIR/.git" ] && ! git -C "$REPO_DIR" rev-parse HEAD >/dev/null 2>&1; then
+          echo "=== Partial clone detected — removing $REPO_DIR ==="
+          sudo rm -rf "$REPO_DIR"
+        fi
+
+        if [ -d "$REPO_DIR/.git" ]; then
+          echo "=== Updating existing clone ==="
+          git -C "$REPO_DIR" remote set-url origin "$FORK_URL"
+          git -C "$REPO_DIR" fetch origin --prune
+          git -C "$REPO_DIR" checkout "$BRANCH" 2>/dev/null \
+            || git -C "$REPO_DIR" checkout -b "$BRANCH" "origin/$BRANCH"
+          git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
+          git -C "$REPO_DIR" clean -fdx
+        else
+          echo "=== Cloning $FORK_URL (branch: $BRANCH) ==="
+          sudo mkdir -p "$(dirname "$REPO_DIR")"
+          sudo chown "$USER:$USER" "$(dirname "$REPO_DIR")"
+          git clone --depth 1 --branch "$BRANCH" "$FORK_URL" "$REPO_DIR"
+        fi
+        git -C "$REPO_DIR" log -1 --format="%H %s (%ai)"
+
+  # ── Step 4: Repo size after clone ────────────────────────────────────────
+  - name: repo_size
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        SIZE=$(du -sh "{{ steps.check_environment.output.repoDir }}" 2>/dev/null | cut -f1)
+        echo "Repo size: $SIZE"
+        SCRIPT_OUTPUT="$SIZE"
+
+  # ── Step 5: Install yarn and bootstrap dependencies ───────────────────────
+  - name: bootstrap
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
+        cd {{ steps.check_environment.output.repoDir }}
+        if ! command -v yarn >/dev/null 2>&1; then
+          npm install -g yarn
+        fi
+        yarn kbn bootstrap
+
+  # ── Step 6: Test each plugin (unit + integration + eslint) ──────────────
+  - name: test_plugins
+    type: foreach
+    foreach: '{{ consts.plugins | json }}'
+    steps:
+      - name: unit_tests
+        type: remoteHost.runCommand
+        connector-id: ihor-vm
+        with:
+          code: |
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
+            cd {{ steps.check_environment.output.repoDir }}
+            node scripts/jest "src/platform/plugins/shared/{{ foreach.item }}" --ci
+
+      - name: eslint
+        type: remoteHost.runCommand
+        connector-id: ihor-vm
+        with:
+          code: |
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
+            cd {{ steps.check_environment.output.repoDir }}
+            node scripts/eslint "src/platform/plugins/shared/{{ foreach.item }}"
+  
+  - name: integration_tests
+    type: remoteHost.runCommand
+    connector-id: ihor-vm
+    with:
+      code: |
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
+        cd {{ steps.check_environment.output.repoDir }}
+        node scripts/jest_integration "src/platform/plugins/shared/workflows_execution_engine" --ci --passWithNoTests
+
+  # ── Step 7: Summary ───────────────────────────────────────────────────────
+  - name: summary
+    type: console
+    with:
+      message: |
+        ═══════════════════════════════════════════
+          CI/CD — Kibana Workflows Plugins
+        ═══════════════════════════════════════════
+          Fork   : {{ inputs.fork_url }}
+          Branch : {{ inputs.branch }}
+        ───────────────────────────────────────────
+          Node : {{ steps.check_environment.output.node }}
+          Yarn : {{ steps.check_environment.output.yarn }}
+          Repo size : {{ steps.repo_size.output }}
+        ───────────────────────────────────────────
+          Unit tests        : ✓ passed
+          Integration tests : ✓ passed
+          ESLint            : ✓ passed
+        ═══════════════════════════════════════════
