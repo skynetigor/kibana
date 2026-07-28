@@ -146,9 +146,10 @@ steps:
       order_by: used_pct
       order: desc
 
-  # ── Step 8: In-Kibana JS — composite score + status label ────────────────────
+  # ── Step 8: Node.js — composite score + status label ────────────────────────
   - name: health_score
-    type: code.javascript
+    type: remoteHost.runJavascript
+    connector-id: ihor-vm
     with:
       code: |
         const report = {{ steps.format_report.output | json }};
