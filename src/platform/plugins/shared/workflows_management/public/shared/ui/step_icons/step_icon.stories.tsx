@@ -66,7 +66,7 @@ const loadExtensions = async (): Promise<LoadedExtensions> => {
   const stepRegistry = new PublicStepRegistry(nullLogger);
   const triggerRegistry = new PublicTriggerRegistry();
   registerInternalStepDefinitions(stepRegistry, {
-    experimentalSteps: { javaScriptStep: true },
+    experimentalSteps: {},
   });
   registerInternalTriggerDefinitions(triggerRegistry);
   await Promise.all([stepRegistry.whenReady(), triggerRegistry.whenReady()]);

@@ -11,22 +11,16 @@ import { config, resolveExperimentalStepsConfig } from './config';
 
 describe('workflows_extensions config', () => {
   describe('resolveExperimentalStepsConfig', () => {
-    it('enables all experimental steps when set to true', () => {
-      expect(resolveExperimentalStepsConfig(true)).toEqual({
-        javaScriptStep: true,
-      });
+    it('returns empty config when set to true', () => {
+      expect(resolveExperimentalStepsConfig(true)).toEqual({});
     });
 
-    it('disables all experimental steps when set to false', () => {
-      expect(resolveExperimentalStepsConfig(false)).toEqual({
-        javaScriptStep: false,
-      });
+    it('returns empty config when set to false', () => {
+      expect(resolveExperimentalStepsConfig(false)).toEqual({});
     });
 
-    it('returns granular settings when an object is provided', () => {
-      expect(resolveExperimentalStepsConfig({ javaScriptStep: true })).toEqual({
-        javaScriptStep: true,
-      });
+    it('returns empty config when an object is provided', () => {
+      expect(resolveExperimentalStepsConfig({})).toEqual({});
     });
   });
 
@@ -37,23 +31,15 @@ describe('workflows_extensions config', () => {
       });
     });
 
-    it('accepts a granular object value', () => {
-      expect(
-        config.schema.validate({ experimentalSteps: { javaScriptStep: true } })
-      ).toEqual({
-        experimentalSteps: { javaScriptStep: true },
+    it('accepts an empty object value', () => {
+      expect(config.schema.validate({ experimentalSteps: {} })).toEqual({
+        experimentalSteps: {},
       });
     });
 
     it('defaults experimentalSteps to false when omitted', () => {
       expect(config.schema.validate({})).toEqual({
         experimentalSteps: false,
-      });
-    });
-
-    it('defaults omitted object keys to false', () => {
-      expect(config.schema.validate({ experimentalSteps: {} })).toEqual({
-        experimentalSteps: { javaScriptStep: false },
       });
     });
   });

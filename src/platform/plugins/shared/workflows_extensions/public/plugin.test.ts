@@ -18,7 +18,7 @@ const { registerInternalStepDefinitions } = jest.requireMock('./steps');
 
 const createPlugin = () => {
   const initContext = coreMock.createPluginInitializerContext({
-    experimentalSteps: { javaScriptStep: false },
+    experimentalSteps: {},
   });
   return new WorkflowsExtensionsPublicPlugin(initContext);
 };
@@ -35,7 +35,7 @@ describe('WorkflowsExtensionsPublicPlugin', () => {
 
       expect(registerInternalStepDefinitions).toHaveBeenCalledTimes(1);
       expect(registerInternalStepDefinitions).toHaveBeenCalledWith(expect.anything(), {
-        experimentalSteps: { javaScriptStep: false },
+        experimentalSteps: {},
       });
     });
 

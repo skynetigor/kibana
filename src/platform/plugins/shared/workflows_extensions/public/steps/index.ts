@@ -43,12 +43,6 @@ export const registerInternalStepDefinitions = (
     import('./data/data_concat_step').then((m) => m.dataConcatStepDefinition)
   );
 
-  if (experimentalSteps.javaScriptStep) {
-    stepRegistry.register(() =>
-      import('./javascript/javascript_step').then((m) => m.scriptsJavaScriptStepDefinition)
-    );
-  }
-
   stepRegistry.register(() =>
     import('./remote_host/remote_host_run_command_step').then(
       (m) => m.remoteHostRunCommandStepDefinition

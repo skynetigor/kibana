@@ -9,7 +9,6 @@
 
 import { loggerMock } from '@kbn/logging-mocks';
 import { registerInternalStepDefinitions } from '.';
-import { ScriptsJavaScriptStepTypeId } from '../../common/steps/javascript';
 import {
   RemoteHostRunCommandStepTypeId,
   RemoteHostRunJavascriptStepTypeId,
@@ -20,31 +19,11 @@ import {
 import { ServerStepRegistry } from '../step_registry';
 
 describe('registerInternalStepDefinitions', () => {
-  it('does not register code.javascript when javaScriptStep is disabled', () => {
-    const registry = new ServerStepRegistry(loggerMock.create());
-
-    registerInternalStepDefinitions(registry, {
-      experimentalSteps: { javaScriptStep: false },
-    });
-
-    expect(registry.has(ScriptsJavaScriptStepTypeId)).toBe(false);
-  });
-
-  it('registers code.javascript when javaScriptStep is enabled', () => {
-    const registry = new ServerStepRegistry(loggerMock.create());
-
-    registerInternalStepDefinitions(registry, {
-      experimentalSteps: { javaScriptStep: true },
-    });
-
-    expect(registry.has(ScriptsJavaScriptStepTypeId)).toBe(true);
-  });
-
   it('always registers all remoteHost steps', () => {
     const registry = new ServerStepRegistry(loggerMock.create());
 
     registerInternalStepDefinitions(registry, {
-      experimentalSteps: { javaScriptStep: false },
+      experimentalSteps: {},
     });
 
     expect(registry.has(RemoteHostRunCommandStepTypeId)).toBe(true);

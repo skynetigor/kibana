@@ -23,9 +23,7 @@ export type {
 };
 export { resolveExperimentalStepsConfig };
 
-const experimentalStepsSchema = schema.object({
-  javaScriptStep: schema.boolean({ defaultValue: false }),
-});
+const experimentalStepsSchema = schema.object({});
 
 const experimentalStepsInputSchema = schema.oneOf([schema.boolean(), experimentalStepsSchema], {
   defaultValue: false,

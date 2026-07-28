@@ -19,7 +19,6 @@ import {
   dataRegexReplaceStepDefinition,
   dataStringifyJsonStepDefinition,
 } from './data';
-import { createScriptsJavaScriptStepDefinition } from './javascript/javascript_step';
 import {
   createRemoteHostRunCommandStepDefinition,
   createRemoteHostRunJavascriptStepDefinition,
@@ -44,10 +43,6 @@ export const registerInternalStepDefinitions = (
   serverStepRegistry.register(dataConcatStepDefinition);
   serverStepRegistry.register(dataParseJsonStepDefinition);
   serverStepRegistry.register(dataStringifyJsonStepDefinition);
-
-  if (experimentalSteps.javaScriptStep) {
-    serverStepRegistry.register(createScriptsJavaScriptStepDefinition({ getActionsStart }));
-  }
 
   serverStepRegistry.register(createRemoteHostRunCommandStepDefinition({ getActionsStart }));
   serverStepRegistry.register(createRemoteHostRunJavascriptStepDefinition({ getActionsStart }));

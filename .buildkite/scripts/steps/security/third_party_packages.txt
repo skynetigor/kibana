@@ -49,7 +49,6 @@ jszip
 @opentelemetry/exporter-logs-otlp-grpc
 @opentelemetry/exporter-logs-otlp-proto
 @opentelemetry/otlp-transformer
-isolated-vm
 just-bash
 immer-v9
 react-redux-v7

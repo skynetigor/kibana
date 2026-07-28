@@ -7,9 +7,7 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export interface WorkflowsExtensionsExperimentalStepsConfig {
-  readonly javaScriptStep: boolean;
-}
+export interface WorkflowsExtensionsExperimentalStepsConfig {}
 
 export type WorkflowsExtensionsExperimentalStepsInputConfig =
   | boolean
@@ -20,13 +18,7 @@ export interface WorkflowsExtensionsConfig {
 }
 
 export const resolveExperimentalStepsConfig = (
-  experimentalSteps: WorkflowsExtensionsExperimentalStepsInputConfig
+  _experimentalSteps: WorkflowsExtensionsExperimentalStepsInputConfig
 ): WorkflowsExtensionsExperimentalStepsConfig => {
-  if (typeof experimentalSteps === 'boolean') {
-    return {
-      javaScriptStep: experimentalSteps,
-    };
-  }
-
-  return experimentalSteps;
+  return {};
 };
