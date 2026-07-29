@@ -14,24 +14,23 @@ triggers:
 steps:
   # ── Step 1: Check which tools are already installed ───────────────────────
   - name: check_tools
-    type: remoteHost.runJavascript
+    type: remoteHost.runCommand
     connector-id: ihor-vm
     with:
       code: |
-        const { execSync } = require('child_process');
-        const run = (cmd) => {
-          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim(); }
-          catch { return null; }
-        };
-        return {
-          nvm:    run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm --version\''),
-          git:    run('git --version'),
-          node:   run('node --version'),
-          npm:    run('npm --version'),
-          yarn:   run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null; yarn --version\''),
-          docker: run('docker --version'),
-          python: run('python3 --version'),
-        };
+        # Returns JSON null for missing tools, quoted version string for present ones.
+        # Pure bash — intentionally avoids node/npm which may not exist yet.
+        _v() { [ -n "$1" ] && printf '"%s"' "$1" || printf 'null'; }
+        NVM=$(bash -c 'source "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm --version' 2>/dev/null || true)
+        GIT=$(git --version 2>/dev/null || true)
+        NODE=$(node --version 2>/dev/null || true)
+        NPM=$(npm --version 2>/dev/null || true)
+        YARN=$(bash -c 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; yarn --version' 2>/dev/null || true)
+        DOCKER=$(docker --version 2>/dev/null || true)
+        PYTHON=$(python3 --version 2>/dev/null || true)
+        SCRIPT_OUTPUT=$(printf '{"nvm":%s,"git":%s,"node":%s,"npm":%s,"yarn":%s,"docker":%s,"python":%s}' \
+          "$(_v "$NVM")" "$(_v "$GIT")" "$(_v "$NODE")" \
+          "$(_v "$NPM")" "$(_v "$YARN")" "$(_v "$DOCKER")" "$(_v "$PYTHON")")
 
   # ── Step 2: Install NVM (skipped if already present) ──────────────────────
   - name: install_nvm
@@ -142,24 +141,21 @@ steps:
 
   # ── Step 6: Collect final versions of all tools ───────────────────────────
   - name: collect_versions
-    type: remoteHost.runJavascript
+    type: remoteHost.runCommand
     connector-id: ihor-vm
     with:
       code: |
-        const { execSync } = require('child_process');
-        const run = (cmd) => {
-          try { return execSync(cmd, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim(); }
-          catch { return 'not found'; }
-        };
-        return {
-          nvm:    run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm --version\''),
-          git:    run('git --version'),
-          node:   run('node --version'),
-          npm:    run('npm --version'),
-          yarn:   run('bash -c \'source "$HOME/.nvm/nvm.sh" 2>/dev/null; yarn --version\''),
-          docker: run('docker --version'),
-          python: run('python3 --version'),
-        };
+        _v() { printf '%s' "${1:-not found}"; }
+        NVM=$(bash -c 'source "$HOME/.nvm/nvm.sh" 2>/dev/null && nvm --version' 2>/dev/null || true)
+        GIT=$(git --version 2>/dev/null || true)
+        NODE=$(node --version 2>/dev/null || true)
+        NPM=$(npm --version 2>/dev/null || true)
+        YARN=$(bash -c 'source "$HOME/.nvm/nvm.sh" 2>/dev/null; yarn --version' 2>/dev/null || true)
+        DOCKER=$(docker --version 2>/dev/null || true)
+        PYTHON=$(python3 --version 2>/dev/null || true)
+        SCRIPT_OUTPUT=$(printf '{"nvm":"%s","git":"%s","node":"%s","npm":"%s","yarn":"%s","docker":"%s","python":"%s"}' \
+          "$(_v "$NVM")" "$(_v "$GIT")" "$(_v "$NODE")" \
+          "$(_v "$NPM")" "$(_v "$YARN")" "$(_v "$DOCKER")" "$(_v "$PYTHON")")
 
   # ── Step 7: Print summary ─────────────────────────────────────────────────
   - name: summary

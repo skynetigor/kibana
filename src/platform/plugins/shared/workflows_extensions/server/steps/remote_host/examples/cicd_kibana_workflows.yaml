@@ -166,7 +166,7 @@ steps:
         [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
 
         cd {{ steps.check_environment.output.repoDir }}
-        node scripts/jest_integration "src/platform/plugins/shared/workflows_execution_engine" --ci --passWithNoTests
+        node scripts/jest_integration --config src/platform/plugins/shared/workflows_execution_engine/integration_tests/jest.integration.config.js --ci --passWithNoTests
 
   # ── Step 7: Summary ───────────────────────────────────────────────────────
   - name: summary

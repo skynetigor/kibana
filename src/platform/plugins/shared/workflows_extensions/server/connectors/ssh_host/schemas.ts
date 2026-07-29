@@ -11,7 +11,7 @@ import { z } from '@kbn/zod/v4';
 
 export const SshHostConfigSchema = z
   .object({
-    ip: z.string().min(1),
+    host: z.string().min(1),
   })
   .strict();
 

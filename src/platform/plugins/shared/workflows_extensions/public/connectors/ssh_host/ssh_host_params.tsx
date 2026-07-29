@@ -13,9 +13,9 @@ import { i18n } from '@kbn/i18n';
 import type { ActionParamsProps } from '@kbn/triggers-actions-ui-plugin/public';
 
 interface SshHostActionParams {
-  subAction: 'ssh';
+  subAction: 'exec';
   subActionParams: {
-    bashScript: string;
+    script: string;
   };
 }
 
@@ -26,31 +26,31 @@ const SshHostParamsFields: React.FunctionComponent<ActionParamsProps<SshHostActi
   errors,
 }) => {
   const { subAction, subActionParams } = actionParams;
-  const bashScript = subActionParams?.bashScript ?? '';
+  const script = subActionParams?.script ?? '';
 
   useEffect(() => {
-    if (subAction !== 'ssh') {
-      editAction('subAction', 'ssh', index);
+    if (subAction !== 'exec') {
+      editAction('subAction', 'exec', index);
     }
   }, [editAction, index, subAction]);
 
-  const bashScriptErrors = errors.bashScript as string[] | undefined;
+  const scriptErrors = errors.script as string[] | undefined;
 
   return (
     <EuiFormRow
       fullWidth
-      label={i18n.translate('workflowsExtensions.sshHostConnector.params.bashScript.label', {
+      label={i18n.translate('workflowsExtensions.sshHostConnector.params.script.label', {
         defaultMessage: 'Bash script',
       })}
-      error={bashScriptErrors}
-      isInvalid={Array.isArray(bashScriptErrors) && bashScriptErrors.length > 0}
+      error={scriptErrors}
+      isInvalid={Array.isArray(scriptErrors) && scriptErrors.length > 0}
     >
       <EuiTextArea
         fullWidth
         rows={10}
-        value={bashScript}
-        onChange={(e) => editAction('subActionParams', { bashScript: e.target.value }, index)}
-        data-test-subj="sshHostBashScript"
+        value={script}
+        onChange={(e) => editAction('subActionParams', { script: e.target.value }, index)}
+        data-test-subj="sshHostScript"
       />
     </EuiFormRow>
   );

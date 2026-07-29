@@ -24,9 +24,9 @@ export const getConnectorType = (): ConnectorTypeModel => ({
   }),
   validateParams: async (actionParams) => {
     const errors: Record<string, string[]> = {};
-    if (!actionParams?.subActionParams?.bashScript?.trim()) {
-      errors.bashScript = [
-        i18n.translate('workflowsExtensions.sshHostConnector.params.bashScript.requiredError', {
+    if (!actionParams?.subActionParams?.script?.trim()) {
+      errors.script = [
+        i18n.translate('workflowsExtensions.sshHostConnector.params.script.requiredError', {
           defaultMessage: 'Bash script is required.',
         }),
       ];

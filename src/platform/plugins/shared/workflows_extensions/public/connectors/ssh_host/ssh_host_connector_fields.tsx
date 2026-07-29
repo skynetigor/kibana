@@ -16,7 +16,7 @@ import type {
 import { SimpleConnectorForm } from '@kbn/triggers-actions-ui-plugin/public';
 
 const configFormSchema: ConfigFieldSchema[] = [
-  { id: 'ip', label: 'Host IP Address', isRequired: true },
+  { id: 'host', label: 'Host (IP or IP:port)', isRequired: true },
 ];
 
 const secretsFormSchema: SecretsFieldSchema[] = [

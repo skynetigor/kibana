@@ -39,6 +39,19 @@ const execPromise = promisify(exec);
 
 export const SSH_HOST_TEMP_DIR = '/tmp/ssh_host_connector';
 
+const DEFAULT_SSH_PORT = 22;
+
+const parseHost = (host: string): { hostname: string; port: number } => {
+  const lastColon = host.lastIndexOf(':');
+  if (lastColon === -1) return { hostname: host, port: DEFAULT_SSH_PORT };
+  const portStr = host.slice(lastColon + 1);
+  const port = parseInt(portStr, 10);
+  if (!portStr || isNaN(port) || port < 1 || port > 65535) {
+    return { hostname: host, port: DEFAULT_SSH_PORT };
+  }
+  return { hostname: host.slice(0, lastColon), port };
+};
+
 export class SshHostConnector extends SubActionConnector<SshHostConfig, SshHostSecrets> {
   constructor(params: ServiceParams<SshHostConfig, SshHostSecrets>) {
     super(params);
@@ -299,7 +312,7 @@ rm -rf "$TMP_DIR"
     params: SshHostDownloadFileParams
   ): Promise<{ content: string; encoding: 'base64' }> {
     const { remotePath } = params;
-    const { ip } = this.config;
+    const { hostname, port } = parseHost(this.config.host);
     const { username, password, sshPrivateKey } = this.secrets;
     const tempKeyPath = join(
       tmpdir(),
@@ -322,6 +335,7 @@ rm -rf "$TMP_DIR"
         '-o ControlMaster=auto',
         `-o ControlPath="${controlPath}"`,
         '-o ControlPersist=60s',
+        `-P ${port}`,
       ];
 
       let command: string;
@@ -331,13 +345,13 @@ rm -rf "$TMP_DIR"
         scpOpts.push('-o PasswordAuthentication=yes');
         command = `sshpass -e scp ${scpOpts.join(
           ' '
-        )} ${username}@${ip}:"${remotePath}" "${tempDownloadPath}"`;
+        )} ${username}@${hostname}:"${remotePath}" "${tempDownloadPath}"`;
         env = { ...process.env, SSHPASS: password };
       } else {
         scpOpts.push('-o PasswordAuthentication=no');
         command = `scp ${scpOpts.join(
           ' '
-        )} ${username}@${ip}:"${remotePath}" "${tempDownloadPath}"`;
+        )} ${username}@${hostname}:"${remotePath}" "${tempDownloadPath}"`;
         env = process.env;
       }
 
@@ -372,7 +386,7 @@ rm -rf "$TMP_DIR"
     params: SshHostExecParams
   ): Promise<{ stdout: string; stderr: string; code: number }> {
     const { script, signal } = params;
-    const { ip } = this.config;
+    const { hostname, port } = parseHost(this.config.host);
     const { username, password, sshPrivateKey } = this.secrets;
     const tempKeyPath = join(
       tmpdir(),
@@ -402,6 +416,7 @@ rm -rf "$TMP_DIR"
         '-o ControlMaster=auto',
         `-o ControlPath="${controlPath}"`,
         '-o ControlPersist=60s',
+        `-p ${port}`,
       ];
 
       let command: string;
@@ -411,11 +426,11 @@ rm -rf "$TMP_DIR"
         // Pass password via SSHPASS env var — safer than -p flag which is visible in ps
         // sshpass -e uses the SSHPASS variable; -o PasswordAuthentication=yes allows fallback
         sshOpts.push('-o PasswordAuthentication=yes');
-        command = `sshpass -e ssh ${sshOpts.join(' ')} ${username}@${ip} "${remoteCmd}"`;
+        command = `sshpass -e ssh ${sshOpts.join(' ')} ${username}@${hostname} "${remoteCmd}"`;
         env = { ...process.env, SSHPASS: password };
       } else {
         sshOpts.push('-o PasswordAuthentication=no');
-        command = `ssh ${sshOpts.join(' ')} ${username}@${ip} "${remoteCmd}"`;
+        command = `ssh ${sshOpts.join(' ')} ${username}@${hostname} "${remoteCmd}"`;
         env = process.env;
       }
 
@@ -455,9 +470,9 @@ rm -rf "$TMP_DIR"
   }
 
   private getControlPath(): string {
-    const { ip } = this.config;
+    const { hostname, port } = parseHost(this.config.host);
     const { username } = this.secrets;
-    const safeId = `${username}_${ip}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeId = `${username}_${hostname}_${port}`.replace(/[^a-zA-Z0-9_-]/g, '_');
     return join(tmpdir(), `kbn_cm_${safeId}`);
   }
 
