@@ -34,9 +34,9 @@ const parseScriptOutput = (raw: string | undefined): unknown => {
 };
 
 // Wraps user Python code in a bash heredoc so it runs via `python3` on the remote host.
-// Stdout is captured as SCRIPT_OUTPUT, which the connector infrastructure returns as `output`.
+// Stdout is captured as STEP_OUTPUT, which the connector infrastructure returns as `output`.
 const buildScript = (code: string): string => `
-SCRIPT_OUTPUT=$(python3 << 'ENDOFSCRIPT'
+STEP_OUTPUT=$(python3 << 'ENDOFSCRIPT'
 ${code}
 ENDOFSCRIPT
 )

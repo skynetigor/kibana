@@ -34,9 +34,9 @@ const parseScriptOutput = (raw: string | undefined): unknown => {
 };
 
 // Wraps user JS code in a bash heredoc so it runs via `node` on the remote host.
-// Stdout is captured as SCRIPT_OUTPUT, which the connector infrastructure returns as `output`.
+// Stdout is captured as STEP_OUTPUT, which the connector infrastructure returns as `output`.
 const buildScript = (code: string): string => `
-SCRIPT_OUTPUT=$(node << 'ENDOFSCRIPT'
+STEP_OUTPUT=$(node << 'ENDOFSCRIPT'
 ${code}
 ENDOFSCRIPT
 )
