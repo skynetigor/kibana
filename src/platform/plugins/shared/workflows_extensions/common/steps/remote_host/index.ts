@@ -46,3 +46,31 @@ export type {
   RemoteHostDownloadFileStepInputSchema,
   RemoteHostDownloadFileStepOutputSchema,
 } from './remote_host_download_file_step';
+
+export {
+  RemoteHostJavascriptStepTypeId,
+  REMOTE_HOST_JAVASCRIPT_TEMPLATE_MAX_CHARS,
+  ConfigSchema as RemoteHostJavascriptConfigSchema,
+  InputSchema as RemoteHostJavascriptInputSchema,
+  OutputSchema as RemoteHostJavascriptOutputSchema,
+  remoteHostJavascriptStepCommonDefinition,
+} from './remote_host_javascript_step';
+export type {
+  RemoteHostJavascriptStepConfigSchema,
+  RemoteHostJavascriptStepInputSchema,
+  RemoteHostJavascriptStepOutputSchema,
+} from './remote_host_javascript_step';
+
+export {
+  RemoteHostPythonStepTypeId,
+  REMOTE_HOST_PYTHON_TEMPLATE_MAX_CHARS,
+  ConfigSchema as RemoteHostPythonConfigSchema,
+  InputSchema as RemoteHostPythonInputSchema,
+  OutputSchema as RemoteHostPythonOutputSchema,
+  remoteHostPythonStepCommonDefinition,
+} from './remote_host_python_step';
+export type {
+  RemoteHostPythonStepConfigSchema,
+  RemoteHostPythonStepInputSchema,
+  RemoteHostPythonStepOutputSchema,
+} from './remote_host_python_step';
