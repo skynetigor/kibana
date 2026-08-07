@@ -75,8 +75,8 @@ export const createRemoteHostPythonStepDefinition = ({ getActionsStart }: Deps) 
         abortSignal: context.abortSignal,
       });
 
-      if (result.stdout) context.logger.info(result.stdout);
-      if (result.stderr) context.logger.warn(result.stderr);
+      if (result.stdout) context.logger.info(result.stdout, { tags: ['remote_host_python'] });
+      if (result.stderr) context.logger.warn(result.stderr, { tags: ['remote_host_python'] });
 
       if (result.status === 'running') {
         return {
@@ -113,8 +113,8 @@ export const createRemoteHostPythonStepDefinition = ({ getActionsStart }: Deps) 
         stderrOffset: state.stderrOffset,
       });
 
-      if (result.stdout) context.logger.info(result.stdout);
-      if (result.stderr) context.logger.warn(result.stderr);
+      if (result.stdout) context.logger.info(result.stdout, { tags: ['remote_host_python'] });
+      if (result.stderr) context.logger.warn(result.stderr, { tags: ['remote_host_python'] });
 
       if (result.status === 'running') {
         return {

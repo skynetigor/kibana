@@ -104,8 +104,8 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         stderrOffset: state.stderrOffset,
       });
 
-      if (result.stdout) context.logger.info(result.stdout);
-      if (result.stderr) context.logger.warn(result.stderr);
+      if (result.stdout) context.logger.info(result.stdout, { tags: ['remote_host_run_command'] });
+      if (result.stderr) context.logger.warn(result.stderr, { tags: ['remote_host_run_command'] });
 
       if (result.status === 'running') {
         return {

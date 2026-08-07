@@ -8,8 +8,8 @@
  */
 
 import React from 'react';
-import { remoteHostRunCommandStepCommonDefinition } from '../../../common/steps/remote_host';
 import { SshHostConnectorTypeId as SSH_HOST_CONNECTOR_ID } from '@kbn/connector-schemas';
+import { remoteHostRunCommandStepCommonDefinition } from '../../../common/steps/remote_host';
 import { createPublicStepDefinition } from '../../step_registry/types';
 
 export const remoteHostRunCommandStepDefinition = createPublicStepDefinition({
@@ -27,6 +27,23 @@ export const remoteHostRunCommandStepDefinition = createPublicStepDefinition({
           enableCreation: true,
         },
       },
+    },
+  },
+  logs: {
+    enabled: true,
+    getLogs: async ({ logsApi }) => {
+      const allLogs = await logsApi.fetchLogs();
+
+      return allLogs
+        .filter((log) => {
+          const tags = log.additionalData?.tags;
+          return Array.isArray(tags) && tags.includes('remote_host_run_command');
+        })
+        .map(({ message, timestamp, level }) => ({
+          message,
+          timestamp,
+          level: level === 'trace' || level === 'debug' ? undefined : level,
+        }));
     },
   },
 });
