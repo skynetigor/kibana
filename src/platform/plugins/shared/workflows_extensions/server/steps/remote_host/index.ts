@@ -10,3 +10,5 @@
 export { createRemoteHostRunCommandStepDefinition } from './remote_host_run_command_step';
 export { createRemoteHostUploadFileStepDefinition } from './remote_host_upload_file_step';
 export { createRemoteHostDownloadFileStepDefinition } from './remote_host_download_file_step';
+export { createRemoteHostJavascriptStepDefinition } from './remote_host_javascript_step';
+export { createRemoteHostPythonStepDefinition } from './remote_host_python_step';

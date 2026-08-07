@@ -54,4 +54,12 @@ export const registerInternalStepDefinitions = (stepRegistry: PublicStepRegistry
       (m) => m.remoteHostDownloadFileStepDefinition
     )
   );
+  stepRegistry.register(() =>
+    import('./remote_host/remote_host_javascript_step').then(
+      (m) => m.remoteHostJavascriptStepDefinition
+    )
+  );
+  stepRegistry.register(() =>
+    import('./remote_host/remote_host_python_step').then((m) => m.remoteHostPythonStepDefinition)
+  );
 };
