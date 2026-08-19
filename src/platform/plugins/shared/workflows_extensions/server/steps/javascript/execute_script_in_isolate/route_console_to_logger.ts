@@ -9,6 +9,8 @@
 
 import type { ScriptLogger } from './script_logger';
 
+const CODE_JAVASCRIPT_LOG_META = { tags: ['code_javascript'] };
+
 export const routeConsoleToLogger = (
   level: string,
   message: string,
@@ -16,16 +18,16 @@ export const routeConsoleToLogger = (
 ): void => {
   switch (level) {
     case 'debug':
-      logger.debug(message);
+      logger.debug(message, CODE_JAVASCRIPT_LOG_META);
       return;
     case 'warn':
-      logger.warn(message);
+      logger.warn(message, CODE_JAVASCRIPT_LOG_META);
       return;
     case 'error':
       logger.error(message);
       return;
     case 'info':
     default:
-      logger.info(message);
+      logger.info(message, CODE_JAVASCRIPT_LOG_META);
   }
 };

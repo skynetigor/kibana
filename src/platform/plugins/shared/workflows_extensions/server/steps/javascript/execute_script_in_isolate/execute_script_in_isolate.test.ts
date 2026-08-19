@@ -67,11 +67,11 @@ describe('executeScriptInIsolate', () => {
       ...defaultIsolateParams,
     });
 
-    expect(logger.info).toHaveBeenCalledWith('log message');
-    expect(logger.info).toHaveBeenCalledWith('info message');
-    expect(logger.warn).toHaveBeenCalledWith('warn message');
+    expect(logger.info).toHaveBeenCalledWith('log message', { tags: ['code_javascript'] });
+    expect(logger.info).toHaveBeenCalledWith('info message', { tags: ['code_javascript'] });
+    expect(logger.warn).toHaveBeenCalledWith('warn message', { tags: ['code_javascript'] });
     expect(logger.error).toHaveBeenCalledWith('error message');
-    expect(logger.debug).toHaveBeenCalledWith('debug message');
+    expect(logger.debug).toHaveBeenCalledWith('debug message', { tags: ['code_javascript'] });
   });
 
   it('truncates console messages longer than CONSOLE_LOG_MAX_MESSAGE_LENGTH and appends [truncated]', async () => {
