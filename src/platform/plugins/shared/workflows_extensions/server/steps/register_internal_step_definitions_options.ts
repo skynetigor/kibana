@@ -7,6 +7,10 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export * from './data';
-export * from './remote_host';
-export * from './javascript';
+import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
+import type { WorkflowsExtensionsExperimentalStepsConfig } from '../../common/experimental_steps_config';
+
+export interface RegisterInternalStepDefinitionsOptions {
+  getActionsStart: () => ActionsPluginStartContract | undefined;
+  experimentalSteps: WorkflowsExtensionsExperimentalStepsConfig;
+}

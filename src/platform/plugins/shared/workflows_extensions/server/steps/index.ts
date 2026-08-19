@@ -7,7 +7,6 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
 import {
   dataAggregateStepDefinition,
   dataConcatStepDefinition,
@@ -27,11 +26,13 @@ import {
   createRemoteHostRunCommandStepDefinition,
   createRemoteHostUploadFileStepDefinition,
 } from './remote_host';
+import { scriptsJavaScriptStepDefinition } from './javascript/javascript_step';
+import type { RegisterInternalStepDefinitionsOptions } from './register_internal_step_definitions_options';
 import type { ServerStepRegistry } from '../step_registry/step_registry';
 
 export const registerInternalStepDefinitions = (
   serverStepRegistry: ServerStepRegistry,
-  { getActionsStart }: { getActionsStart: () => ActionsPluginStartContract | undefined }
+  { getActionsStart, experimentalSteps }: RegisterInternalStepDefinitionsOptions
 ) => {
   serverStepRegistry.register(dataMapStepDefinition);
   serverStepRegistry.register(dataDedupeStepDefinition);
@@ -49,4 +50,8 @@ export const registerInternalStepDefinitions = (
   serverStepRegistry.register(createRemoteHostDownloadFileStepDefinition({ getActionsStart }));
   serverStepRegistry.register(createRemoteHostJavascriptStepDefinition({ getActionsStart }));
   serverStepRegistry.register(createRemoteHostPythonStepDefinition({ getActionsStart }));
+
+  if (experimentalSteps.javaScriptStep) {
+    serverStepRegistry.register(scriptsJavaScriptStepDefinition);
+  }
 };
