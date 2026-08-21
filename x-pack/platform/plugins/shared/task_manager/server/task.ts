@@ -255,6 +255,16 @@ export const taskDefinitionSchema = schema.object(
         min: 2,
       })
     ),
+    /**
+     * How many of the 4 parallel-runner partitions should process this task type (1–4).
+     * Defaults to 1.
+     */
+    parallelRunnerPartitions: schema.maybe(
+      schema.number({
+        min: 1,
+        max: 4,
+      })
+    ),
     stateSchemaByVersion: schema.maybe(
       schema.recordOf(
         schema.string(),

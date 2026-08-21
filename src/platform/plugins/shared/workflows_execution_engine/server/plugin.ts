@@ -203,6 +203,9 @@ export class WorkflowsExecutionEnginePlugin
         // The taskManager:parallel-runner system task owns claiming for this type;
         // the main TM poll loop skips it entirely.
         internalParallelism: 20,
+        // Only partition 0 handles workflow:run. Increase to 2–4 to scale throughput
+        // across multiple TM slots when a single partition becomes a bottleneck.
+        parallelRunnerPartitions: 2,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {
             throw new Error('Cannot execute a workflow without Kibana Request');

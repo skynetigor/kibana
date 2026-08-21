@@ -117,6 +117,13 @@ export interface TaskRegisterDefinition {
    * stateless, instance-independent runners.
    */
   internalParallelism?: number;
+  /**
+   * How many of the 4 parallel-runner partitions should process this task type (1–4).
+   * Partition i handles this type when i < parallelRunnerPartitions.
+   * Higher values increase throughput at the cost of more TM slots.
+   * Defaults to 1.
+   */
+  parallelRunnerPartitions?: number;
   stateSchemaByVersion?: Record<
     number,
     {

@@ -15,7 +15,17 @@ import { claimTaskBatch } from '../task_claimers/claim_task_batch';
 
 export const PARALLEL_RUNNER_TASK_ID = 'taskManager:parallel-runner';
 const PARALLEL_RUNNER_TASK_TYPE = PARALLEL_RUNNER_TASK_ID;
-const SCHEDULE_INTERVAL = '5s';
+const SCHEDULE_INTERVAL = '1ms';
+
+/** Total number of parallel-runner partitions always kept scheduled. */
+const TOTAL_PARTITIONS = 4;
+
+/**
+ * How long each parallel-runner cycle actively polls for new tasks.
+ * After this budget the runner stops claiming, drains in-flight tasks, and exits.
+ * TM re-schedules the next cycle immediately via runAt: new Date().
+ */
+const RUN_BUDGET_MS = 5_000;
 
 export type TaskRunnerFactory = (instance: ConcreteTaskInstance) => TaskRunner;
 
@@ -41,22 +51,34 @@ export function registerParallelRunnerTaskDefinition(
   taskTypeDictionary.registerTaskDefinitions({
     [PARALLEL_RUNNER_TASK_TYPE]: {
       title: 'Task Manager: Parallel Runner',
-      timeout: '365d',
-      createTaskRunner: ({ signal }) => ({
+      // 30s: generous drain headroom after the 5s run budget.
+      // TM aborts via signal if exceeded, which cancels sub-runners.
+      timeout: '30s',
+      createTaskRunner: ({ taskInstance, signal }) => ({
         async run() {
           const runnerFactory = getRunnerFactory();
           if (!runnerFactory) {
-            // start() sets this before any task can run; guard is defensive only
             throw new Error('[parallel-runner] task runner factory not ready');
           }
           const taskStore = getTaskStore();
           if (!taskStore) {
             throw new Error('[parallel-runner] task store not ready');
           }
-          await runParallelLoop({ logger, taskTypeDictionary, runnerFactory, taskStore, signal });
-          // Return a future runAt so TM re-schedules after crash recovery.
-          // Under normal operation the loop exits only on abort.
-          return { state: {}, runAt: new Date(Date.now() + 5_000) };
+          const partitionIndex: number =
+            (taskInstance.params as { partitionIndex?: number })?.partitionIndex ?? 0;
+
+          await runParallelLoop({
+            logger,
+            taskTypeDictionary,
+            runnerFactory,
+            taskStore,
+            signal,
+            partitionIndex,
+          });
+
+          // Re-schedule immediately — the 5s budget already paces the cycle.
+          // The schedule interval serves only as crash-recovery fallback.
+          return { state: {}, runAt: new Date() };
         },
         async cancel() {},
       }),
@@ -65,16 +87,19 @@ export function registerParallelRunnerTaskDefinition(
 }
 
 export async function scheduleParallelRunnerTask(logger: Logger, taskScheduling: TaskScheduling) {
-  try {
-    await taskScheduling.ensureScheduled({
-      id: PARALLEL_RUNNER_TASK_ID,
-      taskType: PARALLEL_RUNNER_TASK_TYPE,
-      schedule: { interval: SCHEDULE_INTERVAL },
-      state: {},
-      params: {},
-    });
-  } catch (e) {
-    logger.error(`Error scheduling ${PARALLEL_RUNNER_TASK_ID}: ${e.message}`);
+  for (let i = 0; i < TOTAL_PARTITIONS; i++) {
+    const id = `${PARALLEL_RUNNER_TASK_ID}-${i}`;
+    try {
+      await taskScheduling.ensureScheduled({
+        id,
+        taskType: PARALLEL_RUNNER_TASK_TYPE,
+        schedule: { interval: SCHEDULE_INTERVAL },
+        state: {},
+        params: { partitionIndex: i },
+      });
+    } catch (e) {
+      logger.error(`Error scheduling ${id}: ${e.message}`);
+    }
   }
 }
 
@@ -84,20 +109,115 @@ async function runParallelLoop({
   runnerFactory,
   taskStore,
   signal,
+  partitionIndex,
 }: {
   logger: Logger;
   taskTypeDictionary: TaskTypeDictionary;
   runnerFactory: TaskRunnerFactory;
   taskStore: TaskStore;
   signal: AbortSignal;
+  partitionIndex: number;
 }) {
+  // Only process types assigned to this partition.
+  // A type with parallelRunnerPartitions=P is handled by partitions 0..(P-1).
   const parallelTypes = taskTypeDictionary
     .getAllDefinitions()
-    .filter((def) => (def.internalParallelism ?? 1) > 1);
+    .filter(
+      (def) =>
+        (def.internalParallelism ?? 1) > 1 && partitionIndex < (def.parallelRunnerPartitions ?? 1)
+    );
 
-  if (parallelTypes.length === 0) return;
+  if (parallelTypes.length === 0) {
+    logger.debug(
+      `[parallel-runner-${partitionIndex}] no task types assigned to this partition, idling`
+    );
+    return;
+  }
+
+  const maxSlots = parallelTypes.reduce((sum, d) => sum + d.internalParallelism!, 0);
+  const deadline = Date.now() + RUN_BUDGET_MS;
+
+  logger.debug(
+    `[parallel-runner-${partitionIndex}] cycle start — ${maxSlots} slots, types: ${parallelTypes
+      .map((d) => d.type)
+      .join(', ')}`
+  );
+
+  // ── Slot tracking ──────────────────────────────────────────────────────────
+  // inFlight: number of tasks currently running.
+  // When a task finishes it decrements inFlight and calls the pending resolver (if any)
+  // so the main loop wakes up and either starts a new task or detects drain completion.
+
+  let inFlight = 0;
+  let resolveSlot: (() => void) | null = null;
+
+  const waitForSlot = (): Promise<void> =>
+    new Promise((resolve) => {
+      resolveSlot = resolve;
+    });
+
+  const signalSlot = () => {
+    inFlight--;
+    const r = resolveSlot;
+    resolveSlot = null;
+    r?.();
+  };
+
+  // ── Fire a single task without blocking the main loop ─────────────────────
+
+  function fireTask(instance: ConcreteTaskInstance): void {
+    inFlight++;
+    const runner = runnerFactory(instance);
+
+    const cancelOnAbort = () => {
+      runner
+        .cancel?.()
+        .catch((err: Error) =>
+          logger.error(`[parallel-runner-${partitionIndex}] cancel error: ${err.message}`)
+        );
+    };
+    signal.addEventListener('abort', cancelOnAbort, { once: true });
+
+    (async () => {
+      try {
+        await runner.markTaskAsRunning();
+        await runner.run();
+      } catch (err) {
+        logger.error(
+          `[parallel-runner-${partitionIndex}] unhandled task error: ${(err as Error).message}`
+        );
+      } finally {
+        signal.removeEventListener('abort', cancelOnAbort);
+        signalSlot();
+      }
+    })();
+  }
+
+  // ── Main loop ──────────────────────────────────────────────────────────────
 
   while (!signal.aborted) {
+    const timeRemaining = deadline - Date.now();
+
+    // Budget exhausted — stop claiming, drain in-flight tasks, and exit.
+    if (timeRemaining <= 0) {
+      if (inFlight > 0) {
+        logger.debug(
+          `[parallel-runner-${partitionIndex}] budget elapsed, draining ${inFlight} in-flight tasks`
+        );
+        while (inFlight > 0) await waitForSlot();
+      }
+      logger.debug(`[parallel-runner-${partitionIndex}] cycle complete`);
+      return;
+    }
+
+    // All slots busy — wait for one to free before fetching more.
+    if (inFlight >= maxSlots) {
+      await waitForSlot();
+      continue;
+    }
+
+    // Fetch only as many tasks as there are free slots.
+    const slotsAvailable = maxSlots - inFlight;
     const { docs } = await taskStore.fetch({
       query: {
         bool: {
@@ -108,11 +228,22 @@ async function runParallelLoop({
           ],
         },
       },
-      size: parallelTypes.reduce((sum, d) => sum + d.internalParallelism!, 0),
+      size: slotsAvailable,
+      // Required for OCC: claimTaskBatch uses task.version (encoded seqNo+primaryTerm)
+      // in bulkPartialUpdate. Without this, version is undefined → blind write →
+      // multiple partitions can claim the same task → double execution.
+      seq_no_primary_term: true,
     });
 
     if (!docs.length) {
-      await sleep(5_000, signal);
+      if (inFlight === 0) {
+        // Truly idle — sleep briefly, respecting both the deadline and abort signal.
+        await sleep(Math.min(1_000, timeRemaining), signal);
+      } else {
+        // Tasks still running but queue is empty for now — wait for a slot to free,
+        // then re-check (new tasks may have become runAt-eligible by then).
+        await waitForSlot();
+      }
       continue;
     }
 
@@ -126,44 +257,23 @@ async function runParallelLoop({
       const summary = Object.entries(countByType)
         .map(([type, count]) => `${type}×${count}`)
         .join(', ');
-      logger.debug(`[parallel-runner] running ${claimed.length} tasks in parallel: ${summary}`);
+      logger.debug(
+        `[parallel-runner-${partitionIndex}] +${claimed.length} tasks (${
+          inFlight + claimed.length
+        }/${maxSlots} slots): ${summary}`
+      );
 
-      await runBatch({ claimed, runnerFactory, signal, logger });
+      for (const task of claimed) {
+        fireTask(task);
+      }
     }
   }
-}
 
-async function runBatch({
-  claimed,
-  runnerFactory,
-  signal,
-  logger,
-}: {
-  claimed: ConcreteTaskInstance[];
-  runnerFactory: TaskRunnerFactory;
-  signal: AbortSignal;
-  logger: Logger;
-}) {
-  const runners = claimed.map((instance) => runnerFactory(instance));
-
-  // markTaskAsRunning is a no-op for mget-claimed tasks (status already set to
-  // 'running' during claimTaskBatch); it transitions the in-memory instance state only.
-  await Promise.all(runners.map((r) => r.markTaskAsRunning()));
-
-  // Propagate system-task abort into each sub-runner.
-  signal.addEventListener(
-    'abort',
-    () => {
-      for (const r of runners) {
-        r.cancel?.().catch((err: Error) => {
-          logger.error(`[parallel-runner] error cancelling sub-runner: ${err.message}`);
-        });
-      }
-    },
-    { once: true }
-  );
-
-  // Run all concurrently; each runner handles its own error, retry, and state persistence.
-  await Promise.allSettled(runners.map((r) => r.run()));
-  logger.debug(`[parallel-runner] batch of ${runners.length} tasks completed`);
+  // Abort signal fired — drain before returning.
+  if (inFlight > 0) {
+    logger.debug(
+      `[parallel-runner-${partitionIndex}] aborted, draining ${inFlight} in-flight tasks`
+    );
+    while (inFlight > 0) await waitForSlot();
+  }
 }
