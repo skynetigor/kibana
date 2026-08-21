@@ -119,6 +119,15 @@ async function runParallelLoop({
     const { claimed } = await claimTaskBatch(taskStore, docs, taskTypeDictionary, logger);
 
     if (claimed.length) {
+      const countByType = claimed.reduce<Record<string, number>>((acc, t) => {
+        acc[t.taskType] = (acc[t.taskType] ?? 0) + 1;
+        return acc;
+      }, {});
+      const summary = Object.entries(countByType)
+        .map(([type, count]) => `${type}×${count}`)
+        .join(', ');
+      logger.debug(`[parallel-runner] running ${claimed.length} tasks in parallel: ${summary}`);
+
       await runBatch({ claimed, runnerFactory, signal, logger });
     }
   }
@@ -156,4 +165,5 @@ async function runBatch({
 
   // Run all concurrently; each runner handles its own error, retry, and state persistence.
   await Promise.allSettled(runners.map((r) => r.run()));
+  logger.debug(`[parallel-runner] batch of ${runners.length} tasks completed`);
 }
