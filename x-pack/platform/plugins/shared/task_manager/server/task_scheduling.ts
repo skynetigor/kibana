@@ -23,6 +23,7 @@ import {
   type TaskInstanceWithId,
 } from './task';
 import type { TaskStore } from './task_store';
+import type { TaskTypeDictionary } from './task_type_dictionary';
 import { ensureDeprecatedFieldsAreCorrected } from './lib/correct_deprecated_fields';
 import { retryableBulkUpdate } from './lib/retryable_bulk_update';
 import type { ErrorOutput } from './lib/bulk_operation_buffer';
@@ -62,6 +63,7 @@ export interface TaskSchedulingOpts {
   middleware: Middleware;
   taskManagerId: string;
   taskPollingLifecycle?: TaskPollingLifecycle; // subscribe to task lifecycle events
+  definitions?: TaskTypeDictionary;
 }
 
 /**
@@ -102,6 +104,7 @@ export class TaskScheduling {
   private logger: Logger;
   private middleware: Middleware;
   private readonly taskPolling: TaskPollingLifecycle | undefined;
+  private readonly definitions: TaskTypeDictionary | undefined;
 
   /**
    * Initializes the task manager, preventing any further addition of middleware,
@@ -113,6 +116,13 @@ export class TaskScheduling {
     this.middleware = opts.middleware;
     this.store = opts.taskStore;
     this.taskPolling = opts.taskPollingLifecycle;
+    this.definitions = opts.definitions;
+  }
+
+  private assignRunnerPartition(taskType: string): number | undefined {
+    const def = this.definitions?.get(taskType);
+    const p = def?.parallelRunnerPartitions ?? 1;
+    return p > 1 ? Math.floor(Math.random() * p) : undefined;
   }
 
   /**
@@ -135,11 +145,15 @@ export class TaskScheduling {
         ? agent.currentTraceparent
         : '';
 
+    const runnerPartition =
+      modifiedTask.runnerPartition ?? this.assignRunnerPartition(modifiedTask.taskType);
+
     return await this.store.schedule(
       {
         ...modifiedTask,
         traceparent: traceparent || '',
         enabled: modifiedTask.enabled ?? true,
+        ...(runnerPartition !== undefined ? { runnerPartition } : {}),
       },
       scheduleOptionsToStoreApiKeyOptions(options)
     );
@@ -175,11 +189,14 @@ export class TaskScheduling {
               ? { runAt: new Date(), scheduledAt: new Date() }
               : addJitter(modifiedTask.schedule?.interval) ?? {};
         }
+        const runnerPartition =
+          modifiedTask.runnerPartition ?? this.assignRunnerPartition(modifiedTask.taskType);
         return {
           ...modifiedTask,
           traceparent: traceparent || '',
           enabled,
           ...scheduling,
+          ...(runnerPartition !== undefined ? { runnerPartition } : {}),
         };
       })
     );

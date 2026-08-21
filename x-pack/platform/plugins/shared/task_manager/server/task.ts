@@ -452,6 +452,12 @@ export interface TaskInstance {
   partition?: number;
 
   /**
+   * Which parallel-runner partition (0 to parallelRunnerPartitions-1) should process this task.
+   * Assigned randomly at schedule time for task types with internalParallelism > 1.
+   */
+  runnerPartition?: number;
+
+  /**
    * Used to allow tasks to be scoped to a user via their ES API key
    */
   apiKey?: string;
@@ -581,6 +587,9 @@ export interface ConcreteTaskInstance extends TaskInstance {
    * Used to break up tasks so each Kibana node can claim tasks on a subset of the partitions
    */
   partition?: number;
+
+  /** Which parallel-runner partition owns this task. Assigned at schedule time. */
+  runnerPartition?: number;
 }
 
 export type PartialConcreteTaskInstance = Partial<ConcreteTaskInstance> & {
@@ -610,6 +619,7 @@ export type SerializedConcreteTaskInstance = Omit<
   retryAt: string | null;
   runAt: string;
   partition?: number;
+  runnerPartition?: number;
   apiKey?: string;
   uiamApiKey?: string;
   userScope?: TaskUserScope;

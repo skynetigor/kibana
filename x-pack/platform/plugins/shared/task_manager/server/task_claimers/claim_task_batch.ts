@@ -68,7 +68,12 @@ export const claimTaskBatch = async (
   for (const result of updateResults) {
     if (isOk(result)) {
       updatedById[result.value.id] = result.value;
-    } else if (result.error.status === 409) {
+    } else if (
+      result.error.status === 409 ||
+      result.error.status === 404
+    ) {
+      // 409 = OCC conflict; 404 (document_missing_exception) = task was completed+deleted between
+      // fetch and claim. Both are expected races — count as conflicts, not errors.
       conflicts++;
     } else {
       logger.error(

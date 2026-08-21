@@ -15,7 +15,7 @@ import { claimTaskBatch } from '../task_claimers/claim_task_batch';
 
 export const PARALLEL_RUNNER_TASK_ID = 'taskManager:parallel-runner';
 const PARALLEL_RUNNER_TASK_TYPE = PARALLEL_RUNNER_TASK_ID;
-const SCHEDULE_INTERVAL = '1ms';
+const SCHEDULE_INTERVAL = '1s';
 
 /** Total number of parallel-runner partitions always kept scheduled. */
 const TOTAL_PARTITIONS = 4;
@@ -217,21 +217,30 @@ async function runParallelLoop({
     }
 
     // Fetch only as many tasks as there are free slots.
+    // Each type with parallelRunnerPartitions > 1 uses runnerPartition (assigned at schedule time)
+    // so each partition owns a disjoint subset — no cross-partition claim races.
     const slotsAvailable = maxSlots - inFlight;
+    const typeFilters = parallelTypes.map((def) => {
+      const p = def.parallelRunnerPartitions ?? 1;
+      const typeFilter = { term: { 'task.taskType': def.type } };
+      if (p <= 1) return typeFilter;
+      return {
+        bool: {
+          filter: [typeFilter, { term: { 'task.runnerPartition': partitionIndex } }],
+        },
+      };
+    });
     const { docs } = await taskStore.fetch({
       query: {
         bool: {
           filter: [
-            { terms: { 'task.taskType': parallelTypes.map((d) => d.type) } },
+            { bool: { should: typeFilters, minimum_should_match: 1 } },
             { term: { 'task.status': 'idle' } },
             { range: { 'task.runAt': { lte: 'now' } } },
           ],
         },
       },
       size: slotsAvailable,
-      // Required for OCC: claimTaskBatch uses task.version (encoded seqNo+primaryTerm)
-      // in bulkPartialUpdate. Without this, version is undefined → blind write →
-      // multiple partitions can claim the same task → double execution.
       seq_no_primary_term: true,
     });
 
