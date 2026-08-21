@@ -111,6 +111,12 @@ export interface TaskRegisterDefinition {
    * The default value, if not given, is 0.
    */
   maxConcurrency?: number;
+  /**
+   * When set, TM claims up to this many pending instances of this task type and runs their
+   * runners concurrently within a single slot via Promise.all. Requires the task type to have
+   * stateless, instance-independent runners.
+   */
+  internalParallelism?: number;
   stateSchemaByVersion?: Record<
     number,
     {

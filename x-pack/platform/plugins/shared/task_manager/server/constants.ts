@@ -22,6 +22,10 @@ export const CONCURRENCY_ALLOW_LIST_BY_TASK_TYPE: string[] = [
   'report:execute',
   'report:execute-scheduled',
   'ad_hoc_run-backfill',
+
+  // workflow execution engine — caps slots to prevent burst starvation of other types
+  'workflow:run',
+  'workflow:resume',
 ];
 
 export const EVENT_LOG_PROVIDER = 'taskManager';

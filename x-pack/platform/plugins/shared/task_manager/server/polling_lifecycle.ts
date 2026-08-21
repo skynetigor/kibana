@@ -332,7 +332,7 @@ export class TaskPollingLifecycle implements ITaskEventEmitter<TaskLifecycleEven
     this.events$.next(event);
   };
 
-  private createTaskRunnerForTask = (instance: ConcreteTaskInstance) => {
+  public createTaskRunnerForTask = (instance: ConcreteTaskInstance) => {
     return new TaskManagerRunner({
       logger: this.logger,
       instance,

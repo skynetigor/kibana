@@ -34,6 +34,10 @@ import {
 import { KibanaDiscoveryService } from './kibana_discovery_service';
 import { TaskExecutionControlService } from './execution_control';
 import { TaskPollingLifecycle } from './polling_lifecycle';
+import {
+  registerParallelRunnerTaskDefinition,
+  scheduleParallelRunnerTask,
+} from './parallel_runner';
 import type { TaskManagerConfig } from './config';
 import type { Middleware } from './lib/middleware';
 import { createInitialMiddleware, addMiddlewareToChain } from './lib/middleware';
@@ -59,6 +63,7 @@ import {
 import type { MonitoringStats } from './monitoring';
 import { createMonitoringStats } from './monitoring';
 import type { ConcreteTaskInstance, TaskEventLogger } from './task';
+import type { TaskRunner } from './task_running';
 import { registerTaskManagerUsageCollector } from './usage';
 import { TASK_MANAGER_INDEX } from './constants';
 import { AdHocTaskCounter } from './lib/adhoc_task_counter';
@@ -175,6 +180,7 @@ export class TaskManagerPlugin
   private startContract?: TaskManagerStartContract;
   private uiamApiKeyProvisioningTask?: UiamApiKeyProvisioningTask;
   private enrichFakeRequest?: FakeRequestEnricher;
+  private parallelRunnerFactory?: (instance: ConcreteTaskInstance) => TaskRunner;
 
   constructor(private readonly initContext: PluginInitializerContext) {
     this.initContext = initContext;
@@ -312,6 +318,12 @@ export class TaskManagerPlugin
     }
 
     registerDeleteInactiveNodesTaskDefinition(this.logger, core.getStartServices, this.definitions);
+    registerParallelRunnerTaskDefinition(
+      this.logger,
+      this.definitions,
+      () => this.parallelRunnerFactory,
+      () => this.taskStore
+    );
     registerInvalidateApiKeyTask({
       configInterval: this.config.invalidate_api_key_task.interval,
       coreStartServices: core.getStartServices,
@@ -496,6 +508,9 @@ export class TaskManagerPlugin
         eventLogger: this.taskEventLogger!,
         enrichFakeRequest,
       });
+
+      this.parallelRunnerFactory = (instance) =>
+        this.taskPollingLifecycle!.createTaskRunnerForTask(instance);
     }
 
     createMonitoringStats({
@@ -533,6 +548,7 @@ export class TaskManagerPlugin
       this.config.invalidate_api_key_task.interval
     ).catch(() => {});
     scheduleMarkRemovedTasksAsUnrecognizedDefinition(this.logger, taskScheduling).catch(() => {});
+    scheduleParallelRunnerTask(this.logger, taskScheduling).catch(() => {});
 
     this.startContract = {
       fetch: (opts: SearchOpts): Promise<FetchResult> => taskStore.fetch(opts),

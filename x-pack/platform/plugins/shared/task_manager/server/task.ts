@@ -245,6 +245,16 @@ export const taskDefinitionSchema = schema.object(
         min: 0,
       })
     ),
+    /**
+     * When set, TM claims up to this many pending instances of this task type and runs their
+     * runners concurrently within a single slot via Promise.all. Requires the task type to have
+     * stateless, instance-independent runners.
+     */
+    internalParallelism: schema.maybe(
+      schema.number({
+        min: 2,
+      })
+    ),
     stateSchemaByVersion: schema.maybe(
       schema.recordOf(
         schema.string(),

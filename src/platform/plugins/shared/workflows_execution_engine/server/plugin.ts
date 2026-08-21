@@ -199,6 +199,11 @@ export class WorkflowsExecutionEnginePlugin
         timeout: '365d',
         // Retries allow `resolveInterruptedWorkflowRunTask` to fail-fast abandoned executions after interrupt.
         maxAttempts: WORKFLOW_RUN_TASK_MAX_ATTEMPTS,
+        // Fairness cap: prevents a burst of workflow:run tasks from monopolising all TM slots.
+        maxConcurrency: 8,
+        // Each slot runs up to 20 workflow:run runners in parallel via Promise.all.
+        // Effective concurrency: 8 × 20 = 160 concurrent workflow executions.
+        internalParallelism: 20,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {
             throw new Error('Cannot execute a workflow without Kibana Request');
