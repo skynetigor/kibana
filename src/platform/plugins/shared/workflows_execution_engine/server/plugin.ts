@@ -406,6 +406,13 @@ export class WorkflowsExecutionEnginePlugin
         maxAttempts: WORKFLOW_RESUME_TASK_MAX_ATTEMPTS,
         // Fairness cap: prevents HITL resume bursts from monopolising all TM slots on this node.
         maxConcurrency: 8,
+        // Runs up to 20 workflow:run task runners concurrently within a single TM slot.
+        // The taskManager:parallel-runner system task owns claiming for this type;
+        // the main TM poll loop skips it entirely.
+        internalParallelism: 20,
+        // Only partition 0 handles workflow:run. Increase to 2–4 to scale throughput
+        // across multiple TM slots when a single partition becomes a bottleneck.
+        parallelRunnerPartitions: 4,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {
             throw new Error('Cannot resume a workflow without Kibana Request');
@@ -603,6 +610,13 @@ export class WorkflowsExecutionEnginePlugin
         // The workflow timeout logic defined in workflow execution engine logic is the primary control.
         timeout: '365d',
         maxAttempts: 3,
+        // Runs up to 20 workflow:run task runners concurrently within a single TM slot.
+        // The taskManager:parallel-runner system task owns claiming for this type;
+        // the main TM poll loop skips it entirely.
+        internalParallelism: 20,
+        // Only partition 0 handles workflow:run. Increase to 2–4 to scale throughput
+        // across multiple TM slots when a single partition becomes a bottleneck.
+        parallelRunnerPartitions: 4,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {
             throw new Error('Cannot execute a scheduled workflow without Kibana Request');
