@@ -14,16 +14,42 @@ import {
   RemoteHostUploadFileStepTypeId,
   RemoteHostDownloadFileStepTypeId,
 } from '../../common/steps/remote_host';
+import { ScriptsJavaScriptStepTypeId } from '../../common/steps/javascript';
 import { ServerStepRegistry } from '../step_registry';
 
 describe('registerInternalStepDefinitions', () => {
   it('always registers all remoteHost steps', () => {
     const registry = new ServerStepRegistry(loggerMock.create());
 
-    registerInternalStepDefinitions(registry, { getActionsStart: () => undefined });
+    registerInternalStepDefinitions(registry, {
+      getActionsStart: () => undefined,
+      experimentalSteps: { javaScriptStep: false },
+    });
 
     expect(registry.has(RemoteHostRunCommandStepTypeId)).toBe(true);
     expect(registry.has(RemoteHostUploadFileStepTypeId)).toBe(true);
     expect(registry.has(RemoteHostDownloadFileStepTypeId)).toBe(true);
+  });
+
+  it('does not register code.javascript when javaScriptStep is disabled', () => {
+    const registry = new ServerStepRegistry(loggerMock.create());
+
+    registerInternalStepDefinitions(registry, {
+      getActionsStart: () => undefined,
+      experimentalSteps: { javaScriptStep: false },
+    });
+
+    expect(registry.has(ScriptsJavaScriptStepTypeId)).toBe(false);
+  });
+
+  it('registers code.javascript when javaScriptStep is enabled', () => {
+    const registry = new ServerStepRegistry(loggerMock.create());
+
+    registerInternalStepDefinitions(registry, {
+      getActionsStart: () => undefined,
+      experimentalSteps: { javaScriptStep: true },
+    });
+
+    expect(registry.has(ScriptsJavaScriptStepTypeId)).toBe(true);
   });
 });

@@ -7,9 +7,13 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import type { RegisterInternalStepDefinitionsOptions } from '../../server/steps/register_internal_step_definitions_options';
 import type { PublicStepRegistry } from '../step_registry';
 
-export const registerInternalStepDefinitions = (stepRegistry: PublicStepRegistry) => {
+export const registerInternalStepDefinitions = (
+  stepRegistry: PublicStepRegistry,
+  { experimentalSteps }: RegisterInternalStepDefinitionsOptions
+) => {
   stepRegistry.register(() => import('./data/data_map_step').then((m) => m.dataMapStepDefinition));
   stepRegistry.register(() =>
     import('./data/data_dedupe_step').then((m) => m.dataDedupeStepDefinition)
@@ -62,4 +66,10 @@ export const registerInternalStepDefinitions = (stepRegistry: PublicStepRegistry
   stepRegistry.register(() =>
     import('./remote_host/remote_host_python_step').then((m) => m.remoteHostPythonStepDefinition)
   );
+
+  if (experimentalSteps.javaScriptStep) {
+    stepRegistry.register(() =>
+      import('./javascript/javascript_step').then((m) => m.scriptsJavaScriptStepDefinition)
+    );
+  }
 };

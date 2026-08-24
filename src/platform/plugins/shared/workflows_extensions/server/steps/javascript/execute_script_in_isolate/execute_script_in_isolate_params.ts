@@ -7,6 +7,13 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export * from './data';
-export * from './remote_host';
-export * from './javascript';
+import type { ScriptLogger } from './script_logger';
+
+export interface ExecuteScriptInIsolateParams {
+  script: string;
+  logger: ScriptLogger;
+  abortSignal: AbortSignal;
+  memoryLimitMb: number;
+  executionTimeoutMs: number;
+  maxConsoleLogCount: number;
+}

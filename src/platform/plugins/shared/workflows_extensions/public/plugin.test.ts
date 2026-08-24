@@ -19,7 +19,9 @@ const { registerInternalStepDefinitions } = jest.requireMock('./steps');
 const mockSetupDeps = {} as any;
 
 const createPlugin = () => {
-  const initContext = coreMock.createPluginInitializerContext();
+  const initContext = coreMock.createPluginInitializerContext({
+    experimentalSteps: { javaScriptStep: false },
+  });
   return new WorkflowsExtensionsPublicPlugin(initContext);
 };
 
@@ -29,12 +31,14 @@ describe('WorkflowsExtensionsPublicPlugin', () => {
   });
 
   describe('setup', () => {
-    it('calls registerInternalStepDefinitions', () => {
+    it('calls registerInternalStepDefinitions with experimentalSteps config', () => {
       const plugin = createPlugin();
       plugin.setup(coreMock.createSetup(), mockSetupDeps);
 
       expect(registerInternalStepDefinitions).toHaveBeenCalledTimes(1);
-      expect(registerInternalStepDefinitions).toHaveBeenCalledWith(expect.anything());
+      expect(registerInternalStepDefinitions).toHaveBeenCalledWith(expect.anything(), {
+        experimentalSteps: { javaScriptStep: false },
+      });
     });
 
     it('returns registerStepDefinition that delegates to step registry', () => {

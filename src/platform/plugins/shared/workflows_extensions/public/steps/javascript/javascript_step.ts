@@ -8,35 +8,25 @@
  */
 
 import React from 'react';
-import { SshHostConnectorTypeId as SSH_HOST_CONNECTOR_ID } from '@kbn/connector-schemas';
-import { remoteHostPythonStepCommonDefinition } from '../../../common/steps/remote_host';
+import { scriptsJavaScriptStepCommonDefinition } from '../../../common/steps/javascript';
 import { createPublicStepDefinition } from '../../step_registry/types';
 
-export const remoteHostPythonStepDefinition = createPublicStepDefinition({
-  ...remoteHostPythonStepCommonDefinition,
+export const scriptsJavaScriptStepDefinition = createPublicStepDefinition({
+  ...scriptsJavaScriptStepCommonDefinition,
   icon: React.lazy(() =>
-    import('@elastic/eui/es/components/icon/assets/app_console').then(({ icon }) => ({
+    import('@elastic/eui/es/components/icon/assets/code').then(({ icon }) => ({
       default: icon,
     }))
   ),
-  editorHandlers: {
-    config: {
-      'connector-id': {
-        connectorIdSelection: {
-          connectorTypes: [SSH_HOST_CONNECTOR_ID],
-          enableCreation: true,
-        },
-      },
-    },
-  },
   logs: {
     enabled: true,
     getLogs: async ({ logsApi }) => {
       const allLogs = await logsApi.fetchLogs();
+
       return allLogs
         .filter((log) => {
           const tags = log.additionalData?.tags;
-          return Array.isArray(tags) && tags.includes('remote_host_python');
+          return Array.isArray(tags) && tags.includes('code_javascript');
         })
         .map(({ message, timestamp, level }) => ({
           message,
