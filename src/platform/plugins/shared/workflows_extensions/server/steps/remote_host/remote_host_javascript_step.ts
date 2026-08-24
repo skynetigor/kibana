@@ -35,12 +35,21 @@ const parseScriptOutput = (raw: string | undefined): unknown => {
 
 // Wraps user JS code in a bash heredoc so it runs via `node` on the remote host.
 // Stdout is captured as SCRIPT_OUTPUT, which the connector infrastructure returns as `output`.
-const buildScript = (code: string): string => `
-SCRIPT_OUTPUT=$(node << 'ENDOFSCRIPT'
-${code}
+const buildScript = (code: string): string =>
+  `
+node << 'ENDOFSCRIPT'
+(async () => {
+ ${code}
+})().then((value) => {
+  if (value === undefined) return;
+  const path = require('path');
+  require('fs').writeFileSync(path.join(process.env.COMMAND_TMP_DIR, 'output.txt'), JSON.stringify(value));
+}).catch((err) => {
+  process.stderr.write((err && err.stack) || String(err));
+  process.exit(1);
+});
 ENDOFSCRIPT
-)
-`;
+`.trim();
 
 interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
