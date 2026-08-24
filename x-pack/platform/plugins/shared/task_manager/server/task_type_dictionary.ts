@@ -118,12 +118,11 @@ export interface TaskRegisterDefinition {
    */
   internalParallelism?: number;
   /**
-   * How many of the 4 parallel-runner partitions should process this task type (1–4).
-   * Partition i handles this type when i < parallelRunnerPartitions.
-   * Higher values increase throughput at the cost of more TM slots.
+   * How many parallel-runner slots to reserve per Kibana node for this task type.
+   * Each node schedules this many runner instances; throughput scales linearly with node count.
    * Defaults to 1.
    */
-  parallelRunnerPartitions?: number;
+  systemTasksPerNode?: number;
   stateSchemaByVersion?: Record<
     number,
     {

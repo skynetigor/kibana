@@ -6,7 +6,6 @@
  *   node benchmark_workflow_executions.mjs [options]
  *
  * Options:
- *   --workflow-id <id>   Workflow ID to run (default: new-workflow-1)
  *   --count <n>          Number of executions to schedule (default: 1000)
  *   --concurrency <n>    HTTP concurrency for scheduling (default: 50)
  *   --kibana <url>       Kibana base URL (default: http://localhost:5601)
@@ -26,7 +25,6 @@ const get = (flag, def) => {
   return i !== -1 && args[i + 1] !== undefined ? args[i + 1] : def;
 };
 
-const WORKFLOW_ID = get('--workflow-id', 'new-workflow-1');
 const COUNT = parseInt(get('--count', '1000'), 10);
 const CONCURRENCY = parseInt(get('--concurrency', '50'), 10);
 const KIBANA_URL = get('--kibana', 'http://localhost:5601');
@@ -61,6 +59,25 @@ const now = () => new Date().toISOString();
 const log = (msg) => process.stdout.write(`[${now()}] ${msg}\n`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ── Workflow definition ───────────────────────────────────────────────────────
+
+const WORKFLOW_NAME = 'Benchmark Workflow';
+const WORKFLOW_ID = WORKFLOW_NAME.toLowerCase().replace(/\s+/g, '-');
+
+const BENCHMARK_WORKFLOW_YAML = `\
+name: Benchmark Workflow
+enabled: true
+description: Minimal workflow used by the benchmark script — do not edit manually
+triggers:
+  - type: manual
+
+steps:
+  - name: hello_world_step
+    type: console
+    with:
+      message: "Hello World!"
+`;
+
 // ── Pre-flight check ──────────────────────────────────────────────────────────
 
 async function waitForKibana() {
@@ -84,6 +101,41 @@ async function waitForKibana() {
     }
     await sleep(Math.min(2000 * attempt, 10_000));
   }
+}
+
+// ── Upsert benchmark workflow ─────────────────────────────────────────────────
+
+async function ensureWorkflow() {
+  log(`Upserting benchmark workflow "${WORKFLOW_ID}"…`);
+
+  const createRes = await fetch(`${KIBANA_URL}/api/workflows/workflow`, {
+    method: 'POST',
+    headers: kibanaHeaders,
+    body: JSON.stringify({ yaml: BENCHMARK_WORKFLOW_YAML, id: WORKFLOW_ID }),
+  });
+
+  if (createRes.ok) {
+    log(`Workflow "${WORKFLOW_ID}" created.`);
+    return;
+  }
+
+  if (createRes.status === 409) {
+    // Already exists — update it so the YAML and enabled state are current.
+    const updateRes = await fetch(`${KIBANA_URL}/api/workflows/workflow/${WORKFLOW_ID}`, {
+      method: 'PUT',
+      headers: kibanaHeaders,
+      body: JSON.stringify({ yaml: BENCHMARK_WORKFLOW_YAML, enabled: true }),
+    });
+    if (!updateRes.ok) {
+      const text = await updateRes.text();
+      throw new Error(`Failed to update workflow "${WORKFLOW_ID}": HTTP ${updateRes.status}: ${text.slice(0, 300)}`);
+    }
+    log(`Workflow "${WORKFLOW_ID}" updated.`);
+    return;
+  }
+
+  const text = await createRes.text();
+  throw new Error(`Failed to create workflow "${WORKFLOW_ID}": HTTP ${createRes.status}: ${text.slice(0, 300)}`);
 }
 
 // ── Phase 1: Schedule executions ──────────────────────────────────────────────
@@ -440,6 +492,7 @@ async function tmSnapshot() {
 
 (async () => {
   await waitForKibana();
+  await ensureWorkflow();
 
   const benchmarkStart = Date.now();
   const benchmarkStartIso = new Date(benchmarkStart).toISOString();

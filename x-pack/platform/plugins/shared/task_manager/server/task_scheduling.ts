@@ -121,7 +121,7 @@ export class TaskScheduling {
 
   private assignRunnerPartition(taskType: string): number | undefined {
     const def = this.definitions?.get(taskType);
-    const p = def?.parallelRunnerPartitions ?? 1;
+    const p = def?.systemTasksPerNode ?? 1;
     return p > 1 ? Math.floor(Math.random() * p) : undefined;
   }
 

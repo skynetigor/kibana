@@ -205,7 +205,7 @@ export class WorkflowsExecutionEnginePlugin
         internalParallelism: 20,
         // Only partition 0 handles workflow:run. Increase to 2–4 to scale throughput
         // across multiple TM slots when a single partition becomes a bottleneck.
-        parallelRunnerPartitions: 4,
+        systemTasksPerNode: 4,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {
             throw new Error('Cannot execute a workflow without Kibana Request');
@@ -412,7 +412,7 @@ export class WorkflowsExecutionEnginePlugin
         internalParallelism: 20,
         // Only partition 0 handles workflow:run. Increase to 2–4 to scale throughput
         // across multiple TM slots when a single partition becomes a bottleneck.
-        parallelRunnerPartitions: 4,
+        systemTasksPerNode: 4,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {
             throw new Error('Cannot resume a workflow without Kibana Request');
@@ -616,7 +616,7 @@ export class WorkflowsExecutionEnginePlugin
         internalParallelism: 20,
         // Only partition 0 handles workflow:run. Increase to 2–4 to scale throughput
         // across multiple TM slots when a single partition becomes a bottleneck.
-        parallelRunnerPartitions: 4,
+        systemTasksPerNode: 4,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {
             throw new Error('Cannot execute a scheduled workflow without Kibana Request');

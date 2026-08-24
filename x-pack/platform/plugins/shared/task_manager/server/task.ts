@@ -256,13 +256,12 @@ export const taskDefinitionSchema = schema.object(
       })
     ),
     /**
-     * How many of the 4 parallel-runner partitions should process this task type (1–4).
+     * How many parallel-runner slots to reserve per Kibana node for this task type.
      * Defaults to 1.
      */
-    parallelRunnerPartitions: schema.maybe(
+    systemTasksPerNode: schema.maybe(
       schema.number({
         min: 1,
-        max: 4,
       })
     ),
     stateSchemaByVersion: schema.maybe(
@@ -452,7 +451,7 @@ export interface TaskInstance {
   partition?: number;
 
   /**
-   * Which parallel-runner partition (0 to parallelRunnerPartitions-1) should process this task.
+   * Which parallel-runner slot (0 to systemTasksPerNode-1) on the owning node should process this task.
    * Assigned randomly at schedule time for task types with internalParallelism > 1.
    */
   runnerPartition?: number;

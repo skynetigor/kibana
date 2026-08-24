@@ -11,14 +11,13 @@ import type { TaskTypeDictionary } from '../task_type_dictionary';
 import type { TaskRunner } from '../task_running';
 import type { TaskScheduling } from '../task_scheduling';
 import type { TaskStore } from '../task_store';
+import type { TaskPartitioner } from '../lib/task_partitioner';
 import { claimTaskBatch } from '../task_claimers/claim_task_batch';
+import { removeIfExists } from '../lib/remove_if_exists';
 
 export const PARALLEL_RUNNER_TASK_ID = 'taskManager:parallel-runner';
 const PARALLEL_RUNNER_TASK_TYPE = PARALLEL_RUNNER_TASK_ID;
 const SCHEDULE_INTERVAL = '1s';
-
-/** Total number of parallel-runner partitions always kept scheduled. */
-const TOTAL_PARTITIONS = 4;
 
 /**
  * How long each parallel-runner cycle actively polls for new tasks.
@@ -26,6 +25,9 @@ const TOTAL_PARTITIONS = 4;
  * TM re-schedules the next cycle immediately via runAt: new Date().
  */
 const RUN_BUDGET_MS = 5_000;
+
+/** Legacy static runner IDs used before per-node scheduling was introduced. */
+const LEGACY_STATIC_IDS = [0, 1, 2, 3].map((i) => `${PARALLEL_RUNNER_TASK_ID}-${i}`);
 
 export type TaskRunnerFactory = (instance: ConcreteTaskInstance) => TaskRunner;
 
@@ -42,11 +44,20 @@ const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
     );
   });
 
+/** Returns the number of runner slots a node should schedule based on registered definitions. */
+function computeTotalRunners(taskTypeDictionary: TaskTypeDictionary): number {
+  return taskTypeDictionary
+    .getAllDefinitions()
+    .filter((def) => (def.internalParallelism ?? 1) > 1)
+    .reduce((max, def) => Math.max(max, def.systemTasksPerNode ?? 1), 1);
+}
+
 export function registerParallelRunnerTaskDefinition(
   logger: Logger,
   taskTypeDictionary: TaskTypeDictionary,
   getRunnerFactory: () => TaskRunnerFactory | undefined,
-  getTaskStore: () => TaskStore | undefined
+  getTaskStore: () => TaskStore | undefined,
+  getTaskPartitioner: () => TaskPartitioner | undefined
 ) {
   taskTypeDictionary.registerTaskDefinitions({
     [PARALLEL_RUNNER_TASK_TYPE]: {
@@ -64,16 +75,24 @@ export function registerParallelRunnerTaskDefinition(
           if (!taskStore) {
             throw new Error('[parallel-runner] task store not ready');
           }
-          const partitionIndex: number =
-            (taskInstance.params as { partitionIndex?: number })?.partitionIndex ?? 0;
+          const taskPartitioner = getTaskPartitioner();
+          if (!taskPartitioner) {
+            throw new Error('[parallel-runner] task partitioner not ready');
+          }
+          const params = taskInstance.params as {
+            slotIndex?: number;
+            partitionIndex?: number; // legacy param name — kept for in-flight tasks
+          };
+          const slotIndex: number = params.slotIndex ?? params.partitionIndex ?? 0;
 
           await runParallelLoop({
             logger,
             taskTypeDictionary,
             runnerFactory,
             taskStore,
+            taskPartitioner,
             signal,
-            partitionIndex,
+            slotIndex,
           });
 
           // Re-schedule immediately — the 5s budget already paces the cycle.
@@ -86,16 +105,32 @@ export function registerParallelRunnerTaskDefinition(
   });
 }
 
-export async function scheduleParallelRunnerTask(logger: Logger, taskScheduling: TaskScheduling) {
-  for (let i = 0; i < TOTAL_PARTITIONS; i++) {
-    const id = `${PARALLEL_RUNNER_TASK_ID}-${i}`;
+export async function scheduleParallelRunnerTask(
+  logger: Logger,
+  taskScheduling: TaskScheduling,
+  taskStore: TaskStore,
+  nodeId: string,
+  taskTypeDictionary: TaskTypeDictionary
+) {
+  // Remove legacy static runner tasks that predate per-node scheduling.
+  for (const id of LEGACY_STATIC_IDS) {
+    try {
+      await removeIfExists(taskStore, id);
+    } catch (e) {
+      logger.debug(`[parallel-runner] could not remove legacy task ${id}: ${e.message}`);
+    }
+  }
+
+  const totalRunners = computeTotalRunners(taskTypeDictionary);
+  for (let i = 0; i < totalRunners; i++) {
+    const id = `${PARALLEL_RUNNER_TASK_ID}-${nodeId}-${i}`;
     try {
       await taskScheduling.ensureScheduled({
         id,
         taskType: PARALLEL_RUNNER_TASK_TYPE,
         schedule: { interval: SCHEDULE_INTERVAL },
         state: {},
-        params: { partitionIndex: i },
+        params: { slotIndex: i },
       });
     } catch (e) {
       logger.error(`Error scheduling ${id}: ${e.message}`);
@@ -108,37 +143,40 @@ async function runParallelLoop({
   taskTypeDictionary,
   runnerFactory,
   taskStore,
+  taskPartitioner,
   signal,
-  partitionIndex,
+  slotIndex,
 }: {
   logger: Logger;
   taskTypeDictionary: TaskTypeDictionary;
   runnerFactory: TaskRunnerFactory;
   taskStore: TaskStore;
+  taskPartitioner: TaskPartitioner;
   signal: AbortSignal;
-  partitionIndex: number;
+  slotIndex: number;
 }) {
-  // Only process types assigned to this partition.
-  // A type with parallelRunnerPartitions=P is handled by partitions 0..(P-1).
+  // Only process types whose systemTasksPerNode covers this slot index.
   const parallelTypes = taskTypeDictionary
     .getAllDefinitions()
     .filter(
-      (def) =>
-        (def.internalParallelism ?? 1) > 1 && partitionIndex < (def.parallelRunnerPartitions ?? 1)
+      (def) => (def.internalParallelism ?? 1) > 1 && slotIndex < (def.systemTasksPerNode ?? 1)
     );
 
   if (parallelTypes.length === 0) {
-    logger.debug(
-      `[parallel-runner-${partitionIndex}] no task types assigned to this partition, idling`
-    );
+    logger.debug(`[parallel-runner-${slotIndex}] no task types assigned to this slot, idling`);
     return;
   }
+
+  // Fetch the node's partition range once per cycle — stable for the 5s budget duration.
+  const nodePartitions = await taskPartitioner.getPartitions();
+  const partitionFilter =
+    nodePartitions.length > 0 ? [{ terms: { 'task.partition': nodePartitions } }] : [];
 
   const maxSlots = parallelTypes.reduce((sum, d) => sum + d.internalParallelism!, 0);
   const deadline = Date.now() + RUN_BUDGET_MS;
 
   logger.debug(
-    `[parallel-runner-${partitionIndex}] cycle start — ${maxSlots} slots, types: ${parallelTypes
+    `[parallel-runner-${slotIndex}] cycle start — ${maxSlots} slots, types: ${parallelTypes
       .map((d) => d.type)
       .join(', ')}`
   );
@@ -173,7 +211,7 @@ async function runParallelLoop({
       runner
         .cancel?.()
         .catch((err: Error) =>
-          logger.error(`[parallel-runner-${partitionIndex}] cancel error: ${err.message}`)
+          logger.error(`[parallel-runner-${slotIndex}] cancel error: ${err.message}`)
         );
     };
     signal.addEventListener('abort', cancelOnAbort, { once: true });
@@ -184,7 +222,7 @@ async function runParallelLoop({
         await runner.run();
       } catch (err) {
         logger.error(
-          `[parallel-runner-${partitionIndex}] unhandled task error: ${(err as Error).message}`
+          `[parallel-runner-${slotIndex}] unhandled task error: ${(err as Error).message}`
         );
       } finally {
         signal.removeEventListener('abort', cancelOnAbort);
@@ -202,11 +240,11 @@ async function runParallelLoop({
     if (timeRemaining <= 0) {
       if (inFlight > 0) {
         logger.debug(
-          `[parallel-runner-${partitionIndex}] budget elapsed, draining ${inFlight} in-flight tasks`
+          `[parallel-runner-${slotIndex}] budget elapsed, draining ${inFlight} in-flight tasks`
         );
         while (inFlight > 0) await waitForSlot();
       }
-      logger.debug(`[parallel-runner-${partitionIndex}] cycle complete`);
+      logger.debug(`[parallel-runner-${slotIndex}] cycle complete`);
       return;
     }
 
@@ -217,16 +255,16 @@ async function runParallelLoop({
     }
 
     // Fetch only as many tasks as there are free slots.
-    // Each type with parallelRunnerPartitions > 1 uses runnerPartition (assigned at schedule time)
-    // so each partition owns a disjoint subset — no cross-partition claim races.
+    // task.partition scopes the query to this node's partition range.
+    // task.runnerPartition (assigned at schedule time) distributes across intra-node slots.
     const slotsAvailable = maxSlots - inFlight;
     const typeFilters = parallelTypes.map((def) => {
-      const p = def.parallelRunnerPartitions ?? 1;
+      const p = def.systemTasksPerNode ?? 1;
       const typeFilter = { term: { 'task.taskType': def.type } };
       if (p <= 1) return typeFilter;
       return {
         bool: {
-          filter: [typeFilter, { term: { 'task.runnerPartition': partitionIndex } }],
+          filter: [typeFilter, { term: { 'task.runnerPartition': slotIndex } }],
         },
       };
     });
@@ -235,6 +273,7 @@ async function runParallelLoop({
         bool: {
           filter: [
             { bool: { should: typeFilters, minimum_should_match: 1 } },
+            ...partitionFilter,
             { term: { 'task.status': 'idle' } },
             { range: { 'task.runAt': { lte: 'now' } } },
           ],
@@ -267,7 +306,7 @@ async function runParallelLoop({
         .map(([type, count]) => `${type}×${count}`)
         .join(', ');
       logger.debug(
-        `[parallel-runner-${partitionIndex}] +${claimed.length} tasks (${
+        `[parallel-runner-${slotIndex}] +${claimed.length} tasks (${
           inFlight + claimed.length
         }/${maxSlots} slots): ${summary}`
       );
@@ -280,9 +319,7 @@ async function runParallelLoop({
 
   // Abort signal fired — drain before returning.
   if (inFlight > 0) {
-    logger.debug(
-      `[parallel-runner-${partitionIndex}] aborted, draining ${inFlight} in-flight tasks`
-    );
+    logger.debug(`[parallel-runner-${slotIndex}] aborted, draining ${inFlight} in-flight tasks`);
     while (inFlight > 0) await waitForSlot();
   }
 }

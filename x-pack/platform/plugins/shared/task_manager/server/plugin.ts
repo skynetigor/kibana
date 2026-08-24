@@ -181,6 +181,7 @@ export class TaskManagerPlugin
   private uiamApiKeyProvisioningTask?: UiamApiKeyProvisioningTask;
   private enrichFakeRequest?: FakeRequestEnricher;
   private parallelRunnerFactory?: (instance: ConcreteTaskInstance) => TaskRunner;
+  private taskPartitioner?: TaskPartitioner;
 
   constructor(private readonly initContext: PluginInitializerContext) {
     this.initContext = initContext;
@@ -322,7 +323,8 @@ export class TaskManagerPlugin
       this.logger,
       this.definitions,
       () => this.parallelRunnerFactory,
-      () => this.taskStore
+      () => this.taskStore,
+      () => this.taskPartitioner
     );
     registerInvalidateApiKeyTask({
       configInterval: this.config.invalidate_api_key_task.interval,
@@ -491,6 +493,7 @@ export class TaskManagerPlugin
         kibanaDiscoveryService: this.kibanaDiscoveryService,
         kibanasPerPartition: this.config.kibanas_per_partition,
       });
+      this.taskPartitioner = taskPartitioner;
 
       this.taskPollingLifecycle = new TaskPollingLifecycle({
         config: this.config!,
@@ -549,7 +552,13 @@ export class TaskManagerPlugin
       this.config.invalidate_api_key_task.interval
     ).catch(() => {});
     scheduleMarkRemovedTasksAsUnrecognizedDefinition(this.logger, taskScheduling).catch(() => {});
-    scheduleParallelRunnerTask(this.logger, taskScheduling).catch(() => {});
+    scheduleParallelRunnerTask(
+      this.logger,
+      taskScheduling,
+      taskStore,
+      this.taskManagerId!,
+      this.definitions
+    ).catch(() => {});
 
     this.startContract = {
       fetch: (opts: SearchOpts): Promise<FetchResult> => taskStore.fetch(opts),
