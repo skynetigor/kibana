@@ -73,6 +73,21 @@ const configSchema = schema.object({
   hitlExternalResume: schema.object({
     enabled: schema.boolean({ defaultValue: true }),
   }),
+  /**
+   * Task Manager cost for workflow task types (run, resume, scheduled).
+   * Lower cost means more concurrent executions within the same capacity budget.
+   * Accepted values: 'tiny' (1), 'normal' (2), 'large' (4), 'extralarge' (10).
+   * Defaults to 'normal'.
+   */
+  taskCost: schema.oneOf(
+    [
+      schema.literal('tiny'),
+      schema.literal('normal'),
+      schema.literal('large'),
+      schema.literal('extralarge'),
+    ],
+    { defaultValue: 'normal' }
+  ),
 });
 
 export type EventTriggersConfig = TypeOf<typeof EventTriggersConfigSchema>;

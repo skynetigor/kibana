@@ -16,6 +16,7 @@ import type {
   Plugin,
   PluginInitializerContext,
 } from '@kbn/core/server';
+import { TaskCost } from '@kbn/task-manager-plugin/server';
 import {
   ExecutionStatus,
   toWorkflowExecutionEngineModel,
@@ -168,6 +169,14 @@ export class WorkflowsExecutionEnginePlugin
     const logger = this.logger;
     const config = this.config;
 
+    const TASK_COST_MAP: Record<string, TaskCost> = {
+      tiny: TaskCost.Tiny,
+      normal: TaskCost.Normal,
+      large: TaskCost.Large,
+      extralarge: TaskCost.ExtraLarge,
+    };
+    const workflowTaskCost = TASK_COST_MAP[config.taskCost];
+
     this.coreSetup = core;
 
     initializeLogsRepositoryDataStream(core.dataStreams);
@@ -197,6 +206,7 @@ export class WorkflowsExecutionEnginePlugin
         // This is high value to allow long-running workflows.
         // The workflow timeout logic defined in workflow execution engine logic is the primary control.
         timeout: '365d',
+        cost: workflowTaskCost,
         // Retries allow `resolveInterruptedWorkflowRunTask` to fail-fast abandoned executions after interrupt.
         maxAttempts: WORKFLOW_RUN_TASK_MAX_ATTEMPTS,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
@@ -395,6 +405,7 @@ export class WorkflowsExecutionEnginePlugin
         // This is high value to allow long-running workflows.
         // The workflow timeout logic defined in workflow execution engine logic is the primary control.
         timeout: '365d',
+        cost: workflowTaskCost,
         // Retries allow `resolveInterruptedWorkflowResumeTask` to fail-fast abandoned executions after interrupt.
         maxAttempts: WORKFLOW_RESUME_TASK_MAX_ATTEMPTS,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
@@ -593,6 +604,7 @@ export class WorkflowsExecutionEnginePlugin
         // This is high value to allow long-running workflows.
         // The workflow timeout logic defined in workflow execution engine logic is the primary control.
         timeout: '365d',
+        cost: workflowTaskCost,
         maxAttempts: 3,
         createTaskRunner: ({ taskInstance, fakeRequest, signal, setCustomTaskRunEventFields }) => {
           if (!fakeRequest) {

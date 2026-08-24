@@ -32,5 +32,6 @@ export const mockContextDependencies = () => ({
     },
     collectQueueMetrics: false,
     hitlExternalResume: { enabled: true },
+    taskCost: 'normal' as const,
   },
 });
