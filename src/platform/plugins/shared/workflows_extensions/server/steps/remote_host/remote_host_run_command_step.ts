@@ -88,7 +88,9 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
 
       const result = await startJob(
         toConnectorContext(connectorId, context, getActionsStart),
-        code
+        code,
+        context.input.env,
+        context.input.cwd
       );
 
       if (result.status === 'running') {
