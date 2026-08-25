@@ -22,6 +22,8 @@ export const ConfigSchema = z.object({
 
 export const InputSchema = z.object({
   code: z.string().max(REMOTE_HOST_JAVASCRIPT_TEMPLATE_MAX_CHARS),
+  env: z.record(z.string(), z.string()).optional(),
+  cwd: z.string().optional(),
 });
 
 export const OutputSchema = z.unknown();

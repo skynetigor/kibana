@@ -22,6 +22,8 @@ export const ConfigSchema = z.object({
 
 export const InputSchema = z.object({
   code: z.string().max(REMOTE_HOST_PYTHON_TEMPLATE_MAX_CHARS),
+  env: z.record(z.string(), z.string()).optional(),
+  cwd: z.string().optional(),
 });
 
 export const OutputSchema = z.unknown();
@@ -60,7 +62,7 @@ into an object; otherwise it is returned as a string.
   with:
     code: |
       import socket
-      print(socket.getfqdn())
+      return socket.getfqdn()
 \`\`\`
 
 ## Structured Output
@@ -72,19 +74,21 @@ into an object; otherwise it is returned as a string.
     connector-id: my-ssh-host-connector
   with:
     code: |
-      import shutil, json
+      import shutil
       total, used, free = shutil.disk_usage('/')
-      print(json.dumps({'available_gb': free // (1024 ** 3)}))
+      return {'available_gb': free // (1024 ** 3)}
 \`\`\`
 
 ## Inputs
 
-- **code** (required): Python 3 script to execute on the remote host.
+- **code** (required): Python 3 script to execute on the remote host. Use \`print()\` for log output and \`return\` a value to set the step output.
+- **env** (optional): Key-value map of environment variables exported before \`code\` runs.
+- **cwd** (optional): Working directory to \`cd\` into before running.
 
 ## Output
 
-Returns the stdout of the script. If the output is valid JSON it is parsed into an object;
-otherwise it is returned as a string. Returns \`null\` when stdout is empty.
+Returns the value returned by the script. If the value is a dict or list it is serialised as
+JSON; strings are returned as-is. Returns \`null\` when nothing is returned.
 `,
   },
   inputSchema: InputSchema,
