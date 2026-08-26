@@ -33,16 +33,12 @@ export const remoteHostPythonStepDefinition = createPublicStepDefinition({
     enabled: true,
     getLogs: async ({ logsApi }) => {
       const allLogs = await logsApi.fetchLogs();
-      return allLogs
-        .filter((log) => {
-          const tags = log.additionalData?.tags;
-          return Array.isArray(tags) && tags.includes('remote_host_python');
-        })
-        .map(({ message, timestamp, level }) => ({
-          message,
-          timestamp,
-          level: level === 'trace' || level === 'debug' ? undefined : level,
-        }));
+
+      return allLogs.map(({ message, timestamp, level }) => ({
+        message,
+        timestamp,
+        level: level === 'trace' || level === 'debug' ? undefined : level,
+      }));
     },
   },
 });

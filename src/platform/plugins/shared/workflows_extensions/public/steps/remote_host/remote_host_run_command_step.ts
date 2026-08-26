@@ -34,16 +34,11 @@ export const remoteHostRunCommandStepDefinition = createPublicStepDefinition({
     getLogs: async ({ logsApi }) => {
       const allLogs = await logsApi.fetchLogs();
 
-      return allLogs
-        .filter((log) => {
-          const tags = log.additionalData?.tags;
-          return Array.isArray(tags) && tags.includes('remote_host_run_command');
-        })
-        .map(({ message, timestamp, level }) => ({
-          message,
-          timestamp,
-          level: level === 'trace' || level === 'debug' ? undefined : level,
-        }));
+      return allLogs.map(({ message, timestamp, level }) => ({
+        message,
+        timestamp,
+        level: level === 'trace' || level === 'debug' ? undefined : level,
+      }));
     },
   },
 });
