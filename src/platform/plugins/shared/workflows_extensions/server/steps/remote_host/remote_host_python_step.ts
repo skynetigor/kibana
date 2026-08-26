@@ -10,41 +10,80 @@
 import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
 import { ExecutionError } from '@kbn/workflows/server';
 import { z } from '@kbn/zod/v4';
-import {
-  executeCommandInConnector,
-  killCommandInConnector,
-  tryExtractCommandOutputFromConnector,
-} from './execute_in_connector';
+import type { ConnectorCallContext } from './execute_in_connector';
+import type { RemoteHostJobStatus } from './remote_host_job';
+import { killJob, parseScriptOutput, pollJob, startJob } from './remote_host_job';
 import { remoteHostPythonStepCommonDefinition } from '../../../common/steps/remote_host';
 import { createPollServerStepDefinition } from '../../step_registry/types';
 
 const StateSchema = z.object({
-  commandId: z.string(),
+  jobId: z.string(),
   stdoutOffset: z.number().default(0),
   stderrOffset: z.number().default(0),
 });
 
-const parseScriptOutput = (raw: string | undefined): unknown => {
-  if (raw === undefined || raw === '') return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-};
-
-// Wraps user Python code in a bash heredoc so it runs via `python3` on the remote host.
-// Stdout is captured as STEP_OUTPUT, which the connector infrastructure returns as `output`.
-const buildScript = (code: string): string => `
-STEP_OUTPUT=$(python3 << 'ENDOFSCRIPT'
-${code}
-ENDOFSCRIPT
-)
-`;
-
 interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
 }
+
+// Wraps user Python code in a __main() function so it runs via `python3`.
+// Stdout goes to logs; returning a value writes it as JSON to $STEP_OUTPUT.
+const buildScript = (code: string): string => {
+  const indented = code
+    .split('\n')
+    .map((line) => `    ${line}`)
+    .join('\n');
+  return `python3 << 'ENDOFSCRIPT'
+import json as __json, os as __os
+
+def __main():
+${indented}
+
+__result = __main()
+if __result is not None:
+    with open(__os.environ['STEP_OUTPUT'], 'w') as __f:
+        __f.write(__result if isinstance(__result, str) else __json.dumps(__result))
+ENDOFSCRIPT`;
+};
+
+const logCommandStreams = (
+  logger: { info: (message: string) => void; warn: (message: string) => void },
+  result: RemoteHostJobStatus
+): void => {
+  if (result.stdout) logger.info(result.stdout);
+  if (result.stderr) logger.warn(result.stderr);
+};
+
+const completeCommand = (
+  logger: { info: (message: string) => void; warn: (message: string) => void },
+  result: RemoteHostJobStatus
+): { output: unknown } => {
+  logCommandStreams(logger, result);
+
+  if (result.exitCode !== 0) {
+    throw new ExecutionError({
+      type: 'ScriptExecutionError',
+      message: result.stderr || `Script exited with code ${result.exitCode}`,
+      details: { exitCode: result.exitCode },
+    });
+  }
+
+  return { output: parseScriptOutput(result.output) };
+};
+
+const toConnectorContext = (
+  connectorId: string,
+  context: {
+    contextManager: { getFakeRequest: () => ConnectorCallContext['request'] };
+    abortSignal: AbortSignal;
+  },
+  getActionsStart: () => ActionsPluginStartContract | undefined
+): ConnectorCallContext => ({
+  connectorId,
+  request: context.contextManager.getFakeRequest(),
+  actionsStart: getActionsStart(),
+  abortSignal: context.abortSignal,
+});
 
 export const createRemoteHostPythonStepDefinition = ({ getActionsStart }: Deps) =>
   createPollServerStepDefinition({
@@ -60,95 +99,69 @@ export const createRemoteHostPythonStepDefinition = ({ getActionsStart }: Deps) 
       maxWaitMs: 60000,
     },
     start: async (context) => {
-      const { code } = context.input;
+      const { code, env, cwd } = context.input;
       const connectorId = context.config['connector-id'];
 
       if (typeof code !== 'string' || code.trim().length === 0) {
         return { error: new Error('Code is required') };
       }
 
-      const result = await executeCommandInConnector({
-        connectorId,
-        request: context.contextManager.getFakeRequest(),
-        actionsStart: getActionsStart(),
-        script: buildScript(code),
-        abortSignal: context.abortSignal,
-      });
-
-      if (result.stdout) context.logger.info(result.stdout, { tags: ['remote_host_python'] });
-      if (result.stderr) context.logger.warn(result.stderr, { tags: ['remote_host_python'] });
+      const result = await startJob(
+        toConnectorContext(connectorId, context, getActionsStart),
+        buildScript(code),
+        env,
+        cwd
+      );
 
       if (result.status === 'running') {
         return {
           state: {
-            commandId: result.commandId,
+            jobId: result.jobId,
             stdoutOffset: result.stdoutOffset,
             stderrOffset: result.stderrOffset,
           },
         };
       }
 
-      if (result.exitCode !== 0) {
-        throw new ExecutionError({
-          type: 'ScriptExecutionError',
-          message: result.stderr || `Script exited with code ${result.exitCode}`,
-          details: { exitCode: result.exitCode },
-        });
-      }
-
-      return { output: parseScriptOutput(result.output) };
+      return completeCommand(context.logger, result);
     },
     poll: async (context) => {
-      const { config, state, contextManager } = context;
-      if (!state?.commandId) {
+      const { config, state } = context;
+      if (!state?.jobId) {
         throw new Error('Invalid state for polling remote Python execution');
       }
 
-      const result = await tryExtractCommandOutputFromConnector({
-        connectorId: config['connector-id'],
-        request: contextManager.getFakeRequest(),
-        actionsStart: getActionsStart(),
-        commandId: state.commandId,
-        stdoutOffset: state.stdoutOffset,
-        stderrOffset: state.stderrOffset,
-      });
-
-      if (result.stdout) context.logger.info(result.stdout, { tags: ['remote_host_python'] });
-      if (result.stderr) context.logger.warn(result.stderr, { tags: ['remote_host_python'] });
+      const result = await pollJob(
+        toConnectorContext(config['connector-id'], context, getActionsStart),
+        {
+          jobId: state.jobId,
+          stdoutOffset: state.stdoutOffset,
+          stderrOffset: state.stderrOffset,
+        }
+      );
 
       if (result.status === 'running') {
+        logCommandStreams(context.logger, result);
         return {
           state: {
-            commandId: state.commandId,
+            jobId: state.jobId,
             stdoutOffset: result.stdoutOffset,
             stderrOffset: result.stderrOffset,
           },
         };
       }
 
-      if (result.exitCode !== 0) {
-        throw new ExecutionError({
-          type: 'ScriptExecutionError',
-          message: result.stderr || `Script exited with code ${result.exitCode}`,
-          details: { exitCode: result.exitCode },
-        });
-      }
-
-      return { output: parseScriptOutput(result.output) };
+      return completeCommand(context.logger, result);
     },
     onCancel: async (context) => {
-      const { config, contextManager } = context;
       const state = (context as { state?: z.infer<typeof StateSchema> }).state;
-
-      if (!state?.commandId) {
+      if (!state?.jobId) {
         return;
       }
 
-      await killCommandInConnector({
-        connectorId: config['connector-id'],
-        request: contextManager.getFakeRequest(),
-        actionsStart: getActionsStart(),
-        commandId: state.commandId,
-      });
+      await killJob(
+        toConnectorContext(context.config['connector-id'], context, getActionsStart),
+        state.jobId
+      );
     },
   });
