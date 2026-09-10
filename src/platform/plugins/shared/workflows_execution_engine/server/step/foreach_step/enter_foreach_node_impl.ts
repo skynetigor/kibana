@@ -36,9 +36,6 @@ export class EnterForeachNodeImpl implements NodeImplementation {
   private async enterForeach(): Promise<void> {
     this.stepExecutionRuntime.startStep();
     const foreachConfig = this.node.configuration.foreach;
-    this.stepExecutionRuntime.setInput({
-      foreach: Array.isArray(foreachConfig) ? JSON.stringify(foreachConfig) : foreachConfig,
-    });
     // Pin the loop's source outputs for the lifetime of the loop. The foreach
     // re-evaluates its source expression synchronously on every iteration
     // (WorkflowContextManager.buildForeachContext); without pinning, a
@@ -48,6 +45,10 @@ export class EnterForeachNodeImpl implements NodeImplementation {
     this.stepIoService.pinForeachSource(this.node.stepId, foreachConfig);
 
     const evaluatedItems = this.getItems();
+    this.stepExecutionRuntime.setInput({
+      foreach: Array.isArray(foreachConfig) ? JSON.stringify(foreachConfig) : foreachConfig,
+      items: evaluatedItems,
+    });
 
     if (evaluatedItems.length === 0) {
       // No iterations will run — release the pin we just took.

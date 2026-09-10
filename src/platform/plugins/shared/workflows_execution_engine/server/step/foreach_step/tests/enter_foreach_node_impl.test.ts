@@ -96,6 +96,7 @@ describe('EnterForeachNodeImpl', () => {
         await underTest.run();
         expect(stepExecutionRuntime.setInput).toHaveBeenCalledWith({
           foreach: JSON.stringify(['item1', 'item2', 'item3']),
+          items: ['item1', 'item2', 'item3'],
         });
       });
 
@@ -140,6 +141,7 @@ describe('EnterForeachNodeImpl', () => {
 
         expect(stepExecutionRuntime.setInput).toHaveBeenCalledWith({
           foreach: '{{steps.testStep.array}}',
+          items: ['item1', 'item2', 'item3'],
         });
       });
 
@@ -291,6 +293,7 @@ describe('EnterForeachNodeImpl', () => {
         await underTest.run();
         expect(stepExecutionRuntime.setInput).toHaveBeenCalledWith({
           foreach: JSON.stringify(['a', 'b', 'c']),
+          items: ['a', 'b', 'c'],
         });
       });
 
@@ -335,6 +338,7 @@ describe('EnterForeachNodeImpl', () => {
         await underTest.run();
         expect(stepExecutionRuntime.setInput).toHaveBeenCalledWith({
           foreach: JSON.stringify([]),
+          items: [],
         });
       });
 
