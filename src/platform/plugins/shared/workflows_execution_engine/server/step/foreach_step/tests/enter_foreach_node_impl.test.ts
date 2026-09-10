@@ -14,6 +14,7 @@ import type { StepIoService } from '../../../workflow_context_manager/step_io_se
 import type { WorkflowExecutionRuntimeManager } from '../../../workflow_context_manager/workflow_execution_runtime_manager';
 import type { IWorkflowEventLogger } from '../../../workflow_event_logger';
 import { EnterForeachNodeImpl } from '../enter_foreach_node_impl';
+import { ITERATION_STEP_TYPE, iterationStepIdFromIndex } from '../utils';
 
 describe('EnterForeachNodeImpl', () => {
   let node: EnterForeachNode;
@@ -74,8 +75,8 @@ describe('EnterForeachNodeImpl', () => {
       await underTest.run();
 
       expect(workflowExecutionRuntimeManager.navigateToSynthetic).toHaveBeenCalledWith({
-        stepId: 'iteration-0',
-        stepType: 'foreach-iteration',
+        stepId: iterationStepIdFromIndex(0),
+        stepType: ITERATION_STEP_TYPE,
       });
     });
 
@@ -322,8 +323,8 @@ describe('EnterForeachNodeImpl', () => {
         await underTest.run();
 
         expect(workflowExecutionRuntimeManager.navigateToSynthetic).toHaveBeenCalledWith({
-          stepId: 'iteration-0',
-          stepType: 'foreach-iteration',
+          stepId: iterationStepIdFromIndex(0),
+          stepType: ITERATION_STEP_TYPE,
         });
         expect(workflowExecutionRuntimeManager.navigateToNextNode).toHaveBeenCalled();
       });
@@ -391,8 +392,8 @@ describe('EnterForeachNodeImpl', () => {
       await underTest.run();
 
       expect(workflowExecutionRuntimeManager.navigateToSynthetic).toHaveBeenCalledWith({
-        stepId: 'iteration-1',
-        stepType: 'foreach-iteration',
+        stepId: iterationStepIdFromIndex(1),
+        stepType: ITERATION_STEP_TYPE,
       });
     });
 

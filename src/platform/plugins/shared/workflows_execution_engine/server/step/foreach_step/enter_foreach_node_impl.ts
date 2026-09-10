@@ -9,6 +9,7 @@
 
 import type { EnterForeachNode } from '@kbn/workflows/graph';
 import type { ForeachStepState } from './types';
+import { ITERATION_STEP_TYPE, iterationStepIdFromIndex } from './utils';
 import { isTemplateExpression } from '../../utils';
 import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
 import type { StepIoService } from '../../workflow_context_manager/step_io_service';
@@ -83,8 +84,8 @@ export class EnterForeachNodeImpl implements NodeImplementation {
 
     this.stepExecutionRuntime.setCurrentStepState(foreachState);
     this.wfExecutionRuntimeManager.navigateToSynthetic({
-      stepId: `iteration-${foreachState.index}`,
-      stepType: 'foreach-iteration',
+      stepId: iterationStepIdFromIndex(foreachState.index),
+      stepType: ITERATION_STEP_TYPE,
     });
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }
@@ -101,12 +102,18 @@ export class EnterForeachNodeImpl implements NodeImplementation {
     const currentIndex = currentForeachState.index as number;
 
     const index = currentIndex + 1;
+
+    if (index >= currentForeachState.total) {
+      this.wfExecutionRuntimeManager.navigateToNode(this.node.exitNodeId);
+      return;
+    }
+
     const newForeachState: ForeachStepState = { index, total: currentForeachState.total };
     // Only persist index and total — no need to store the full items array.
     this.stepExecutionRuntime.setCurrentStepState(newForeachState);
     this.wfExecutionRuntimeManager.navigateToSynthetic({
-      stepId: `iteration-${index}`,
-      stepType: 'foreach-iteration',
+      stepId: iterationStepIdFromIndex(index),
+      stepType: ITERATION_STEP_TYPE,
     });
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }

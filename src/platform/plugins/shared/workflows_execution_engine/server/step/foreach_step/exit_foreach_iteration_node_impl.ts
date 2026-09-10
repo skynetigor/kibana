@@ -7,15 +7,18 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type { GraphNodeUnion } from '@kbn/workflows/graph';
+import type { StepExecutionRuntime } from '../../workflow_context_manager/step_execution_runtime';
 import type { WorkflowExecutionRuntimeManager } from '../../workflow_context_manager/workflow_execution_runtime_manager';
 import type { NodeImplementation } from '../node_implementation';
 
 export class ExitForeachIterationNodeImpl implements NodeImplementation {
   constructor(
-    private node: GraphNodeUnion,
+    private stepExecutionRuntime: StepExecutionRuntime,
     private wfExecutionRuntimeManager: WorkflowExecutionRuntimeManager
   ) {}
 
-  public run(): void {}
+  public run(): void {
+    this.stepExecutionRuntime.finishStep();
+    this.wfExecutionRuntimeManager.navigateToNextNode();
+  }
 }

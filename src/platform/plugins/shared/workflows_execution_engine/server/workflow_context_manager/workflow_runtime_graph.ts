@@ -62,7 +62,7 @@ export class WorkflowRuntimeGraph {
    * Adds a runtime scope under `ownerNodeId` (one loop iteration) and returns the
    * enter node the cursor should move to.
    */
-  public insertSyntheticScope(ownerNodeId: string, stepId: string, stepType?: string): string {
+  public insertSyntheticScope(ownerNodeId: string, stepId: string, stepType: string): string {
     const ownerExitNodeId = ownerNodeId.replace(/^enter/, 'exit');
     const ownerExitInEdges = this.internalGraph.inEdges(ownerExitNodeId) ?? [];
     const lastBeforeOwnerExit = ownerExitInEdges[0];
@@ -85,14 +85,14 @@ export class WorkflowRuntimeGraph {
       id: enterSyntheticId,
       type: enterType,
       stepId,
-      stepType: stepId,
+      stepType,
     } as GraphNodeUnion;
 
     const exitSyntheticNode = {
       id: exitSyntheticId,
       type: exitType,
       stepId,
-      stepType: stepId,
+      stepType,
     } as GraphNodeUnion;
 
     this.internalGraph.setNode(enterSyntheticNode.id, enterSyntheticNode);

@@ -199,6 +199,15 @@ export class NodesFactory {
           stepLogger,
           this.stepIoService
         );
+      case 'enter-foreach-iteration':
+        return new EnterForeachIterationNodeImpl(
+          node,
+          this.workflowRuntime,
+          stepExecutionRuntime,
+          this.stepExecutionRuntimeFactory
+        );
+      case 'exit-foreach-iteration':
+        return new ExitForeachIterationNodeImpl(stepExecutionRuntime, this.workflowRuntime);
       case 'exit-foreach':
         return new ExitForeachNodeImpl(
           node as ExitForeachNode,
@@ -208,10 +217,6 @@ export class NodesFactory {
           this.stepIoService,
           this.workflowGraph
         );
-      case 'enter-foreach-iteration':
-        return new EnterForeachIterationNodeImpl(node, this.workflowRuntime);
-      case 'exit-foreach-iteration':
-        return new ExitForeachIterationNodeImpl(node, this.workflowRuntime);
       case 'enter-while':
         return new EnterWhileNodeImpl(
           node as EnterWhileNode,
