@@ -8,13 +8,14 @@
  */
 
 import type { StackFrame } from '@kbn/workflows';
-import type { GraphNodeUnion, WorkflowGraph } from '@kbn/workflows/graph';
+import type { GraphNodeUnion } from '@kbn/workflows/graph';
+import type { WorkflowRuntimeGraph } from './workflow_runtime_graph';
 import { WorkflowScopeStack } from './workflow_scope_stack';
 
 export interface WorkflowExecutionCursorInit {
   nodeId?: string;
   stackFrames?: StackFrame[];
-  workflowExecutionGraph: WorkflowGraph;
+  workflowExecutionGraph: WorkflowRuntimeGraph;
 }
 
 /** Public surface of {@link WorkflowExecutionCursor} for typing mocks and loop params. */
@@ -31,6 +32,14 @@ export interface WorkflowExecutionCursorApi {
   navigateToNode(nodeId: string): void;
   navigateToNextNode(): void;
   navigateToAfterNode(nodeId: string): void;
+  navigateToSynthetic(params: {
+    stepId: string;
+    nodeType: string;
+    nodeId: string;
+    scopeId?: string;
+    exitNodeId?: string;
+    stepType?: string;
+  }): void;
   readonly currentStackFrames: StackFrame[];
   setCurrentScopeId(scopeId?: string): void;
 }
@@ -41,12 +50,15 @@ export interface WorkflowExecutionCursorApi {
  * {@link WorkflowExecutionCursor.start} and {@link WorkflowExecutionCursor.stop}.
  */
 export class WorkflowExecutionCursor implements WorkflowExecutionCursorApi {
-  private readonly workflowGraph: WorkflowGraph;
+  private readonly workflowGraph: WorkflowRuntimeGraph;
   private currentNodeId: string | undefined;
   private nextNodeId: string | undefined;
   private executing = true;
   private stackFrames: StackFrame[];
   private workflowError: Error | undefined;
+  private pendingSynthetic:
+    | { currentNodeId: string; stepId: string; stepType?: string }
+    | undefined;
 
   constructor(init: WorkflowExecutionCursorInit) {
     this.workflowGraph = init.workflowExecutionGraph;
@@ -103,6 +115,15 @@ export class WorkflowExecutionCursor implements WorkflowExecutionCursorApi {
    * Used after a normal `runNode` cycle and after each error-bubbling step once `navigateToNode` has set `nextNodeId`.
    */
   commitPendingNavigation(): void {
+    if (this.pendingSynthetic) {
+      this.nextNodeId = this.workflowGraph.insertSyntheticScope(
+        this.pendingSynthetic.currentNodeId,
+        this.pendingSynthetic.stepId,
+        this.pendingSynthetic.stepType
+      );
+      this.pendingSynthetic = undefined;
+    }
+
     this.currentNodeId = this.nextNodeId;
     this.syncScopeStack();
   }
@@ -112,7 +133,7 @@ export class WorkflowExecutionCursor implements WorkflowExecutionCursorApi {
       return null;
     }
 
-    return this.workflowGraph.getNode(this.currentNodeId);
+    return this.workflowGraph.getNode(this.currentNodeId) ?? null;
   }
 
   public get nextNode(): GraphNodeUnion | null {
@@ -120,7 +141,7 @@ export class WorkflowExecutionCursor implements WorkflowExecutionCursorApi {
       return null;
     }
 
-    return this.workflowGraph.getNode(this.nextNodeId);
+    return this.workflowGraph.getNode(this.nextNodeId) ?? null;
   }
 
   public navigateToNode(nodeId: string): void {
@@ -137,6 +158,22 @@ export class WorkflowExecutionCursor implements WorkflowExecutionCursorApi {
 
   public navigateToAfterNode(nodeId: string): void {
     this.nextNodeId = this.nodeAfter(nodeId);
+  }
+
+  /**
+   * Queues a synthetic enter/exit pair under the current node.
+   * The overlay insert and cursor move happen on the next `commitPendingNavigation`.
+   */
+  public navigateToSynthetic(params: { stepId: string; stepType?: string }): void {
+    if (!this.currentNodeId) {
+      throw new Error('Cannot insert a synthetic scope without a current node');
+    }
+
+    this.pendingSynthetic = {
+      currentNodeId: this.currentNodeId,
+      stepId: params.stepId,
+      stepType: params.stepType,
+    };
   }
 
   public get currentStackFrames(): StackFrame[] {
@@ -178,19 +215,19 @@ export class WorkflowExecutionCursor implements WorkflowExecutionCursorApi {
       }
     }
 
-    const nodesStack = this.workflowGraph.getNodeStack(this.currentNodeId);
+    const frames = this.workflowGraph.getNodeStack(this.currentNodeId);
 
     let currentNodeScope = new WorkflowScopeStack();
 
-    for (const nodeId of nodesStack) {
-      const nodeFromGraph = this.workflowGraph.getNode(nodeId);
-
-      currentNodeScope = currentNodeScope.enterScope({
-        nodeId: nodeFromGraph.id,
-        nodeType: nodeFromGraph.type,
-        stepId: nodeFromGraph.stepId,
-        scopeId: scopesMap.get(nodeFromGraph.id),
-      });
+    for (const frame of frames) {
+      for (const nestedScope of frame.nestedScopes) {
+        currentNodeScope = currentNodeScope.enterScope({
+          nodeId: nestedScope.nodeId,
+          nodeType: nestedScope.nodeType,
+          stepId: frame.stepId,
+          scopeId: scopesMap.get(nestedScope.nodeId) ?? nestedScope.scopeId,
+        });
+      }
     }
 
     this.stackFrames = currentNodeScope.stackFrames;

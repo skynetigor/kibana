@@ -7,12 +7,13 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type { GraphNodeUnion, WorkflowGraph } from '@kbn/workflows/graph';
+import type { GraphNodeUnion } from '@kbn/workflows/graph';
 import { WorkflowExecutionCursor } from '../workflow_execution_cursor';
+import type { WorkflowRuntimeGraph } from '../workflow_runtime_graph';
 
 describe('WorkflowExecutionCursor', () => {
   let workflowExecutionCursor: WorkflowExecutionCursor;
-  let workflowExecutionGraph: WorkflowGraph;
+  let workflowExecutionGraph: WorkflowRuntimeGraph;
 
   beforeEach(() => {
     workflowExecutionGraph = {
@@ -29,8 +30,9 @@ describe('WorkflowExecutionCursor', () => {
         }
         return undefined;
       }),
-      getNodeStack: jest.fn().mockImplementation((nodeId: string) => [nodeId]),
-    } as unknown as WorkflowGraph;
+      getNodeStack: jest.fn().mockReturnValue([]),
+      insertSyntheticScope: jest.fn(),
+    } as unknown as WorkflowRuntimeGraph;
 
     workflowExecutionCursor = new WorkflowExecutionCursor({
       nodeId: 'node1',
