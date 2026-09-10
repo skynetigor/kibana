@@ -138,7 +138,7 @@ export class WorkflowExecutionRuntimeManager {
     this.workflowExecutionCursor.navigateToAfterNode(nodeId);
   }
 
-  public navigateToSynthetic(params: { stepId: string; stepType?: string }): void {
+  public navigateToSynthetic(params: { stepId: string; stepType: string }): void {
     this.workflowExecutionCursor.navigateToSynthetic(params);
   }
 
