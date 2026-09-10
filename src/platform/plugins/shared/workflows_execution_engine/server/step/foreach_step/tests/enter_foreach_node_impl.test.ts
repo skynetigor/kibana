@@ -37,7 +37,7 @@ describe('EnterForeachNodeImpl', () => {
     workflowExecutionRuntimeManager = {} as unknown as WorkflowExecutionRuntimeManager;
     workflowExecutionRuntimeManager.navigateToNextNode = jest.fn();
     workflowExecutionRuntimeManager.navigateToNode = jest.fn();
-    workflowExecutionRuntimeManager.enterScope = jest.fn();
+    workflowExecutionRuntimeManager.navigateToSynthetic = jest.fn();
 
     stepExecutionRuntime = {} as unknown as StepExecutionRuntime;
     stepExecutionRuntime.startStep = jest.fn();
@@ -73,7 +73,10 @@ describe('EnterForeachNodeImpl', () => {
     it('should enter the iteration scope', async () => {
       await underTest.run();
 
-      expect(workflowExecutionRuntimeManager.enterScope).toHaveBeenCalledWith('0');
+      expect(workflowExecutionRuntimeManager.navigateToSynthetic).toHaveBeenCalledWith({
+        stepId: 'iteration-0',
+        stepType: 'foreach-iteration',
+      });
     });
 
     describe('when foreach configuration is an array with items', () => {
@@ -315,7 +318,10 @@ describe('EnterForeachNodeImpl', () => {
       it('should enter the first iteration scope', async () => {
         await underTest.run();
 
-        expect(workflowExecutionRuntimeManager.enterScope).toHaveBeenCalledWith('0');
+        expect(workflowExecutionRuntimeManager.navigateToSynthetic).toHaveBeenCalledWith({
+          stepId: 'iteration-0',
+          stepType: 'foreach-iteration',
+        });
         expect(workflowExecutionRuntimeManager.navigateToNextNode).toHaveBeenCalled();
       });
     });
@@ -380,13 +386,16 @@ describe('EnterForeachNodeImpl', () => {
     it('should enter iteration scope', async () => {
       await underTest.run();
 
-      expect(workflowExecutionRuntimeManager.enterScope).toHaveBeenCalledWith('1');
+      expect(workflowExecutionRuntimeManager.navigateToSynthetic).toHaveBeenCalledWith({
+        stepId: 'iteration-1',
+        stepType: 'foreach-iteration',
+      });
     });
 
     it('should enter scope only once', async () => {
       await underTest.run();
 
-      expect(workflowExecutionRuntimeManager.enterScope).toHaveBeenCalledTimes(1);
+      expect(workflowExecutionRuntimeManager.navigateToSynthetic).toHaveBeenCalledTimes(1);
     });
 
     it('should not start step', async () => {

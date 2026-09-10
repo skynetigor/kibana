@@ -50,7 +50,12 @@ import { CustomStepImpl } from './custom_step_impl';
 import { DataSetStepImpl } from './data_set_step';
 import { ElasticsearchActionStepImpl } from './elasticsearch_action_step';
 import { LoopBreakNodeImpl, LoopContinueNodeImpl } from './flow_control_step';
-import { EnterForeachNodeImpl, ExitForeachNodeImpl } from './foreach_step';
+import {
+  EnterForeachIterationNodeImpl,
+  EnterForeachNodeImpl,
+  ExitForeachIterationNodeImpl,
+  ExitForeachNodeImpl,
+} from './foreach_step';
 import {
   EnterConditionBranchNodeImpl,
   EnterIfNodeImpl,
@@ -203,6 +208,10 @@ export class NodesFactory {
           this.stepIoService,
           this.workflowGraph
         );
+      case 'enter-foreach-iteration':
+        return new EnterForeachIterationNodeImpl(node, this.workflowRuntime);
+      case 'exit-foreach-iteration':
+        return new ExitForeachIterationNodeImpl(node, this.workflowRuntime);
       case 'enter-while':
         return new EnterWhileNodeImpl(
           node as EnterWhileNode,

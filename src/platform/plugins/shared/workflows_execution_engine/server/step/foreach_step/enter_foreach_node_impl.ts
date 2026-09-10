@@ -81,8 +81,10 @@ export class EnterForeachNodeImpl implements NodeImplementation {
     };
 
     this.stepExecutionRuntime.setCurrentStepState(foreachState);
-    // Enter a new scope for the first iteration
-    this.wfExecutionRuntimeManager.enterScope(foreachState.index.toString());
+    this.wfExecutionRuntimeManager.navigateToSynthetic({
+      stepId: `iteration-${foreachState.index}`,
+      stepType: 'foreach-iteration',
+    });
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }
 
@@ -101,8 +103,10 @@ export class EnterForeachNodeImpl implements NodeImplementation {
     const newForeachState: ForeachStepState = { index, total: currentForeachState.total };
     // Only persist index and total — no need to store the full items array.
     this.stepExecutionRuntime.setCurrentStepState(newForeachState);
-    // Enter a new scope for the new iteration
-    this.wfExecutionRuntimeManager.enterScope(index.toString());
+    this.wfExecutionRuntimeManager.navigateToSynthetic({
+      stepId: `iteration-${index}`,
+      stepType: 'foreach-iteration',
+    });
     this.wfExecutionRuntimeManager.navigateToNextNode();
   }
 
