@@ -83,6 +83,9 @@ export class WorkflowRuntimeGraph {
   /**
    * Adds a runtime scope under `ownerNodeId` (one loop iteration) and returns the
    * enter node the cursor should move to.
+   *
+   * Wraps the compiled body the first time. Later mints rewire that same pair to
+   * the new hashed ids — the body is not cloned.
    */
   public insertSyntheticScope(ownerNodeId: string, stepId: string, stepType: string): string {
     const { enter: enterSynthetic, exit: exitSynthetic } = this.createSyntheticScope(
