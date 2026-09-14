@@ -7,7 +7,14 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-export { EnterForeachIterationNodeImpl } from './enter_foreach_iteration_node_impl';
-export { EnterForeachNodeImpl } from './enter_foreach_node_impl';
-export { ExitForeachIterationNodeImpl } from './exit_foreach_iteration_node_impl';
-export { ExitForeachNodeImpl } from './exit_foreach_node_impl';
+const ITERATION_STEP_ID_PREFIX = 'iteration-';
+
+export const ITERATION_STEP_TYPE = 'foreach-iteration';
+
+export function iterationStepIdFromIndex(index: number): string {
+  return `iteration-${index}`;
+}
+
+export function indexFromIterationStepId(stepId: string): number {
+  return Number(stepId.replace(ITERATION_STEP_ID_PREFIX, ''));
+}
