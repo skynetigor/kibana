@@ -37,6 +37,7 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
       useWorkflowsCapabilities();
     const { mutateAsync: runWorkflow, isLoading: isRerunning } = useRunWorkflow();
     const api = useWorkflowsApi();
+    const { testWorkflow } = api;
     const telemetry = useTelemetry();
     const { href: executionHref } = useNavigateToExecution({
       workflowId: execution.workflowId ?? '',
@@ -50,11 +51,16 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
 
     const handleRerun = useCallback(async () => {
       if (!canExecuteWorkflow || !execution.workflowId) return;
+      const inputs = buildReplayInputsFromExecutionContext(execution.context);
       try {
-        await runWorkflow({
-          id: execution.workflowId,
-          inputs: buildReplayInputsFromExecutionContext(execution.context),
-        });
+        if (execution.isTestRun) {
+          await testWorkflow({ workflowId: execution.workflowId, inputs });
+        } else {
+          await runWorkflow({
+            id: execution.workflowId,
+            inputs,
+          });
+        }
         notifications.toasts.addSuccess(
           i18n.translate('workflows.executionFlyout.takeAction.reRunSuccess', {
             defaultMessage: 'Re-ran execution',
@@ -71,9 +77,11 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
     }, [
       canExecuteWorkflow,
       execution.context,
+      execution.isTestRun,
       execution.workflowId,
       notifications.toasts,
       runWorkflow,
+      testWorkflow,
     ]);
 
     const handleCancel = useCallback(async () => {

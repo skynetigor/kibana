@@ -19,6 +19,7 @@ import { createMockWorkflowExecutionDto } from '../../../shared/test_utils';
 
 const mockRunWorkflow = jest.fn();
 const mockCancelExecution = jest.fn();
+const mockTestWorkflow = jest.fn();
 
 jest.mock('@kbn/workflows-ui', () => ({
   ...jest.requireActual('@kbn/workflows-ui'),
@@ -38,12 +39,14 @@ describe('ExecutionTakeActionSplitButton', () => {
     jest.clearAllMocks();
     mockRunWorkflow.mockResolvedValue({ workflowExecutionId: 'new-exec' });
     mockCancelExecution.mockResolvedValue({});
+    mockTestWorkflow.mockResolvedValue({ workflowExecutionId: 'new-test-exec' });
     jest.mocked(useRunWorkflow).mockReturnValue({
       mutateAsync: mockRunWorkflow,
       isLoading: false,
     } as ReturnType<typeof useRunWorkflow>);
     jest.mocked(useWorkflowsApi).mockReturnValue({
       cancelExecution: mockCancelExecution,
+      testWorkflow: mockTestWorkflow,
     } as ReturnType<typeof useWorkflowsApi>);
     jest.mocked(useWorkflowsCapabilities).mockReturnValue(createMockWorkflowsCapabilities());
     services.notifications.toasts.addSuccess = jest.fn();
@@ -93,5 +96,39 @@ describe('ExecutionTakeActionSplitButton', () => {
     openTakeActionMenu();
     fireEvent.click(screen.getByTestId('workflowExecutionFlyoutCancelExecution'));
     expect(mockCancelExecution).not.toHaveBeenCalled();
+  });
+
+  it('re-runs a production execution through runWorkflow', async () => {
+    renderButton({
+      isTestRun: false,
+      context: { inputs: { alertId: 'a-1' } },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-run' }));
+
+    await waitFor(() => {
+      expect(mockRunWorkflow).toHaveBeenCalledWith({
+        id: 'wf-1',
+        inputs: { alertId: 'a-1' },
+      });
+    });
+    expect(mockTestWorkflow).not.toHaveBeenCalled();
+  });
+
+  it('re-runs a test execution through testWorkflow', async () => {
+    renderButton({
+      isTestRun: true,
+      context: { inputs: { alertId: 'a-1' } },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-run' }));
+
+    await waitFor(() => {
+      expect(mockTestWorkflow).toHaveBeenCalledWith({
+        workflowId: 'wf-1',
+        inputs: { alertId: 'a-1' },
+      });
+    });
+    expect(mockRunWorkflow).not.toHaveBeenCalled();
   });
 });
