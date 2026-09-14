@@ -18,7 +18,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { i18n } from '@kbn/i18n';
 import { isDangerousStatus } from '@kbn/workflows';
 import type { WorkflowExecutionDto } from '@kbn/workflows';
-import { useRunWorkflow, useWorkflowsCapabilities } from '@kbn/workflows-ui';
+import { useRunWorkflow, useWorkflowsApi, useWorkflowsCapabilities } from '@kbn/workflows-ui';
 import { useNavigateToExecution } from '../../../hooks/navigation/use_navigate_to_execution';
 import { useKibana } from '../../../hooks/use_kibana';
 import { buildReplayInputsFromExecutionContext } from '../../../pages/executions/build_replay_inputs_from_execution_context';
@@ -34,6 +34,7 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
     const { notifications, application } = useKibana().services;
     const { canExecuteWorkflow, canUpdateWorkflow } = useWorkflowsCapabilities();
     const { mutateAsync: runWorkflow, isLoading: isRerunning } = useRunWorkflow();
+    const { testWorkflow } = useWorkflowsApi();
     const { href: executionHref } = useNavigateToExecution({
       workflowId: execution.workflowId ?? '',
       executionId: execution.id,
@@ -44,11 +45,16 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
 
     const handleRerun = useCallback(async () => {
       if (!canExecuteWorkflow || !execution.workflowId) return;
+      const inputs = buildReplayInputsFromExecutionContext(execution.context);
       try {
-        await runWorkflow({
-          id: execution.workflowId,
-          inputs: buildReplayInputsFromExecutionContext(execution.context),
-        });
+        if (execution.isTestRun) {
+          await testWorkflow({ workflowId: execution.workflowId, inputs });
+        } else {
+          await runWorkflow({
+            id: execution.workflowId,
+            inputs,
+          });
+        }
         notifications.toasts.addSuccess(
           i18n.translate('workflows.executionFlyout.takeAction.reRunSuccess', {
             defaultMessage: 'Re-ran execution',
@@ -65,9 +71,11 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
     }, [
       canExecuteWorkflow,
       execution.context,
+      execution.isTestRun,
       execution.workflowId,
       notifications.toasts,
       runWorkflow,
+      testWorkflow,
     ]);
 
     const handleEditWorkflow = useCallback(() => {
