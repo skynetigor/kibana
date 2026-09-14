@@ -42,7 +42,10 @@ import {
   buildTriggerStepExecutionFromContext,
 } from './workflow_pseudo_step_context';
 import { buildDiagnosisContextPackage } from '../lib/build_diagnosis_context_package';
-import { buildIterationVirtualId } from '../lib/build_iteration_pseudo_step';
+import {
+  buildIterationVirtualId,
+  parseIterationVirtualId,
+} from '../lib/build_iteration_pseudo_step';
 import type { ErrorPanelDiagnoseState } from '../lib/derive_error_panel_diagnose_availability';
 import {
   buildIterationStatusOverrides,
@@ -524,7 +527,13 @@ function convertTreeToOpenNodes(
             if (iter) gapChildren.push(iter);
           }
           const gapId = iterationGapId(foreachParentId, entry.from, entry.to);
-          const isExpanded = expandedGapIds.has(gapId);
+          const selectedIteration = selectedId ? parseIterationVirtualId(selectedId) : null;
+          const selectedInThisGap =
+            selectedIteration != null &&
+            selectedIteration.parentStepId === foreachParentStepId &&
+            selectedIteration.iterationIndex >= entry.from &&
+            selectedIteration.iterationIndex <= entry.to;
+          const isExpanded = expandedGapIds.has(gapId) || selectedInThisGap;
           nodes.push(
             buildIterationGapNode(
               foreachParentId,
@@ -947,6 +956,18 @@ const collectDefaultExpandedIds = (nodes: OpenTreeNode[], into: Set<string>) => 
   }
 };
 
+const withSelectedIterationExpanded = (
+  base: Set<string>,
+  selectedId: string | null
+): Set<string> => {
+  if (selectedId && parseIterationVirtualId(selectedId) && !base.has(selectedId)) {
+    const next = new Set(base);
+    next.add(selectedId);
+    return next;
+  }
+  return base;
+};
+
 /**
  * Iterations section rows: full flat list of iteration leaves (no nested step
  * trees / expand chevrons). Gap rows are already disabled via collapseIterations.
@@ -1058,7 +1079,10 @@ export const StepExecutionOpenTree = ({
     return ids;
   }, [openNodes]);
 
-  const expandedIds = userExpandedIds ?? defaultExpandedIds;
+  const expandedIds = withSelectedIterationExpanded(
+    userExpandedIds ?? defaultExpandedIds,
+    selectedId
+  );
 
   const onToggleExpand = useCallback(
     (id: string) => {
@@ -1331,7 +1355,10 @@ export const WorkflowStepExecutionTree = ({
     return ids;
   }, [openNodes]);
 
-  const expandedIds = userExpandedIds ?? defaultExpandedIds;
+  const expandedIds = withSelectedIterationExpanded(
+    userExpandedIds ?? defaultExpandedIds,
+    selectedId
+  );
 
   const onToggleExpand = useCallback(
     (id: string) => {
