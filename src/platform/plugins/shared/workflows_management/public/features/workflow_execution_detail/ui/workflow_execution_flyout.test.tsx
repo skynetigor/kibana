@@ -7,8 +7,10 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import { copyToClipboard } from '@elastic/eui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import type { WorkflowExecutionDto, WorkflowStepExecutionDto } from '@kbn/workflows';
 import { ExecutionStatus } from '@kbn/workflows';
 import { WorkflowExecutionFlyout } from './workflow_execution_flyout';
 import { createStartServicesMock } from '../../../mocks';
@@ -18,10 +20,26 @@ import {
   createMockWorkflowExecutionDto,
 } from '../../../shared/test_utils';
 
+const mockCopyToClipboard = copyToClipboard as jest.MockedFunction<typeof copyToClipboard>;
+
+jest.mock('@elastic/eui', () => {
+  const actual = jest.requireActual('@elastic/eui');
+  return {
+    ...actual,
+    copyToClipboard: jest.fn(),
+  };
+});
+
 const mockUrlState = {
   shouldAutoResume: false,
   clearResumeParam: jest.fn(),
+  selectedStepExecutionId: undefined as string | undefined,
+  setSelectedStepExecution: (stepExecutionId: string | null) => {
+    mockUrlState.selectedStepExecutionId = stepExecutionId ?? undefined;
+    mockSetSelectedStepExecution(stepExecutionId);
+  },
 };
+const mockSetSelectedStepExecution = jest.fn();
 
 jest.mock('../../../hooks/use_workflow_url_state', () => ({
   useWorkflowUrlState: () => mockUrlState,
@@ -35,13 +53,15 @@ jest.mock('../../../hooks/navigation/use_navigate_to_execution', () => ({
     workflowId: string;
     executionId?: string;
   }) => ({
-    href: `/app/workflows/${workflowId}${executionId ? `?executionId=${executionId}` : ''}`,
+    href: `/app/workflows/${workflowId}${
+      executionId ? `?tab=executions&executionId=${executionId}` : '?tab=executions'
+    }`,
     navigate: jest.fn(),
   }),
 }));
 
 jest.mock('../../../entities/connectors/model/use_available_connectors', () => ({
-  useAvailableConnectors: () => undefined,
+  useAvailableConnectors: () => ({ connectorTypes: {} }),
   useFetchConnector: () => ({ data: undefined }),
 }));
 
@@ -72,13 +92,50 @@ jest.mock('./resume_execution_button', () => ({
   ),
 }));
 
+const mockPollingResult: {
+  workflowExecution: WorkflowExecutionDto | undefined;
+  error: Error | null;
+} = {
+  workflowExecution: undefined,
+  error: null,
+};
+
+jest.mock('../../../entities/workflows/model/use_workflow_execution_polling', () => ({
+  useWorkflowExecutionPolling: () => mockPollingResult,
+}));
+
+const mockUseStepExecution = jest.fn(() => ({
+  data: {
+    id: 'step-wait',
+    stepId: 'request_approval',
+    stepType: 'waitForInput',
+    status: 'waiting_for_input',
+    input: { message: 'Approve this' },
+  },
+  isLoading: false,
+}));
+
+jest.mock('../model/use_step_execution', () => ({
+  useStepExecution: (...args: unknown[]) => mockUseStepExecution(...args),
+}));
+
 jest.mock('./workflow_step_execution_tree', () => ({
   WorkflowStepExecutionTree: ({
     onStepExecutionClick,
+    selectedId,
   }: {
     onStepExecutionClick: (id: string) => void;
+    selectedId: string | null;
   }) => (
-    <>
+    <div data-test-subj="workflow-step-execution-tree">
+      <div data-test-subj="tree-selected-id">{selectedId || 'No Selection'}</div>
+      <button
+        type="button"
+        data-test-subj="mock-step-click"
+        onClick={() => onStepExecutionClick('step-123')}
+      >
+        {'Click Step'}
+      </button>
       <button
         type="button"
         data-test-subj="select-waiting-step"
@@ -100,7 +157,7 @@ jest.mock('./workflow_step_execution_tree', () => ({
       >
         {'Select child step'}
       </button>
-    </>
+    </div>
   ),
 }));
 
@@ -108,29 +165,16 @@ jest.mock('./execution_take_action_split_button', () => ({
   ExecutionTakeActionSplitButton: () => <div data-test-subj="take-action" />,
 }));
 
-const mockPollingResult = {
-  workflowExecution: undefined as ReturnType<typeof createMockWorkflowExecutionDto> | undefined,
-  error: null as Error | null,
-};
-
-jest.mock('../../../entities/workflows/model/use_workflow_execution_polling', () => ({
-  useWorkflowExecutionPolling: () => mockPollingResult,
+jest.mock('../../../shared/ui/step_icons/step_icon', () => ({
+  StepIcon: () => <span data-test-subj="step-icon" />,
 }));
 
-const mockUseStepExecution = jest.fn(() => ({
-  data: {
-    id: 'step-wait',
-    stepId: 'request_approval',
-    stepType: 'waitForInput',
-    status: 'waiting_for_input',
-    input: { message: 'Approve this' },
-  },
-  isLoading: false,
-}));
-
-jest.mock('../model/use_step_execution', () => ({
-  useStepExecution: (...args: unknown[]) => mockUseStepExecution(...args),
-}));
+const pathStep: WorkflowStepExecutionDto = createMockStepExecutionDto({
+  id: 'step-123',
+  stepId: 'lookup_host',
+  stepType: 'console',
+  output: { result: 'ok', details: { field: 'abc' } },
+});
 
 describe('WorkflowExecutionFlyout resume', () => {
   const services = createStartServicesMock();
@@ -153,6 +197,7 @@ describe('WorkflowExecutionFlyout resume', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUrlState.shouldAutoResume = false;
+    mockUrlState.selectedStepExecutionId = undefined;
     mockWaitingStepResume.waitingStepExecutionId = undefined;
     mockWaitingStepResume.waitingStepStartedAt = undefined;
     mockWaitingStepResume.resumeMessage = undefined;
@@ -204,8 +249,9 @@ describe('WorkflowExecutionFlyout resume', () => {
     mockWaitingStepResume.waitingStepExecutionId = 'step-wait';
     mockWaitingStepResume.waitingStepStartedAt = '2024-01-01T00:00:00Z';
 
-    renderFlyout();
+    const view = renderFlyout();
     fireEvent.click(screen.getByTestId('select-waiting-step'));
+    view.rerender(<WorkflowExecutionFlyout executionId="exec-1" onClose={jest.fn()} />);
 
     const resumeButtons = screen.getAllByTestId('resume-execution-button');
     expect(resumeButtons).toHaveLength(2);
@@ -254,6 +300,8 @@ describe('WorkflowExecutionFlyout child workflow steps', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUrlState.shouldAutoResume = false;
+    mockUrlState.selectedStepExecutionId = undefined;
     mockChildExecutions.clear();
     mockChildExecutions.set('parent-execute', childExecution);
     mockPollingResult.workflowExecution = parentExecution;
@@ -275,8 +323,9 @@ describe('WorkflowExecutionFlyout child workflow steps', () => {
     });
 
   it('fetches I/O from the child run and links to it when a child step is selected', () => {
-    renderFlyout();
+    const view = renderFlyout();
     fireEvent.click(screen.getByTestId('select-child-step'));
+    view.rerender(<WorkflowExecutionFlyout executionId="parent-exec" onClose={jest.fn()} />);
 
     expect(mockUseStepExecution).toHaveBeenCalledWith(
       'child-exec-1',
@@ -287,7 +336,7 @@ describe('WorkflowExecutionFlyout child workflow steps', () => {
     expect(owningLink).toHaveTextContent('Flyout test - child: lookup_host');
     expect(owningLink).toHaveAttribute(
       'href',
-      '/app/workflows/flyout-test-child?executionId=child-exec-1'
+      '/app/workflows/flyout-test-child?tab=executions&executionId=child-exec-1'
     );
     expect(screen.getByText('hostname')).toBeInTheDocument();
     expect(screen.getByText('workstation-7')).toBeInTheDocument();
@@ -304,8 +353,9 @@ describe('WorkflowExecutionFlyout child workflow steps', () => {
       isLoading: false,
     });
 
-    renderFlyout();
+    const view = renderFlyout();
     fireEvent.click(screen.getByTestId('select-execute-step'));
+    view.rerender(<WorkflowExecutionFlyout executionId="parent-exec" onClose={jest.fn()} />);
 
     expect(mockUseStepExecution).toHaveBeenCalledWith(
       'parent-exec',
@@ -316,7 +366,82 @@ describe('WorkflowExecutionFlyout child workflow steps', () => {
     expect(childLink).toHaveTextContent('workflow.execute: Flyout test - child');
     expect(childLink).toHaveAttribute(
       'href',
-      '/app/workflows/flyout-test-child?executionId=child-exec-1'
+      '/app/workflows/flyout-test-child?tab=executions&executionId=child-exec-1'
     );
+  });
+});
+
+describe('WorkflowExecutionFlyout step URL and field paths', () => {
+  const services = createStartServicesMock();
+
+  const renderFlyout = () =>
+    render(<WorkflowExecutionFlyout executionId="exec-1" onClose={jest.fn()} />, {
+      wrapper: getTestProvider({ services }),
+    });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUrlState.shouldAutoResume = false;
+    mockUrlState.selectedStepExecutionId = undefined;
+    mockChildExecutions.clear();
+    mockPollingResult.workflowExecution = createMockWorkflowExecutionDto({
+      id: 'exec-1',
+      workflowId: 'workflow-1',
+      status: ExecutionStatus.COMPLETED,
+      stepExecutions: [pathStep],
+    });
+    mockPollingResult.error = null;
+    mockUseStepExecution.mockReturnValue({
+      data: {
+        input: { host: 'web-1' },
+        output: { result: 'ok', details: { field: 'abc' } },
+      },
+      isLoading: false,
+    });
+  });
+
+  it('writes the selected step to the URL', () => {
+    renderFlyout();
+
+    fireEvent.click(screen.getByTestId('mock-step-click'));
+
+    expect(mockSetSelectedStepExecution).toHaveBeenCalledWith('step-123');
+  });
+
+  it('opens the step panel from the URL and copies the output field path', () => {
+    mockUrlState.selectedStepExecutionId = 'step-123';
+
+    renderFlyout();
+
+    expect(screen.getByTestId('tree-selected-id')).toHaveTextContent('step-123');
+    expect(screen.getAllByTestId('workflowExecutionStepDataTable').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByTestId('workflowExecutionStepDataCopyFieldPath')[0]);
+
+    expect(mockCopyToClipboard).toHaveBeenCalledWith('steps.lookup_host.output.result');
+  });
+
+  it('includes the selected step on the shared execution link', () => {
+    mockUrlState.selectedStepExecutionId = 'step-123';
+
+    renderFlyout();
+
+    fireEvent.click(screen.getByTestId('workflowExecutionFlyoutShare'));
+
+    expect(mockCopyToClipboard).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '/app/workflows/workflow-1?tab=executions&executionId=exec-1&stepExecutionId=step-123'
+      )
+    );
+  });
+
+  it('clears the step from the URL when the step panel is closed', () => {
+    mockUrlState.selectedStepExecutionId = 'step-123';
+
+    renderFlyout();
+
+    fireEvent.click(screen.getByTestId('workflowExecutionFlyoutStepClose'));
+
+    expect(mockSetSelectedStepExecution).toHaveBeenCalledWith(null);
   });
 });
