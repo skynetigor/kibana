@@ -20,12 +20,19 @@ import { createMockWorkflowExecutionDto } from '../../../shared/test_utils';
 const mockRunWorkflow = jest.fn();
 const mockTestWorkflow = jest.fn();
 const mockCancelExecution = jest.fn();
+const mockSetSelectedExecution = jest.fn();
 
 jest.mock('@kbn/workflows-ui', () => ({
   ...jest.requireActual('@kbn/workflows-ui'),
   useRunWorkflow: jest.fn(),
   useWorkflowsApi: jest.fn(),
   useWorkflowsCapabilities: jest.fn(),
+}));
+
+jest.mock('../../../hooks/use_workflow_url_state', () => ({
+  useWorkflowUrlState: () => ({
+    setSelectedExecution: mockSetSelectedExecution,
+  }),
 }));
 
 jest.mock('../../../hooks/navigation/use_navigate_to_execution', () => ({
@@ -78,6 +85,7 @@ describe('ExecutionTakeActionSplitButton', () => {
       });
     });
     expect(mockTestWorkflow).not.toHaveBeenCalled();
+    expect(mockSetSelectedExecution).toHaveBeenCalledWith('new-exec');
   });
 
   it('re-runs a test execution through testWorkflow', async () => {
@@ -95,6 +103,24 @@ describe('ExecutionTakeActionSplitButton', () => {
       });
     });
     expect(mockRunWorkflow).not.toHaveBeenCalled();
+    expect(mockSetSelectedExecution).toHaveBeenCalledWith('new-test-exec');
+  });
+
+  it('does not change the selected execution when re-run fails', async () => {
+    mockRunWorkflow.mockRejectedValue(new Error('run failed'));
+
+    renderButton({
+      isTestRun: false,
+      context: { inputs: { alertId: 'a-1' } },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-run' }));
+
+    await waitFor(() => {
+      expect(services.notifications.toasts.addError).toHaveBeenCalled();
+    });
+
+    expect(mockSetSelectedExecution).not.toHaveBeenCalled();
   });
 
   it('cancels a running execution from the take-action menu', async () => {
