@@ -127,4 +127,140 @@ describe('mergeDefinitionStepsIntoTree', () => {
     const tree = [node({ stepId: 'a', stepType: 'console' })];
     expect(mergeDefinitionStepsIntoTree(tree, null)).toBe(tree);
   });
+
+  it('reorders foreach iteration body steps to YAML order and ghosts unrun siblings', () => {
+    const tree = [
+      node({
+        stepId: 'process_alerts',
+        stepType: 'foreach',
+        children: [
+          node({
+            stepId: '0',
+            stepType: 'foreach-iteration',
+            children: [
+              node({ stepId: 'notify', stepType: 'console' }),
+              node({ stepId: 'enrich', stepType: 'console' }),
+            ],
+          }),
+        ],
+      }),
+    ];
+
+    const result = mergeDefinitionStepsIntoTree(tree, {
+      name: 'wf',
+      steps: [
+        {
+          name: 'process_alerts',
+          type: 'foreach',
+          foreach: '{{ alerts }}',
+          steps: [
+            { name: 'enrich', type: 'console' },
+            { name: 'triage', type: 'console' },
+            { name: 'notify', type: 'console' },
+          ],
+        },
+      ],
+    } as WorkflowYaml);
+
+    const iteration = result[0].children[0];
+    expect(iteration.children.map((n) => n.stepId)).toEqual(['enrich', 'triage', 'notify']);
+    expect(iteration.children[1]).toMatchObject({
+      stepId: 'triage',
+      status: ExecutionStatus.SKIPPED,
+      stepExecutionId: null,
+      children: [],
+    });
+    expect(iteration.children[0].status).toBe(ExecutionStatus.COMPLETED);
+    expect(iteration.children[2].status).toBe(ExecutionStatus.COMPLETED);
+  });
+
+  it('reorders if-branch body steps to YAML order and ghosts unrun siblings', () => {
+    const tree = [
+      node({
+        stepId: 'gate',
+        stepType: 'if',
+        children: [
+          node({
+            stepId: 'true',
+            stepType: 'if-branch',
+            children: [
+              node({ stepId: 'then_b', stepType: 'console' }),
+              node({ stepId: 'then_a', stepType: 'console' }),
+            ],
+          }),
+        ],
+      }),
+    ];
+
+    const result = mergeDefinitionStepsIntoTree(tree, {
+      name: 'wf',
+      steps: [
+        {
+          name: 'gate',
+          type: 'if',
+          condition: 'true',
+          steps: [
+            { name: 'then_a', type: 'console' },
+            { name: 'then_mid', type: 'console' },
+            { name: 'then_b', type: 'console' },
+          ],
+        },
+      ],
+    } as WorkflowYaml);
+
+    const branch = result[0].children[0];
+    expect(branch.children.map((n) => n.stepId)).toEqual(['then_a', 'then_mid', 'then_b']);
+    expect(branch.children[1]).toMatchObject({
+      stepId: 'then_mid',
+      status: ExecutionStatus.SKIPPED,
+      stepExecutionId: null,
+    });
+  });
+
+  it('leaves retry-attempt children unchanged', () => {
+    const retryChild = node({
+      stepId: 'triage_overview',
+      stepType: 'ai.prompt',
+      isRetryAttempt: true,
+      attemptNumber: 1,
+      status: ExecutionStatus.FAILED,
+    });
+    const tree = [
+      node({
+        stepId: 'triage_overview',
+        stepType: 'ai.prompt',
+        status: ExecutionStatus.FAILED,
+        children: [retryChild],
+      }),
+    ];
+
+    const result = mergeDefinitionStepsIntoTree(tree, {
+      name: 'wf',
+      steps: [{ name: 'triage_overview', type: 'ai.prompt' }],
+    } as WorkflowYaml);
+
+    expect(result[0].children).toEqual([retryChild]);
+  });
+
+  it('keeps an unexecuted top-level foreach as a ghost leaf', () => {
+    const tree = [node({ stepId: 'start', stepType: 'console' })];
+    const result = mergeDefinitionStepsIntoTree(tree, {
+      name: 'wf',
+      steps: [
+        { name: 'start', type: 'console' },
+        {
+          name: 'process_alerts',
+          type: 'foreach',
+          foreach: '{{ alerts }}',
+          steps: [{ name: 'enrich', type: 'console' }],
+        },
+      ],
+    } as WorkflowYaml);
+
+    expect(result.find((n) => n.stepId === 'process_alerts')).toMatchObject({
+      stepType: 'foreach',
+      status: ExecutionStatus.SKIPPED,
+      children: [],
+    });
+  });
 });
