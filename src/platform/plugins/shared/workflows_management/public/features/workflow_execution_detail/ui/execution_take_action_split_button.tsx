@@ -15,14 +15,15 @@ import {
   EuiSplitButton,
 } from '@elastic/eui';
 import React, { useCallback, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { i18n } from '@kbn/i18n';
 import { isDangerousStatus, isTerminalStatus } from '@kbn/workflows';
 import type { WorkflowExecutionDto } from '@kbn/workflows';
-import { useRunWorkflow, useWorkflowsApi, useWorkflowsCapabilities } from '@kbn/workflows-ui';
+import { useWorkflowsApi, useWorkflowsCapabilities } from '@kbn/workflows-ui';
 import { useNavigateToExecution } from '../../../hooks/navigation/use_navigate_to_execution';
 import { useKibana } from '../../../hooks/use_kibana';
 import { useTelemetry } from '../../../hooks/use_telemetry';
-import { buildReplayInputsFromExecutionContext } from '../../../pages/executions/build_replay_inputs_from_execution_context';
+import { useWorkflowUrlState } from '../../../hooks/use_workflow_url_state';
 
 interface ExecutionTakeActionSplitButtonProps {
   execution: WorkflowExecutionDto;
@@ -35,10 +36,10 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
     const { notifications, application } = useKibana().services;
     const { canExecuteWorkflow, canUpdateWorkflow, canCancelWorkflowExecution } =
       useWorkflowsCapabilities();
-    const { mutateAsync: runWorkflow, isLoading: isRerunning } = useRunWorkflow();
     const api = useWorkflowsApi();
-    const { testWorkflow } = api;
     const telemetry = useTelemetry();
+    const { pathname } = useLocation();
+    const { updateUrlState } = useWorkflowUrlState();
     const { href: executionHref } = useNavigateToExecution({
       workflowId: execution.workflowId ?? '',
       executionId: execution.id,
@@ -49,39 +50,25 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
     const isTerminal = isTerminalStatus(execution.status);
     const isCancelDisabled = isTerminal || !canCancelWorkflowExecution;
 
-    const handleRerun = useCallback(async () => {
+    const handleRerun = useCallback(() => {
       if (!canExecuteWorkflow || !execution.workflowId) return;
-      const inputs = buildReplayInputsFromExecutionContext(execution.context);
-      try {
-        if (execution.isTestRun) {
-          await testWorkflow({ workflowId: execution.workflowId, inputs });
-        } else {
-          await runWorkflow({
-            id: execution.workflowId,
-            inputs,
-          });
-        }
-        notifications.toasts.addSuccess(
-          i18n.translate('workflows.executionFlyout.takeAction.reRunSuccess', {
-            defaultMessage: 'Re-ran execution',
-          }),
-          { toastLifeTimeMs: 3000 }
-        );
-      } catch (err) {
-        notifications.toasts.addError(err instanceof Error ? err : new Error(String(err)), {
-          title: i18n.translate('workflows.executionFlyout.takeAction.reRunError', {
-            defaultMessage: 'Failed to re-run execution',
-          }),
-        });
+
+      // Stay on this execution so the flyout does not close behind the modal.
+      if (pathname === `/${execution.workflowId}`) {
+        updateUrlState({ replayExecutionId: execution.id });
+        return;
       }
+
+      application.navigateToApp('workflows', {
+        path: `/${execution.workflowId}?tab=executions&executionId=${execution.id}&replayExecutionId=${execution.id}`,
+      });
     }, [
+      application,
       canExecuteWorkflow,
-      execution.context,
-      execution.isTestRun,
+      execution.id,
       execution.workflowId,
-      notifications.toasts,
-      runWorkflow,
-      testWorkflow,
+      pathname,
+      updateUrlState,
     ]);
 
     const handleCancel = useCallback(async () => {
@@ -265,11 +252,7 @@ export const ExecutionTakeActionSplitButton = React.memo<ExecutionTakeActionSpli
         anchorPosition="upRight"
         button={
           <EuiSplitButton size="s" fill data-test-subj="workflowExecutionFlyoutTakeAction">
-            <EuiSplitButton.ActionPrimary
-              onClick={() => void handleRerun()}
-              isLoading={isRerunning}
-              isDisabled={!canExecuteWorkflow}
-            >
+            <EuiSplitButton.ActionPrimary onClick={handleRerun} isDisabled={!canExecuteWorkflow}>
               {i18n.translate('workflows.executionFlyout.takeAction.reRun', {
                 defaultMessage: 'Re-run',
               })}
