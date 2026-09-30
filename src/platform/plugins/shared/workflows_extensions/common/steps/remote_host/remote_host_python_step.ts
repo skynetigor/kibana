@@ -12,7 +12,7 @@ import { StepCategory } from '@kbn/workflows';
 import { z } from '@kbn/zod/v4';
 import type { CommonStepDefinition } from '../../step_registry/types';
 
-export const RemoteHostPythonStepTypeId = 'remoteHost.python' as const;
+export const SshPythonStepTypeId = 'ssh.python' as const;
 
 export const REMOTE_HOST_PYTHON_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB
 
@@ -37,7 +37,7 @@ export const remoteHostPythonStepCommonDefinition: CommonStepDefinition<
   RemoteHostPythonStepOutputSchema,
   RemoteHostPythonStepConfigSchema
 > = {
-  id: RemoteHostPythonStepTypeId,
+  id: SshPythonStepTypeId,
   category: StepCategory.Kibana,
   stability: 'tech_preview',
   label: i18n.translate('workflowsExtensions.remoteHostPythonStep.label', {
@@ -57,7 +57,7 @@ are captured to logs.
 
 \`\`\`yaml
 - name: get-hostname
-  type: remoteHost.python
+  type: ssh.python
   config:
     connector-id: my-ssh-connector
   with:
@@ -70,7 +70,7 @@ are captured to logs.
 
 \`\`\`yaml
 - name: disk-info
-  type: remoteHost.python
+  type: ssh.python
   config:
     connector-id: my-ssh-connector
   with:
@@ -84,7 +84,7 @@ are captured to logs.
 
 \`\`\`yaml
 - name: deploy
-  type: remoteHost.python
+  type: ssh.python
   config:
     connector-id: my-ssh-connector
   with:

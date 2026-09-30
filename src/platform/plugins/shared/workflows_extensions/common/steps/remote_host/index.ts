@@ -26,7 +26,7 @@ export type {
 } from './remote_host_download_file_step';
 
 export {
-  RemoteHostJavascriptStepTypeId,
+  SshNodeStepTypeId,
   REMOTE_HOST_JAVASCRIPT_TEMPLATE_MAX_CHARS,
   ConfigSchema as RemoteHostJavascriptConfigSchema,
   InputSchema as RemoteHostJavascriptInputSchema,
@@ -40,7 +40,7 @@ export type {
 } from './remote_host_javascript_step';
 
 export {
-  RemoteHostPythonStepTypeId,
+  SshPythonStepTypeId,
   REMOTE_HOST_PYTHON_TEMPLATE_MAX_CHARS,
   ConfigSchema as RemoteHostPythonConfigSchema,
   InputSchema as RemoteHostPythonInputSchema,
