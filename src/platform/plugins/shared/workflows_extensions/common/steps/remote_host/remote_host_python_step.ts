@@ -98,7 +98,7 @@ are captured to logs.
 
 ## Inputs
 
-- **code** (required): Python 3 script to execute on the remote host. Use \`print()\` for log output and \`return\` a value to set the step output.
+- **code** (required): Python 3 script to execute on the remote host. Use \`print()\` for log output and \`return\` a value to set the step output. Top-level \`await\` is supported.
 - **env** (optional): Key-value map of environment variables exported before \`code\` runs. Keys must be valid shell identifiers.
 - **cwd** (optional): Working directory for \`code\`.
 

@@ -97,7 +97,7 @@ are captured to logs.
 
 ## Inputs
 
-- **code** (required): Node.js script to execute on the remote host. Use \`console.log\` for log output and \`return\` a value to set the step output.
+- **code** (required): Node.js script to execute on the remote host. Use \`console.log\` for log output and \`return\` a value to set the step output. Top-level \`import\` and \`await\` are supported, and \`require()\` is available.
 - **env** (optional): Key-value map of environment variables exported before \`code\` runs. Keys must be valid shell identifiers.
 - **cwd** (optional): Working directory for \`code\`.
 
