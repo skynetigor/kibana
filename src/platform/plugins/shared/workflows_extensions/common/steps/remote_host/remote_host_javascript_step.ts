@@ -12,7 +12,7 @@ import { StepCategory } from '@kbn/workflows';
 import { z } from '@kbn/zod/v4';
 import type { CommonStepDefinition } from '../../step_registry/types';
 
-export const RemoteHostJavascriptStepTypeId = 'remoteHost.javascript' as const;
+export const SshNodeStepTypeId = 'ssh.node' as const;
 
 export const REMOTE_HOST_JAVASCRIPT_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB
 
@@ -37,7 +37,7 @@ export const remoteHostJavascriptStepCommonDefinition: CommonStepDefinition<
   RemoteHostJavascriptStepOutputSchema,
   RemoteHostJavascriptStepConfigSchema
 > = {
-  id: RemoteHostJavascriptStepTypeId,
+  id: SshNodeStepTypeId,
   category: StepCategory.Kibana,
   stability: 'tech_preview',
   label: i18n.translate('workflowsExtensions.remoteHostJavascriptStep.label', {
@@ -57,7 +57,7 @@ are captured to logs.
 
 \`\`\`yaml
 - name: get-hostname
-  type: remoteHost.javascript
+  type: ssh.node
   config:
     connector-id: my-ssh-connector
   with:
@@ -70,7 +70,7 @@ are captured to logs.
 
 \`\`\`yaml
 - name: disk-info
-  type: remoteHost.javascript
+  type: ssh.node
   config:
     connector-id: my-ssh-connector
   with:
@@ -84,7 +84,7 @@ are captured to logs.
 
 \`\`\`yaml
 - name: deploy
-  type: remoteHost.javascript
+  type: ssh.node
   config:
     connector-id: my-ssh-connector
   with:
