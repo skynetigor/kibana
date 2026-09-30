@@ -22,7 +22,7 @@ export const ConfigSchema = z.object({
 
 export const InputSchema = z.object({
   code: z.string().max(REMOTE_HOST_JAVASCRIPT_TEMPLATE_MAX_CHARS),
-  env: z.record(z.string(), z.string()).optional(),
+  env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string()).optional(),
   cwd: z.string().optional(),
 });
 
@@ -39,6 +39,7 @@ export const remoteHostJavascriptStepCommonDefinition: CommonStepDefinition<
 > = {
   id: RemoteHostJavascriptStepTypeId,
   category: StepCategory.Kibana,
+  stability: 'tech_preview',
   label: i18n.translate('workflowsExtensions.remoteHostJavascriptStep.label', {
     defaultMessage: 'Run JavaScript',
   }),
@@ -48,9 +49,9 @@ export const remoteHostJavascriptStepCommonDefinition: CommonStepDefinition<
   documentation: {
     details: `# Run JavaScript
 
-Execute a Node.js script on a remote host via an SSH Host connector. The script's standard
-output is captured and returned as the step output. If the output is valid JSON it is parsed
-into an object; otherwise it is returned as a string.
+Execute a Node.js script on a remote host via an SSH connector. Return a value from the
+script to set the step output (written to \`$STEP_OUTPUT\`). Standard output and stderr
+are captured to logs.
 
 ## Basic Usage
 
@@ -58,11 +59,11 @@ into an object; otherwise it is returned as a string.
 - name: get-hostname
   type: remoteHost.javascript
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
     code: |
       const os = require('os');
-      console.log(os.hostname());
+      return os.hostname();
 \`\`\`
 
 ## Structured Output
@@ -71,22 +72,39 @@ into an object; otherwise it is returned as a string.
 - name: disk-info
   type: remoteHost.javascript
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
     code: |
       const { execSync } = require('child_process');
       const available = execSync("df -BG / | awk 'NR==2{print $4}'").toString().trim();
-      console.log(JSON.stringify({ available }));
+      return { available };
+\`\`\`
+
+## Environment Variables and Working Directory
+
+\`\`\`yaml
+- name: deploy
+  type: remoteHost.javascript
+  config:
+    connector-id: my-ssh-connector
+  with:
+    cwd: /opt/myapp
+    env:
+      DEPLOY_ENV: production
+    code: |
+      return process.env.DEPLOY_ENV;
 \`\`\`
 
 ## Inputs
 
-- **code** (required): Node.js script to execute on the remote host.
+- **code** (required): Node.js script to execute on the remote host. Use \`console.log\` for log output and \`return\` a value to set the step output. Top-level \`import\` and \`await\` are supported, and \`require()\` is available.
+- **env** (optional): Key-value map of environment variables exported before \`code\` runs. Keys must be valid shell identifiers.
+- **cwd** (optional): Working directory for \`code\`.
 
 ## Output
 
-Returns the stdout of the script. If the output is valid JSON it is parsed into an object;
-otherwise it is returned as a string. Returns \`null\` when stdout is empty.
+Returns the value returned by the script. Objects and arrays are serialised as JSON.
+Returns \`null\` when nothing is returned.
 `,
   },
   inputSchema: InputSchema,

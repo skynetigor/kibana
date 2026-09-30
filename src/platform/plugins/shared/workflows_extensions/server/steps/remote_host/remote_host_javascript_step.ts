@@ -11,6 +11,7 @@ import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/act
 import { ExecutionError } from '@kbn/workflows/server';
 import { z } from '@kbn/zod/v4';
 import type { ConnectorCallContext } from './execute_in_connector';
+import { peelLeadingImports } from './peel_leading_imports';
 import type { RemoteHostJobStatus } from './remote_host_job';
 import { killJob, parseScriptOutput, pollJob, startJob } from './remote_host_job';
 import { remoteHostJavascriptStepCommonDefinition } from '../../../common/steps/remote_host';
@@ -26,19 +27,37 @@ interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
 }
 
-// Wraps user JS code so it runs via `node` and writes its return value to $STEP_OUTPUT.
-const buildScript = (code: string): string =>
-  `node << 'ENDOFSCRIPT'
-(async () => {
-  ${code}
-})().then((value) => {
-  if (value === undefined) return;
-  require('fs').writeFileSync(process.env.STEP_OUTPUT, JSON.stringify(value));
-}).catch((err) => {
-  process.stderr.write((err && err.stack) || String(err));
+// Leading imports stay at module scope. The rest runs in an async function so
+// `return` and `await` work, and `require` is still available inside that function.
+export const buildRemoteHostJavascriptScript = (code: string): string => {
+  const { imports, body } = peelLeadingImports(code);
+  const program = `
+import { createRequire as __wfCreateRequire } from 'node:module';
+import { writeFileSync as __wfWriteFileSync } from 'node:fs';
+import { dirname as __wfDirname } from 'node:path';
+import { fileURLToPath as __wfFileURLToPath } from 'node:url';
+const require = __wfCreateRequire(import.meta.url);
+const __filename = __wfFileURLToPath(import.meta.url);
+const __dirname = __wfDirname(__filename);
+${imports}
+try {
+  const __wfResult = await (async () => {
+${body}
+  })();
+  if (__wfResult !== undefined) {
+    __wfWriteFileSync(process.env.STEP_OUTPUT, JSON.stringify(__wfResult));
+  }
+} catch (__wfError) {
+  process.stderr.write((__wfError && __wfError.stack) || String(__wfError));
   process.exit(1);
-});
-ENDOFSCRIPT`;
+}
+`.trim();
+
+  return `cat > "$WORKDIR/step.mjs" << 'ENDOFSCRIPT'
+${program}
+ENDOFSCRIPT
+node "$WORKDIR/step.mjs"`;
+};
 
 const logCommandStreams = (
   logger: { info: (message: string) => void; warn: (message: string) => void },
@@ -100,14 +119,17 @@ export const createRemoteHostJavascriptStepDefinition = ({ getActionsStart }: De
         return { error: new Error('Code is required') };
       }
 
+      const maxBytes = context.maxStepSizeBytes ?? 0;
       const result = await startJob(
         toConnectorContext(connectorId, context, getActionsStart),
-        buildScript(code),
+        buildRemoteHostJavascriptScript(code),
         env,
-        cwd
+        cwd,
+        maxBytes
       );
 
       if (result.status === 'running') {
+        logCommandStreams(context.logger, result);
         return {
           state: {
             jobId: result.jobId,
@@ -131,7 +153,8 @@ export const createRemoteHostJavascriptStepDefinition = ({ getActionsStart }: De
           jobId: state.jobId,
           stdoutOffset: state.stdoutOffset,
           stderrOffset: state.stderrOffset,
-        }
+        },
+        context.maxStepSizeBytes ?? 0
       );
 
       if (result.status === 'running') {

@@ -26,20 +26,20 @@ interface Deps {
   getActionsStart: () => ActionsPluginStartContract | undefined;
 }
 
-// Wraps user Python code in a __main() function so it runs via `python3`.
-// Stdout goes to logs; returning a value writes it as JSON to $STEP_OUTPUT.
-const buildScript = (code: string): string => {
+// Wraps user Python in an async function so top-level await and return both work.
+// Stdout goes to logs; a returned value is written to $STEP_OUTPUT.
+export const buildRemoteHostPythonScript = (code: string): string => {
   const indented = code
     .split('\n')
     .map((line) => `    ${line}`)
     .join('\n');
   return `python3 << 'ENDOFSCRIPT'
-import json as __json, os as __os
+import json as __json, os as __os, asyncio as __asyncio
 
-def __main():
+async def __main():
 ${indented}
 
-__result = __main()
+__result = __asyncio.run(__main())
 if __result is not None:
     with open(__os.environ['STEP_OUTPUT'], 'w') as __f:
         __f.write(__result if isinstance(__result, str) else __json.dumps(__result))
@@ -106,14 +106,17 @@ export const createRemoteHostPythonStepDefinition = ({ getActionsStart }: Deps) 
         return { error: new Error('Code is required') };
       }
 
+      const maxBytes = context.maxStepSizeBytes ?? 0;
       const result = await startJob(
         toConnectorContext(connectorId, context, getActionsStart),
-        buildScript(code),
+        buildRemoteHostPythonScript(code),
         env,
-        cwd
+        cwd,
+        maxBytes
       );
 
       if (result.status === 'running') {
+        logCommandStreams(context.logger, result);
         return {
           state: {
             jobId: result.jobId,
@@ -137,7 +140,8 @@ export const createRemoteHostPythonStepDefinition = ({ getActionsStart }: Deps) 
           jobId: state.jobId,
           stdoutOffset: state.stdoutOffset,
           stderrOffset: state.stderrOffset,
-        }
+        },
+        context.maxStepSizeBytes ?? 0
       );
 
       if (result.status === 'running') {
