@@ -177,7 +177,9 @@ describe('WorkflowExecutionFlyout step URL and field paths', () => {
 
     renderFlyout();
 
-    fireEvent.click(screen.getByTestId('workflowExecutionFlyoutStepClose'));
+    fireEvent.click(
+      within(screen.getByTestId('workflowExecutionStepFlyout')).getByTestId('euiFlyoutCloseButton')
+    );
 
     expect(mockSetSelectedStepExecution).toHaveBeenCalledWith(null);
   });

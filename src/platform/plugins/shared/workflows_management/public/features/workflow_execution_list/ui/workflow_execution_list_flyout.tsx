@@ -20,18 +20,16 @@ import { css } from '@emotion/react';
 import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { WorkflowExecutionList } from './workflow_execution_list_stateful';
+import { WORKFLOW_EXECUTION_FLYOUT_HISTORY_KEY } from '../../workflow_execution_detail/ui/workflow_execution_flyout_session';
 
 export interface WorkflowExecutionListFlyoutProps {
   workflowId: string;
   onClose: () => void;
-  /** Keep mounted but collapse out of the push layout while detail is shown. */
-  isHidden?: boolean;
 }
 
 export const WorkflowExecutionListFlyout = ({
   workflowId,
   onClose,
-  isHidden = false,
 }: WorkflowExecutionListFlyoutProps) => {
   const { euiTheme } = useEuiTheme();
 
@@ -41,20 +39,13 @@ export const WorkflowExecutionListFlyout = ({
         defaultMessage: 'Workflow execution history',
       })}
       onClose={onClose}
-      // Overlay when hidden so the detail push-flyout owns the layout slot.
-      type={isHidden ? 'overlay' : 'push'}
+      session="start"
+      historyKey={WORKFLOW_EXECUTION_FLYOUT_HISTORY_KEY}
+      type="push"
+      size={480}
       paddingSize="none"
       hideCloseButton
-      ownFocus={!isHidden}
-      style={
-        isHidden
-          ? {
-              display: 'none',
-            }
-          : { minWidth: '480px', maxWidth: '480px' }
-      }
       data-test-subj="workflowExecutionListFlyout"
-      aria-hidden={isHidden}
     >
       <EuiFlyoutHeader css={{ padding: 0 }}>
         <EuiFlexGroup

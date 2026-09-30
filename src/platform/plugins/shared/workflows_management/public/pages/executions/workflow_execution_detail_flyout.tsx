@@ -29,7 +29,7 @@ export const WorkflowExecutionDetailFlyout = React.memo<WorkflowExecutionDetailF
   ({ executionId, onClose }) => {
     return (
       <WorkflowDetailStoreProvider>
-        <WorkflowExecutionFlyout executionId={executionId} onClose={onClose} />
+        <WorkflowExecutionFlyout session="start" executionId={executionId} onClose={onClose} />
       </WorkflowDetailStoreProvider>
     );
   }

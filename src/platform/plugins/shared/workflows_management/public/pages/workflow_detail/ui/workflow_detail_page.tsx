@@ -44,6 +44,7 @@ import { loadWorkflowThunk } from '../../../entities/workflows/store/workflow_de
 import { loadWorkflowsThunk } from '../../../entities/workflows/store/workflow_detail/thunks/load_workflows_thunk';
 import { WorkflowChangeHistoryProvider } from '../../../features/change_history';
 import { WorkflowExecutionFlyout } from '../../../features/workflow_execution_detail';
+import { useDeferredChildMount } from '../../../features/workflow_execution_detail/ui/use_deferred_child_mount';
 import { WorkflowExecutionDetail } from '../../../features/workflow_execution_detail_old';
 import { WorkflowExecutionListFlyout } from '../../../features/workflow_execution_list/ui/workflow_execution_list_flyout';
 import { WorkflowExecutionList } from '../../../features/workflow_execution_list_old';
@@ -205,17 +206,12 @@ export function WorkflowDetailPage({ id }: { id?: string }) {
 
   // TODO: manage it in a workflow state context
   const [highlightDiff, setHighlightDiff] = useState(false);
-  const [isExecutionListOpen, setIsExecutionListOpen] = useState(false);
-
-  // If the page loads with an execution already selected (e.g. direct URL), open the list too
-  // so that closing the detail navigates back to the list rather than closing everything.
-  useEffect(() => {
-    if (selectedExecutionId) {
-      setIsExecutionListOpen(true);
-    }
-    // intentionally runs only on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // A direct link already has an execution selected. The list is the session root, so it
+  // must be mounted on the first render, before the execution flyout.
+  const [isExecutionListOpen, setIsExecutionListOpen] = useState(() =>
+    Boolean(selectedExecutionId)
+  );
+  const showExecutionFlyout = useDeferredChildMount(Boolean(selectedExecutionId));
 
   // Both handlers also close the list, which is local state rather than URL state. They must
   // replace, or Back restores the execution while the list stays shut.
@@ -307,14 +303,11 @@ export function WorkflowDetailPage({ id }: { id?: string }) {
               executionDetail={sidebarExecutionDetail}
             />
             {showExecutionFlyouts && id && isExecutionListOpen && (
-              <WorkflowExecutionListFlyout
-                workflowId={id}
-                onClose={onCloseExecutionList}
-                isHidden={Boolean(selectedExecutionId)}
-              />
+              <WorkflowExecutionListFlyout workflowId={id} onClose={onCloseExecutionList} />
             )}
-            {showExecutionFlyouts && selectedExecutionId && (
+            {showExecutionFlyouts && selectedExecutionId && showExecutionFlyout && (
               <WorkflowExecutionFlyout
+                session="inherit"
                 executionId={selectedExecutionId}
                 workflowName={workflowName ?? ''}
                 workflowTags={workflowTags}
