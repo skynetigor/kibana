@@ -22,7 +22,7 @@ export const ConfigSchema = z.object({
 
 export const InputSchema = z.object({
   code: z.string().max(REMOTE_HOST_PYTHON_TEMPLATE_MAX_CHARS),
-  env: z.record(z.string(), z.string()).optional(),
+  env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string()).optional(),
   cwd: z.string().optional(),
 });
 
@@ -39,6 +39,7 @@ export const remoteHostPythonStepCommonDefinition: CommonStepDefinition<
 > = {
   id: RemoteHostPythonStepTypeId,
   category: StepCategory.Kibana,
+  stability: 'tech_preview',
   label: i18n.translate('workflowsExtensions.remoteHostPythonStep.label', {
     defaultMessage: 'Run Python',
   }),
@@ -48,9 +49,9 @@ export const remoteHostPythonStepCommonDefinition: CommonStepDefinition<
   documentation: {
     details: `# Run Python
 
-Execute a Python 3 script on a remote host via an SSH Host connector. The script's standard
-output is captured and returned as the step output. If the output is valid JSON it is parsed
-into an object; otherwise it is returned as a string.
+Execute a Python 3 script on a remote host via an SSH connector. Return a value from the
+script to set the step output (written to \`$STEP_OUTPUT\`). Standard output and stderr
+are captured to logs.
 
 ## Basic Usage
 
@@ -58,7 +59,7 @@ into an object; otherwise it is returned as a string.
 - name: get-hostname
   type: remoteHost.python
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
     code: |
       import socket
@@ -71,7 +72,7 @@ into an object; otherwise it is returned as a string.
 - name: disk-info
   type: remoteHost.python
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
     code: |
       import shutil
@@ -79,16 +80,33 @@ into an object; otherwise it is returned as a string.
       return {'available_gb': free // (1024 ** 3)}
 \`\`\`
 
+## Environment Variables and Working Directory
+
+\`\`\`yaml
+- name: deploy
+  type: remoteHost.python
+  config:
+    connector-id: my-ssh-connector
+  with:
+    cwd: /opt/myapp
+    env:
+      DEPLOY_ENV: production
+    code: |
+      import os
+      return os.environ['DEPLOY_ENV']
+\`\`\`
+
 ## Inputs
 
 - **code** (required): Python 3 script to execute on the remote host. Use \`print()\` for log output and \`return\` a value to set the step output.
-- **env** (optional): Key-value map of environment variables exported before \`code\` runs.
-- **cwd** (optional): Working directory to \`cd\` into before running.
+- **env** (optional): Key-value map of environment variables exported before \`code\` runs. Keys must be valid shell identifiers.
+- **cwd** (optional): Working directory for \`code\`.
 
 ## Output
 
-Returns the value returned by the script. If the value is a dict or list it is serialised as
-JSON; strings are returned as-is. Returns \`null\` when nothing is returned.
+Returns the value returned by the script. Dicts and lists are serialised as JSON; strings
+are written as-is. If that value is valid JSON it is parsed into an object; otherwise it
+is returned as a string. Returns \`null\` when nothing is returned.
 `,
   },
   inputSchema: InputSchema,

@@ -100,14 +100,17 @@ export const createRemoteHostJavascriptStepDefinition = ({ getActionsStart }: De
         return { error: new Error('Code is required') };
       }
 
+      const maxBytes = context.maxStepSizeBytes ?? 0;
       const result = await startJob(
         toConnectorContext(connectorId, context, getActionsStart),
         buildScript(code),
         env,
-        cwd
+        cwd,
+        maxBytes
       );
 
       if (result.status === 'running') {
+        logCommandStreams(context.logger, result);
         return {
           state: {
             jobId: result.jobId,
@@ -131,7 +134,8 @@ export const createRemoteHostJavascriptStepDefinition = ({ getActionsStart }: De
           jobId: state.jobId,
           stdoutOffset: state.stdoutOffset,
           stderrOffset: state.stderrOffset,
-        }
+        },
+        context.maxStepSizeBytes ?? 0
       );
 
       if (result.status === 'running') {
