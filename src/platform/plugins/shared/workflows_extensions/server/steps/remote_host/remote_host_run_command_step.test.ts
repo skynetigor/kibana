@@ -50,11 +50,11 @@ describe('createRemoteHostRunCommandStepDefinition', () => {
 
   const createContext = (
     overrides: {
-      input?: { code: string };
+      input?: { command: string };
       state?: { jobId: string; stdoutOffset: number; stderrOffset: number };
     } = {}
   ): PollHandlerContext<any, any, any> => {
-    const input = overrides.input ?? { code: 'echo hi' };
+    const input = overrides.input ?? { command: 'echo hi' };
     const base: StepHandlerContext<any, any> = {
       config: { 'connector-id': 'conn-1' },
       input,
@@ -74,7 +74,8 @@ describe('createRemoteHostRunCommandStepDefinition', () => {
       },
       abortSignal: new AbortController().signal,
       stepId: 'run-command',
-      stepType: 'remoteHost.runCommand',
+      stepType: 'ssh.run',
+      maxStepSizeBytes: 10 * 1024 * 1024,
     };
 
     return {
@@ -104,8 +105,8 @@ describe('createRemoteHostRunCommandStepDefinition', () => {
       return startHandler;
     };
 
-    it('returns an error when code is empty', async () => {
-      const result = await start()(createContext({ input: { code: '   ' } }));
+    it('returns an error when command is empty', async () => {
+      const result = await start()(createContext({ input: { command: '   ' } }));
 
       expect(result).toEqual({ error: expect.any(Error) });
       expect(mockedUploadFile).not.toHaveBeenCalled();
@@ -123,6 +124,10 @@ describe('createRemoteHostRunCommandStepDefinition', () => {
       });
       expect(mockedUploadFile).toHaveBeenCalledTimes(1);
       expect(mockedExecScript).toHaveBeenCalledTimes(1);
+      expect(mockedExecScript).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('-gt 10485760')
+      );
     });
 
     it('returns parsed STEP_OUTPUT when the command finishes within 2s', async () => {

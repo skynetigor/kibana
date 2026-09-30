@@ -8,37 +8,15 @@
  */
 
 export {
-  RemoteHostRunCommandStepTypeId,
-  REMOTE_HOST_COMMAND_TEMPLATE_MAX_CHARS,
-  ConfigSchema as RemoteHostRunCommandConfigSchema,
-  InputSchema as RemoteHostRunCommandInputSchema,
-  OutputSchema as RemoteHostRunCommandOutputSchema,
+  SshRunStepTypeId,
   remoteHostRunCommandStepCommonDefinition,
 } from './remote_host_run_command_step';
-export type {
-  RemoteHostRunCommandStepConfigSchema,
-  RemoteHostRunCommandStepInputSchema,
-  RemoteHostRunCommandStepOutputSchema,
-} from './remote_host_run_command_step';
-
 export {
-  RemoteHostUploadFileStepTypeId,
-  ConfigSchema as RemoteHostUploadFileConfigSchema,
-  InputSchema as RemoteHostUploadFileInputSchema,
-  OutputSchema as RemoteHostUploadFileOutputSchema,
+  SshUploadFileStepTypeId,
   remoteHostUploadFileStepCommonDefinition,
 } from './remote_host_upload_file_step';
-export type {
-  RemoteHostUploadFileStepConfigSchema,
-  RemoteHostUploadFileStepInputSchema,
-  RemoteHostUploadFileStepOutputSchema,
-} from './remote_host_upload_file_step';
-
 export {
-  RemoteHostDownloadFileStepTypeId,
-  ConfigSchema as RemoteHostDownloadFileConfigSchema,
-  InputSchema as RemoteHostDownloadFileInputSchema,
-  OutputSchema as RemoteHostDownloadFileOutputSchema,
+  SshDownloadFileStepTypeId,
   remoteHostDownloadFileStepCommonDefinition,
 } from './remote_host_download_file_step';
 export type {

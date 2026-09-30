@@ -5,14 +5,14 @@
  * 2.0.
  */
 
-import { exec } from 'child_process';
-import { closeSync, existsSync, openSync, readFileSync, unlinkSync, writeSync } from 'fs';
+import { createHash } from 'crypto';
+import { execFile } from 'child_process';
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { promisify } from 'util';
 import type { ServiceParams } from '@kbn/actions-plugin/server';
 import { SubActionConnector } from '@kbn/actions-plugin/server';
-import { AUTH_TYPE } from '@kbn/connector-schemas/ssh_host';
+import { AUTH_TYPE, SUB_ACTION } from '@kbn/connector-schemas/ssh_host';
 import type {
   Config,
   Secrets,
@@ -26,19 +26,52 @@ import {
   UploadFileParamsSchema,
 } from '@kbn/connector-schemas/ssh_host';
 
-const execPromise = promisify(exec);
-
+const MAX_BUFFER_BYTES = 100 * 1024 * 1024;
 const DEFAULT_SSH_PORT = 22;
+const DEFAULT_DOWNLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const CONTROL_PERSIST = '10s';
+
+interface CommandTarget {
+  bin: string;
+  prefixArgs: string[];
+}
 
 interface ResolvedCredentials {
-  sshPrefix: string;
-  scpPrefix: string;
-  authOpts: string[];
+  ssh: CommandTarget;
+  scp: CommandTarget;
+  authArgs: string[];
   env: NodeJS.ProcessEnv;
   cleanup: () => void;
 }
 
-const parseHost = (host: string): { hostname: string; port: number } => {
+interface ExecFileResult {
+  stdout: string;
+  stderr: string;
+  code: number;
+}
+
+export const parseHost = (host: string): { hostname: string; port: number } => {
+  if (host.startsWith('[')) {
+    const close = host.indexOf(']');
+    if (close === -1) {
+      return { hostname: host, port: DEFAULT_SSH_PORT };
+    }
+    const hostname = host.slice(1, close);
+    const rest = host.slice(close + 1);
+    if (rest.startsWith(':')) {
+      const port = parseInt(rest.slice(1), 10);
+      if (port >= 1 && port <= 65535) {
+        return { hostname, port };
+      }
+    }
+    return { hostname, port: DEFAULT_SSH_PORT };
+  }
+
+  // Unbracketed IPv6 contains more than one colon — host only, port 22.
+  if ((host.match(/:/g) ?? []).length > 1) {
+    return { hostname: host, port: DEFAULT_SSH_PORT };
+  }
+
   const lastColon = host.lastIndexOf(':');
   if (lastColon === -1) return { hostname: host, port: DEFAULT_SSH_PORT };
   const portStr = host.slice(lastColon + 1);
@@ -49,18 +82,59 @@ const parseHost = (host: string): { hostname: string; port: number } => {
   return { hostname: host.slice(0, lastColon), port };
 };
 
+const sshDestination = (username: string, hostname: string): string => `${username}@${hostname}`;
+
+const scpDestination = (username: string, hostname: string, remotePath: string): string => {
+  const host = hostname.includes(':') ? `[${hostname}]` : hostname;
+  return `${username}@${host}:${remotePath}`;
+};
+
+const runExecFile = (
+  bin: string,
+  args: string[],
+  env: NodeJS.ProcessEnv
+): Promise<ExecFileResult> =>
+  new Promise((resolve, reject) => {
+    execFile(bin, args, { env, maxBuffer: MAX_BUFFER_BYTES }, (error, stdout, stderr) => {
+      if (!error) {
+        resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: 0 });
+        return;
+      }
+
+      if (error.code === 'ENOENT') {
+        reject(
+          new Error(
+            `${bin} is not installed on the Kibana host. The SSH Host connector requires ssh, scp, and (for password auth) sshpass.`
+          )
+        );
+        return;
+      }
+
+      if (typeof error.code === 'number') {
+        resolve({
+          stdout: (error.stdout ?? stdout).toString().trim(),
+          stderr: (error.stderr ?? stderr).toString().trim(),
+          code: error.code,
+        });
+        return;
+      }
+
+      reject(error);
+    });
+  });
+
 export class SshHostConnector extends SubActionConnector<Config, Secrets> {
   constructor(params: ServiceParams<Config, Secrets>) {
     super(params);
 
-    this.registerSubAction({ name: 'exec', method: 'exec', schema: ExecParamsSchema });
+    this.registerSubAction({ name: SUB_ACTION.Exec, method: 'exec', schema: ExecParamsSchema });
     this.registerSubAction({
-      name: 'downloadFile',
+      name: SUB_ACTION.DownloadFile,
       method: 'downloadFile',
       schema: DownloadFileParamsSchema,
     });
     this.registerSubAction({
-      name: 'uploadFile',
+      name: SUB_ACTION.UploadFile,
       method: 'uploadFile',
       schema: UploadFileParamsSchema,
     });
@@ -71,50 +145,117 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
   }
 
   public async exec(params: ExecParams): Promise<{ stdout: string; stderr: string; code: number }> {
+    this.assertHostAllowed();
     return this.execCommand(params);
   }
 
   public async downloadFile(
     params: DownloadFileParams
   ): Promise<{ content: string; encoding: 'base64' }> {
+    this.assertHostAllowed();
     const { remotePath } = params;
+    const maxBytes =
+      params.maxBytes && params.maxBytes > 0 ? params.maxBytes : DEFAULT_DOWNLOAD_MAX_BYTES;
     const { hostname, port } = parseHost(this.config.host);
     const { username } = this.secrets;
-    const tempDownloadPath = join(tmpdir(), `ssh_host_download_${Date.now()}`);
-    const { scpPrefix, authOpts, env, cleanup } = await this.resolveCredentials();
+    const tempDir = mkdtempSync(join(tmpdir(), 'ssh_host_download_'));
+    const tempDownloadPath = join(tempDir, 'file');
+    const { ssh, scp, authArgs, env, cleanup } = await this.resolveCredentials();
 
-    const scpOpts = [
-      ...authOpts,
-      '-o StrictHostKeyChecking=no',
-      '-o UserKnownHostsFile=/dev/null',
-      '-o ConnectTimeout=10',
-      '-o ControlMaster=auto',
-      `-o ControlPath="${this.getControlPath()}"`,
-      '-o ControlPersist=10s',
-      `-P ${port}`,
+    const args = [
+      ...scp.prefixArgs,
+      ...this.getTransportArgs('-P', port, authArgs),
+      scpDestination(username, hostname, remotePath),
+      tempDownloadPath,
     ];
 
-    const scpTarget = `${username}@${hostname}:"${remotePath}" "${tempDownloadPath}"`;
-    const scpCommand = `${scpPrefix} ${scpOpts.join(' ')} ${scpTarget}`;
-
     try {
-      await execPromise(scpCommand, { env });
+      const remoteStat = await runExecFile(
+        ssh.bin,
+        [
+          ...ssh.prefixArgs,
+          ...this.getTransportArgs('-p', port, authArgs),
+          sshDestination(username, hostname),
+          `wc -c < ${JSON.stringify(remotePath)}`,
+        ],
+        env
+      );
+      if (remoteStat.code !== 0) {
+        throw new Error(remoteStat.stderr || `Failed to stat remote file ${remotePath}`);
+      }
+      const remoteSize = parseInt(remoteStat.stdout, 10);
+      if (!Number.isNaN(remoteSize) && remoteSize > maxBytes) {
+        throw new Error(
+          `Remote file exceeds max-step-size (${remoteSize} bytes > ${maxBytes} bytes). Increase max-step-size on this step or download a smaller file.`
+        );
+      }
+
+      const { stderr, code } = await runExecFile(scp.bin, args, env);
+      if (code !== 0) {
+        throw new Error(stderr || `scp exited with code ${code}`);
+      }
+      const { size } = statSync(tempDownloadPath);
+      if (size > maxBytes) {
+        throw new Error(
+          `Remote file exceeds max-step-size (${size} bytes > ${maxBytes} bytes). Increase max-step-size on this step or download a smaller file.`
+        );
+      }
       return { content: readFileSync(tempDownloadPath).toString('base64'), encoding: 'base64' };
     } finally {
       cleanup();
-      if (existsSync(tempDownloadPath)) unlinkSync(tempDownloadPath);
+      rmSync(tempDir, { recursive: true, force: true });
     }
   }
 
   public async uploadFile(params: UploadFileParams): Promise<void> {
+    this.assertHostAllowed();
     const { remotePath, content } = params;
+    const { hostname, port } = parseHost(this.config.host);
+    const { username } = this.secrets;
+    const tempDir = mkdtempSync(join(tmpdir(), 'ssh_host_upload_'));
+    const localPath = join(tempDir, 'payload');
+    const { ssh, scp, authArgs, env, cleanup } = await this.resolveCredentials();
+
+    const bytes = Buffer.from(content, 'base64');
+    const fd = openSync(localPath, 'w', 0o600);
+    writeSync(fd, bytes);
+    closeSync(fd);
+
     const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
-    const mkdirPart = remoteDir ? `mkdir -p "${remoteDir}" && ` : '';
-    const { code, stderr } = await this.execCommand({
-      script: `${mkdirPart}printf '%s' '${content}' | openssl base64 -d -A > "${remotePath}"`,
-    });
-    if (code !== 0) {
-      throw new Error(`Failed to upload file to ${remotePath}: ${stderr}`);
+
+    try {
+      if (remoteDir) {
+        const mkdir = await runExecFile(
+          ssh.bin,
+          [
+            ...ssh.prefixArgs,
+            ...this.getTransportArgs('-p', port, authArgs),
+            sshDestination(username, hostname),
+            `mkdir -p -- ${JSON.stringify(remoteDir)}`,
+          ],
+          env
+        );
+        if (mkdir.code !== 0) {
+          throw new Error(`Failed to create remote directory ${remoteDir}: ${mkdir.stderr}`);
+        }
+      }
+
+      const { stderr, code } = await runExecFile(
+        scp.bin,
+        [
+          ...scp.prefixArgs,
+          ...this.getTransportArgs('-P', port, authArgs),
+          localPath,
+          scpDestination(username, hostname, remotePath),
+        ],
+        env
+      );
+      if (code !== 0) {
+        throw new Error(`Failed to upload file to ${remotePath}: ${stderr}`);
+      }
+    } finally {
+      cleanup();
+      rmSync(tempDir, { recursive: true, force: true });
     }
   }
 
@@ -131,9 +272,9 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
         }
 
         return {
-          sshPrefix: 'sshpass -e ssh',
-          scpPrefix: 'sshpass -e scp',
-          authOpts: ['-o PasswordAuthentication=yes'],
+          ssh: { bin: 'sshpass', prefixArgs: ['-e', 'ssh'] },
+          scp: { bin: 'sshpass', prefixArgs: ['-e', 'scp'] },
+          authArgs: ['-o', 'PasswordAuthentication=yes'],
           env: { ...process.env, SSHPASS: password },
           cleanup: () => {},
         };
@@ -145,10 +286,8 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
           throw new Error('SSH private key is required for key-based authentication');
         }
 
-        const tempKeyPath = join(
-          tmpdir(),
-          `ssh_host_key_${Date.now()}_${Math.random().toString(36).slice(2)}`
-        );
+        const tempDir = mkdtempSync(join(tmpdir(), 'ssh_host_key_'));
+        const tempKeyPath = join(tempDir, 'id');
         // Strip \r so CRLF-pasted keys don't corrupt OpenSSH parsing; ensure trailing newline.
         const keyContent = `${sshPrivateKey.replace(/\r/g, '').trimEnd()}\n`;
         // Write with restricted permissions (writeFileSync is ESLint-restricted)
@@ -157,12 +296,12 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
         closeSync(fd);
 
         return {
-          sshPrefix: 'ssh',
-          scpPrefix: 'scp',
-          authOpts: [`-i "${tempKeyPath}"`, '-o PasswordAuthentication=no'],
+          ssh: { bin: 'ssh', prefixArgs: [] },
+          scp: { bin: 'scp', prefixArgs: [] },
+          authArgs: ['-i', tempKeyPath, '-o', 'PasswordAuthentication=no'],
           env: process.env,
           cleanup: () => {
-            if (existsSync(tempKeyPath)) unlinkSync(tempKeyPath);
+            rmSync(tempDir, { recursive: true, force: true });
           },
         };
       }
@@ -178,61 +317,73 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
     const { hostname, port } = parseHost(this.config.host);
     const { username } = this.secrets;
 
-    // Base64-encode the script so bash variables ($PID, $STATE, etc.) are not expanded
-    // by the local shell when it processes the double-quoted SSH argument.
+    // One argv to ssh. The remote shell decodes the payload and runs it with bash.
     const encodedScript = Buffer.from(script).toString('base64');
     const remoteCmd = `printf '%s' '${encodedScript}' | openssl base64 -d -A | bash`;
 
-    const { sshPrefix, authOpts, env, cleanup } = await this.resolveCredentials();
-
-    const sshOpts = [
-      ...authOpts,
-      '-o StrictHostKeyChecking=no',
-      '-o UserKnownHostsFile=/dev/null',
-      '-o ConnectTimeout=10',
-      '-o ControlMaster=auto',
-      `-o ControlPath="${this.getControlPath()}"`,
-      '-o ControlPersist=10s',
-      `-p ${port}`,
+    const { ssh, authArgs, env, cleanup } = await this.resolveCredentials();
+    const args = [
+      ...ssh.prefixArgs,
+      ...this.getTransportArgs('-p', port, authArgs),
+      sshDestination(username, hostname),
+      remoteCmd,
     ];
 
-    const command = `${sshPrefix} ${sshOpts.join(' ')} ${username}@${hostname} "${remoteCmd}"`;
-
     try {
-      const { stdout, stderr } = await execPromise(command, {
-        env,
-        maxBuffer: 100 * 1024 * 1024,
-      });
-      return {
-        stdout: stdout.replace(command, '').trim(),
-        stderr: stderr.replace(command, '').trim(),
-        code: 0,
-      };
-    } catch (error) {
-      const isChildProcessError =
-        error instanceof Error && 'stdout' in error && 'stderr' in error && 'code' in error;
-      if (
-        isChildProcessError &&
-        typeof error.stdout === 'string' &&
-        typeof error.stderr === 'string' &&
-        typeof error.code === 'number'
-      ) {
-        return {
-          stdout: error.stdout.replace(command, '').trim(),
-          stderr: error.stderr.replace(command, '').trim(),
-          code: error.code,
-        };
-      }
-      throw error;
+      return await runExecFile(ssh.bin, args, env);
     } finally {
       cleanup();
     }
   }
 
+  private getTransportArgs(portFlag: '-p' | '-P', port: number, authArgs: string[]): string[] {
+    return [
+      ...authArgs,
+      ...this.getHostKeyArgs(),
+      '-o',
+      'ConnectTimeout=10',
+      '-o',
+      'ControlMaster=auto',
+      '-o',
+      `ControlPath=${this.getControlPath()}`,
+      '-o',
+      `ControlPersist=${CONTROL_PERSIST}`,
+      portFlag,
+      String(port),
+    ];
+  }
+
+  private assertHostAllowed(): void {
+    const { hostname } = parseHost(this.config.host);
+    this.configurationUtilities.ensureHostnameAllowed(hostname);
+  }
+
+  private getHostKeyArgs(): string[] {
+    if (this.config.skipHostKeyVerification) {
+      return ['-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null'];
+    }
+
+    return [
+      '-o',
+      'StrictHostKeyChecking=accept-new',
+      '-o',
+      `UserKnownHostsFile=${this.getKnownHostsPath()}`,
+    ];
+  }
+
+  private getKnownHostsPath(): string {
+    const id = createHash('sha256').update(this.connector.id).digest('hex').slice(0, 16);
+    return join(tmpdir(), `kbn_ssh_kh_${id}`);
+  }
+
   private getControlPath(): string {
     const { hostname, port } = parseHost(this.config.host);
     const { username } = this.secrets;
-    const safeId = `${username}_${hostname}_${port}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-    return join(tmpdir(), `kbn_cm_${safeId}`);
+    const id = createHash('sha256')
+      .update(`${this.connector.id}\0${username}\0${hostname}\0${port}`)
+      .digest('hex')
+      .slice(0, 12);
+    // OpenSSH ControlPath is capped around 104 chars; keep this under /tmp.
+    return join('/tmp', `kbn_cm_${id}`);
   }
 }

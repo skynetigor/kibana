@@ -10,15 +10,15 @@
 import { loggerMock } from '@kbn/logging-mocks';
 import { registerInternalStepDefinitions } from '.';
 import {
-  RemoteHostRunCommandStepTypeId,
-  RemoteHostUploadFileStepTypeId,
-  RemoteHostDownloadFileStepTypeId,
+  SshDownloadFileStepTypeId,
+  SshRunStepTypeId,
+  SshUploadFileStepTypeId,
 } from '../../common/steps/remote_host';
 import { ScriptsJavaScriptStepTypeId } from '../../common/steps/javascript';
 import { ServerStepRegistry } from '../step_registry';
 
 describe('registerInternalStepDefinitions', () => {
-  it('always registers all remoteHost steps', () => {
+  it('always registers all ssh steps', () => {
     const registry = new ServerStepRegistry(loggerMock.create());
 
     registerInternalStepDefinitions(registry, {
@@ -26,9 +26,9 @@ describe('registerInternalStepDefinitions', () => {
       experimentalSteps: { javaScriptStep: false },
     });
 
-    expect(registry.has(RemoteHostRunCommandStepTypeId)).toBe(true);
-    expect(registry.has(RemoteHostUploadFileStepTypeId)).toBe(true);
-    expect(registry.has(RemoteHostDownloadFileStepTypeId)).toBe(true);
+    expect(registry.has(SshRunStepTypeId)).toBe(true);
+    expect(registry.has(SshUploadFileStepTypeId)).toBe(true);
+    expect(registry.has(SshDownloadFileStepTypeId)).toBe(true);
   });
 
   it('does not register code.javascript when javaScriptStep is disabled', () => {

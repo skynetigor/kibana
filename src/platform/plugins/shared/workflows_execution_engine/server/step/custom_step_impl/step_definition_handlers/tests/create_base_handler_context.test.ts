@@ -31,6 +31,7 @@ describe('createBaseHandlerContext', () => {
     expect(context.config).toEqual(config);
     expect(context.stepId).toBe('custom-step');
     expect(context.stepType).toBe('my-custom-type');
+    expect(context.maxStepSizeBytes).toBe(10 * 1024 * 1024);
     expect(context.abortSignal).toBe(mocks.stepExecutionRuntime.abortController.signal);
 
     context.contextManager.getContext();
@@ -46,6 +47,33 @@ describe('createBaseHandlerContext', () => {
 
     context.logger.info('hello', { meta: true });
     expect(mocks.workflowLogger.logInfo).toHaveBeenCalledWith('hello', { meta: true });
+  });
+
+  it('creates a renderer that snapshots the workflow context once', () => {
+    const mocks = createHandlerTestMocks();
+    const workflowContext = { workflow: { id: 'workflow-id' } };
+    mocks.stepExecutionRuntime.contextManager.getContext.mockReturnValue(workflowContext);
+
+    const context = createBaseHandlerContext(
+      {},
+      {},
+      {},
+      defaultTestNode as any,
+      mocks.stepExecutionRuntime as any,
+      mocks.workflowLogger as any
+    );
+    const renderTemplate = context.contextManager.createTemplateRenderer?.();
+
+    renderTemplate?.('{{ item.id }}', { item: { id: 1 } });
+    renderTemplate?.('{{ item.id }}', { item: { id: 2 } });
+
+    expect(mocks.stepExecutionRuntime.contextManager.getContext).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.stepExecutionRuntime.contextManager.renderValueWithContext
+    ).toHaveBeenNthCalledWith(1, '{{ item.id }}', workflowContext, { item: { id: 1 } });
+    expect(
+      mocks.stepExecutionRuntime.contextManager.renderValueWithContext
+    ).toHaveBeenNthCalledWith(2, '{{ item.id }}', workflowContext, { item: { id: 2 } });
   });
 
   it('defaults rawInput and config to empty objects when omitted', () => {
@@ -92,5 +120,24 @@ describe('createBaseHandlerContext', () => {
       signal: mocks.stepExecutionRuntime.abortController.signal,
     });
     expect(result).toEqual({ status: 200, headers: {}, body: { ok: true } });
+  });
+
+  it('resolves maxStepSizeBytes from the step max-step-size', () => {
+    const mocks = createHandlerTestMocks();
+    const node = {
+      ...defaultTestNode,
+      configuration: { with: {}, 'max-step-size': '5mb' },
+    };
+
+    const context = createBaseHandlerContext(
+      {},
+      {},
+      {},
+      node as any,
+      mocks.stepExecutionRuntime as any,
+      mocks.workflowLogger as any
+    );
+
+    expect(context.maxStepSizeBytes).toBe(5 * 1024 * 1024);
   });
 });
