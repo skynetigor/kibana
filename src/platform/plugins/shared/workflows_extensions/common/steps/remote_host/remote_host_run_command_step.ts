@@ -12,17 +12,17 @@ import { StepCategory } from '@kbn/workflows';
 import { z } from '@kbn/zod/v4';
 import type { CommonStepDefinition } from '../../step_registry/types';
 
-export const RemoteHostRunCommandStepTypeId = 'remoteHost.runCommand' as const;
+export const SshRunStepTypeId = 'ssh.run' as const;
 
-export const REMOTE_HOST_COMMAND_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB
+const REMOTE_HOST_COMMAND_TEMPLATE_MAX_CHARS = 1024 * 32; // 32 KB
 
 export const ConfigSchema = z.object({
   'connector-id': z.string().min(1),
 });
 
 export const InputSchema = z.object({
-  code: z.string().max(REMOTE_HOST_COMMAND_TEMPLATE_MAX_CHARS),
-  env: z.record(z.string(), z.string()).optional(),
+  command: z.string().max(REMOTE_HOST_COMMAND_TEMPLATE_MAX_CHARS),
+  env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string()).optional(),
   cwd: z.string().optional(),
 });
 
@@ -37,9 +37,9 @@ export const remoteHostRunCommandStepCommonDefinition: CommonStepDefinition<
   RemoteHostRunCommandStepOutputSchema,
   RemoteHostRunCommandStepConfigSchema
 > = {
-  id: RemoteHostRunCommandStepTypeId,
+  id: SshRunStepTypeId,
   category: StepCategory.Kibana,
-  // stability: 'tech_preview',
+  stability: 'tech_preview',
   label: i18n.translate('workflowsExtensions.remoteHostRunCommandStep.label', {
     defaultMessage: 'Run Command',
   }),
@@ -49,61 +49,61 @@ export const remoteHostRunCommandStepCommonDefinition: CommonStepDefinition<
   documentation: {
     details: `# Run Command
 
-Execute a shell command on a remote host via an SSH Host connector. The script can set
-\`STEP_OUTPUT\` to a string or JSON value — that value becomes the step output.
-Standard output and stderr are captured to logs.
+Execute a shell command on a remote host via an SSH connector. Write the step result
+to the file at \`$STEP_OUTPUT\` (string or JSON). That file content becomes the step
+output. Standard output and stderr are captured to logs.
 
 ## Basic Usage
 
 \`\`\`yaml
 - name: get-hostname
-  type: remoteHost.runCommand
+  type: ssh.run
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
-    code: |
-      STEP_OUTPUT=$(hostname -f)
+    command: |
+      printf '%s' "$(hostname -f)" > "$STEP_OUTPUT"
 \`\`\`
 
 ## Structured Output
 
 \`\`\`yaml
 - name: disk-info
-  type: remoteHost.runCommand
+  type: ssh.run
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
-    code: |
+    command: |
       AVAILABLE=$(df -BG / | awk 'NR==2{print $4}')
-      STEP_OUTPUT="{\"available\": \"$AVAILABLE\"}"
+      printf '{"available": "%s"}' "$AVAILABLE" > "$STEP_OUTPUT"
 \`\`\`
 
-## Environment Variables
+## Environment Variables and Working Directory
 
 \`\`\`yaml
 - name: deploy
-  type: remoteHost.runCommand
+  type: ssh.run
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
+    cwd: /opt/myapp
     env:
-      APP_DIR: /opt/myapp
       DEPLOY_ENV: production
-    code: |
-      cd "$APP_DIR"
+    command: |
       echo "Deploying to $DEPLOY_ENV"
 \`\`\`
 
 ## Inputs
 
-- **code** (required): Shell script to execute on the remote host.
-- **env** (optional): Key-value map of environment variables exported before \`code\` runs.
+- **command** (required): Shell command to execute on the remote host.
+- **env** (optional): Key-value map of environment variables exported before \`command\` runs. Keys must be valid shell identifiers.
+- **cwd** (optional): Working directory for \`command\`.
 
 ## Output
 
-Returns the value of \`STEP_OUTPUT\` set by the script. If the value is valid JSON it is
+Returns the contents of the file at \`$STEP_OUTPUT\`. If the value is valid JSON it is
 parsed into an object; otherwise it is returned as a string. Returns \`null\` when
-\`STEP_OUTPUT\` is not set.
+the file is empty.
 `,
   },
   inputSchema: InputSchema,

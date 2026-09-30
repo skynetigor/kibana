@@ -8,6 +8,7 @@
  */
 
 import type { PluginStartContract as ActionsPluginStartContract } from '@kbn/actions-plugin/server';
+import { SUB_ACTION } from '@kbn/connector-schemas/ssh_host';
 import type { KibanaRequest } from '@kbn/core/server';
 import { ExecutionError } from '@kbn/workflows/server';
 
@@ -57,7 +58,7 @@ export async function execScript(
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   return executeSubAction({
     ...ctx,
-    subAction: 'exec',
+    subAction: SUB_ACTION.Exec,
     subActionParams: { script },
   });
 }
@@ -68,7 +69,7 @@ export async function uploadFile(
 ): Promise<void> {
   await executeSubAction({
     ...ctx,
-    subAction: 'uploadFile',
+    subAction: SUB_ACTION.UploadFile,
     subActionParams: {
       remotePath: params.remotePath,
       content: Buffer.from(params.content).toString('base64'),
@@ -77,11 +78,15 @@ export async function uploadFile(
   });
 }
 
-export async function downloadFile(ctx: ConnectorCallContext, remotePath: string): Promise<string> {
+export async function downloadFile(
+  ctx: ConnectorCallContext,
+  remotePath: string,
+  maxBytes: number
+): Promise<string> {
   const result = await executeSubAction<{ content: string; encoding: 'base64' }>({
     ...ctx,
-    subAction: 'downloadFile',
-    subActionParams: { remotePath },
+    subAction: SUB_ACTION.DownloadFile,
+    subActionParams: { remotePath, maxBytes },
   });
   return Buffer.from(result.content, 'base64').toString('utf-8');
 }

@@ -57,13 +57,21 @@ const statusJson = (payload: {
   });
 
 describe('wrapUserScript', () => {
-  it('wraps user code with a STEP_OUTPUT EXIT trap', () => {
-    const wrapped = wrapUserScript('hostname -f');
+  it('sets STEP_OUTPUT to the workdir output file and includes the user command', () => {
+    const wrapped = wrapUserScript('hostname -f', false);
 
-    expect(wrapped).toContain("STEP_OUTPUT=''");
-    expect(wrapped).toContain('printf \'%s\' "$STEP_OUTPUT" > "$WORKDIR/output.txt"');
-    expect(wrapped).toContain("trap '_capture_output' EXIT");
+    expect(wrapped).toContain('export STEP_OUTPUT="$WORKDIR/output.txt"');
+    expect(wrapped).toContain('touch "$STEP_OUTPUT"');
     expect(wrapped).toContain('hostname -f');
+    expect(wrapped).not.toContain('env.sh');
+  });
+
+  it('sources env.sh when env vars are present', () => {
+    expect(wrapUserScript('echo hi', true)).toContain('. "$WORKDIR/env.sh"');
+  });
+
+  it('cds into cwd before the user command', () => {
+    expect(wrapUserScript('echo hi', false, '/opt/app')).toContain('cd "/opt/app" || exit 1');
   });
 });
 
@@ -155,10 +163,54 @@ describe('startJob', () => {
       content: expect.stringContaining('echo hi'),
     });
     expect(mockedExecScript).toHaveBeenCalledWith(ctx, expect.stringContaining('TIMEOUT=20'));
+    expect(mockedExecScript).toHaveBeenCalledWith(ctx, expect.stringContaining('set -m'));
+    expect(mockedExecScript).toHaveBeenCalledWith(
+      ctx,
+      expect.stringContaining('command -v setsid')
+    );
     expect(mockedExecScript).toHaveBeenCalledWith(
       ctx,
       expect.stringContaining(`setsid bash -c 'WORKDIR="${getWorkdir(result.jobId)}"`)
     );
+    expect(mockedExecScript).toHaveBeenCalledWith(
+      ctx,
+      expect.stringContaining(`else\n  bash -c 'WORKDIR="${getWorkdir(result.jobId)}"`)
+    );
+  });
+
+  it('caps STEP_OUTPUT reads at maxBytes before encoding', async () => {
+    await startJob(ctx, 'echo hi', undefined, undefined, 1024);
+
+    expect(mockedExecScript).toHaveBeenCalledWith(
+      ctx,
+      expect.stringContaining('STEP_OUTPUT exceeds max-step-size')
+    );
+    expect(mockedExecScript).toHaveBeenCalledWith(ctx, expect.stringContaining('-gt 1024'));
+  });
+
+  it('does not cap STEP_OUTPUT when maxBytes is 0', async () => {
+    await startJob(ctx, 'echo hi', undefined, undefined, 0);
+
+    expect(mockedExecScript).toHaveBeenCalledWith(
+      ctx,
+      expect.not.stringContaining('STEP_OUTPUT exceeds max-step-size')
+    );
+  });
+
+  it('uploads env.sh with quoted heredoc assignments', async () => {
+    const result = await startJob(ctx, 'echo hi', { APP_DIR: '/opt/app' });
+
+    expect(mockedUploadFile).toHaveBeenCalledWith(ctx, {
+      remotePath: `${getWorkdir(result.jobId)}/env.sh`,
+      content: "export APP_DIR=$(cat << 'EOF'\n/opt/app\nEOF\n)",
+    });
+  });
+
+  it('throws on invalid env keys', async () => {
+    await expect(startJob(ctx, 'echo hi', { 'FOO; rm': 'x' })).rejects.toThrow(
+      'Invalid environment variable name: FOO; rm'
+    );
+    expect(mockedUploadFile).not.toHaveBeenCalled();
   });
 
   it('returns terminated status when the command finishes within 2s', async () => {
@@ -207,6 +259,18 @@ describe('pollJob', () => {
       ctx,
       expect.stringContaining(`${getWorkdir('job-1')}/code.txt`)
     );
+  });
+
+  it('caps STEP_OUTPUT reads at maxBytes before encoding', async () => {
+    mockedExecScript.mockResolvedValue({
+      stdout: statusJson({ status: 'running' }),
+      stderr: '',
+      code: 0,
+    });
+
+    await pollJob(ctx, { jobId: 'job-1', stdoutOffset: 0, stderrOffset: 0 }, 2048);
+
+    expect(mockedExecScript).toHaveBeenCalledWith(ctx, expect.stringContaining('-gt 2048'));
   });
 
   it('throws when the status script exits non-zero', async () => {

@@ -12,7 +12,7 @@ import { StepCategory } from '@kbn/workflows';
 import { z } from '@kbn/zod/v4';
 import type { CommonStepDefinition } from '../../step_registry/types';
 
-export const RemoteHostDownloadFileStepTypeId = 'remoteHost.downloadFile' as const;
+export const SshDownloadFileStepTypeId = 'ssh.downloadFile' as const;
 
 export const ConfigSchema = z.object({
   'connector-id': z.string().min(1),
@@ -35,7 +35,7 @@ export const remoteHostDownloadFileStepCommonDefinition: CommonStepDefinition<
   RemoteHostDownloadFileStepOutputSchema,
   RemoteHostDownloadFileStepConfigSchema
 > = {
-  id: RemoteHostDownloadFileStepTypeId,
+  id: SshDownloadFileStepTypeId,
   category: StepCategory.Kibana,
   stability: 'tech_preview',
   label: i18n.translate('workflowsExtensions.remoteHostDownloadFileStep.label', {
@@ -47,15 +47,15 @@ export const remoteHostDownloadFileStepCommonDefinition: CommonStepDefinition<
   documentation: {
     details: `# Download File
 
-Download a file from a remote host via an SSH Host connector.
+Download a file from a remote host via an SSH connector.
 
 ## Basic Usage
 
 \`\`\`yaml
 - name: fetch-log
-  type: remoteHost.downloadFile
+  type: ssh.downloadFile
   config:
-    connector-id: my-ssh-host-connector
+    connector-id: my-ssh-connector
   with:
     remotePath: /var/log/myapp/app.log
 \`\`\`
@@ -63,6 +63,8 @@ Download a file from a remote host via an SSH Host connector.
 ## Inputs
 
 - **remotePath** (required): Absolute path on the remote host of the file to download.
+
+The file must fit in this step's \`max-step-size\` (default 10mb). Larger files fail before the content is returned.
 
 ## Output
 

@@ -14,6 +14,7 @@ export const ConfigSchema = lazySchema(() =>
     .object({
       host: z.string().min(1).max(253),
       authType: z.enum(['privateKey', 'password']).default('privateKey'),
+      skipHostKeyVerification: z.boolean().default(false),
     })
     .strict()
 );
@@ -37,6 +38,12 @@ export const ExecParamsSchema = lazySchema(() =>
 export const DownloadFileParamsSchema = lazySchema(() =>
   z.object({
     remotePath: z.string().min(1).max(4096),
+    maxBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(1024 * 1024 * 1024)
+      .optional(),
   })
 );
 

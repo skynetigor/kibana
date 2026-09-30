@@ -11,9 +11,9 @@ import { randomUUID } from 'crypto';
 import type { ConnectorCallContext } from './execute_in_connector';
 import { execScript, uploadFile } from './execute_in_connector';
 
-export const REMOTE_HOST_JOB_ROOT = '/tmp/wf_remote_host';
+const REMOTE_HOST_JOB_ROOT = '/tmp/wf_remote_host';
 
-export interface RemoteHostJobState {
+interface RemoteHostJobState {
   jobId: string;
   stdoutOffset: number;
   stderrOffset: number;
@@ -39,7 +39,7 @@ interface JobStatusPayload {
   output: string;
 }
 
-export const createJobId = (): string => randomUUID();
+const createJobId = (): string => randomUUID();
 
 export const getWorkdir = (jobId: string): string => `${REMOTE_HOST_JOB_ROOT}/${jobId}`;
 
@@ -102,12 +102,22 @@ _fsize() { wc -c < "$1" 2>/dev/null | tr -d ' ' || echo '0'; }`;
 const printTerminatedStatus = (
   workdir: string,
   stdoutOffset: number,
-  stderrOffset: number
+  stderrOffset: number,
+  maxBytes: number
 ): string => {
   const stdoutFile = `${workdir}/stdout.txt`;
   const stderrFile = `${workdir}/stderr.txt`;
   const codeFile = `${workdir}/code.txt`;
   const outputFile = `${workdir}/output.txt`;
+  const sizeGuard =
+    maxBytes > 0
+      ? `OUTPUT_SIZE=$(_fsize "${outputFile}")
+  if [ "$OUTPUT_SIZE" -gt ${maxBytes} ]; then
+    echo "STEP_OUTPUT exceeds max-step-size ($OUTPUT_SIZE bytes > ${maxBytes} bytes)" >&2
+    exit 2
+  fi
+  `
+      : '';
 
   return `EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
 STDOUT=$(_b64_from ${stdoutOffset} "${stdoutFile}")
@@ -116,7 +126,7 @@ STDOUT_SIZE=$(_fsize "${stdoutFile}")
 STDERR_SIZE=$(_fsize "${stderrFile}")
 OUTPUT=''
 if [ -f "${outputFile}" ]; then
-  OUTPUT=$(_b64_from 0 "${outputFile}")
+  ${sizeGuard}OUTPUT=$(_b64_from 0 "${outputFile}")
 fi
 rm -rf "${workdir}"
 printf '{"status":"terminated","exitCode":%s,"stdout":"%s","stderr":"%s","stdoutOffset":%s,"stderrOffset":%s,"output":"%s"}\\n' \\
@@ -139,16 +149,22 @@ printf '{"status":"running","exitCode":0,"stdout":"%s","stderr":"%s","stdoutOffs
   "$STDOUT" "$STDERR" "$STDOUT_SIZE" "$STDERR_SIZE"`;
 };
 
-const buildLauncherScript = (workdir: string, scriptFile: string): string => {
+const buildLauncherScript = (workdir: string, scriptFile: string, maxBytes: number): string => {
   const stdoutFile = `${workdir}/stdout.txt`;
   const stderrFile = `${workdir}/stderr.txt`;
   const codeFile = `${workdir}/code.txt`;
   const pidFile = `${workdir}/pid.txt`;
+  const jobCmd = `WORKDIR="${workdir}" bash "${scriptFile}" < /dev/null > "${stdoutFile}" 2>"${stderrFile}"; echo $? > "${codeFile}"`;
 
   return `#!/bin/bash
 ${BASH_STATUS_HELPERS}
 mkdir -p "${workdir}"
-setsid bash -c 'WORKDIR="${workdir}" bash "${scriptFile}" < /dev/null > "${stdoutFile}" 2>"${stderrFile}"; echo $? > "${codeFile}"' < /dev/null > /dev/null 2>&1 &
+set -m
+if command -v setsid >/dev/null 2>&1; then
+  setsid bash -c '${jobCmd}' < /dev/null > /dev/null 2>&1 &
+else
+  bash -c '${jobCmd}' < /dev/null > /dev/null 2>&1 &
+fi
 PID=$!
 echo $PID > "${pidFile}"
 TIMEOUT=20
@@ -158,20 +174,25 @@ while [ ! -f "${codeFile}" ] && [ $COUNT -lt $TIMEOUT ]; do
   COUNT=$((COUNT + 1))
 done
 if [ -f "${codeFile}" ]; then
-${printTerminatedStatus(workdir, 0, 0)}
+${printTerminatedStatus(workdir, 0, 0, maxBytes)}
   exit 0
 fi
 printf '{"status":"running","exitCode":0,"stdout":"","stderr":"","stdoutOffset":0,"stderrOffset":0,"output":""}\\n'
 `;
 };
 
-const buildStatusScript = (workdir: string, stdoutOffset: number, stderrOffset: number): string => {
+const buildStatusScript = (
+  workdir: string,
+  stdoutOffset: number,
+  stderrOffset: number,
+  maxBytes: number
+): string => {
   const codeFile = `${workdir}/code.txt`;
 
   return `#!/bin/bash
 ${BASH_STATUS_HELPERS}
 if [ -f "${codeFile}" ]; then
-${printTerminatedStatus(workdir, stdoutOffset, stderrOffset)}
+${printTerminatedStatus(workdir, stdoutOffset, stderrOffset, maxBytes)}
 else
 ${printRunningStatus(workdir, stdoutOffset, stderrOffset)}
 fi
@@ -186,11 +207,18 @@ fi
 rm -rf "${workdir}"
 `;
 
-const createVariableAssignment = (variable: string, value: string): string =>
-  `export ${variable}=$(cat << EOF
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+const createVariableAssignment = (variable: string, value: string): string => {
+  if (!ENV_KEY_PATTERN.test(variable)) {
+    throw new Error(`Invalid environment variable name: ${variable}`);
+  }
+
+  return `export ${variable}=$(cat << 'EOF'
 ${value}
 EOF
 )`;
+};
 
 const envRecordToScript = (env: Record<string, string>): string =>
   Object.entries(env)
@@ -201,12 +229,14 @@ export async function startJob(
   ctx: ConnectorCallContext,
   script: string,
   env?: Record<string, string>,
-  cwd?: string
+  cwd?: string,
+  maxBytes = 0
 ): Promise<RemoteHostJobStatus & { jobId: string }> {
   const jobId = createJobId();
   const workdir = getWorkdir(jobId);
   const scriptFile = `${workdir}/script.sh`;
   const hasEnv = env != null && Object.keys(env).length > 0;
+  const outputLimit = Math.max(0, Math.floor(maxBytes));
 
   if (hasEnv) {
     await uploadFile(ctx, {
@@ -220,7 +250,10 @@ export async function startJob(
     content: wrapUserScript(script, hasEnv, cwd),
   });
 
-  const { stdout, stderr, code } = await execScript(ctx, buildLauncherScript(workdir, scriptFile));
+  const { stdout, stderr, code } = await execScript(
+    ctx,
+    buildLauncherScript(workdir, scriptFile, outputLimit)
+  );
   if (code !== 0) {
     throw new Error(`Failed to start remote command: ${stderr}`);
   }
@@ -230,15 +263,17 @@ export async function startJob(
 
 export async function pollJob(
   ctx: ConnectorCallContext,
-  state: RemoteHostJobState
+  state: RemoteHostJobState,
+  maxBytes = 0
 ): Promise<RemoteHostJobStatus> {
   const workdir = getWorkdir(state.jobId);
   const stdoutOffset = Math.max(0, Math.floor(state.stdoutOffset));
   const stderrOffset = Math.max(0, Math.floor(state.stderrOffset));
+  const outputLimit = Math.max(0, Math.floor(maxBytes));
 
   const { stdout, stderr, code } = await execScript(
     ctx,
-    buildStatusScript(workdir, stdoutOffset, stderrOffset)
+    buildStatusScript(workdir, stdoutOffset, stderrOffset, outputLimit)
   );
   if (code !== 0) {
     throw new Error(`Failed to poll remote command: ${stderr}`);
