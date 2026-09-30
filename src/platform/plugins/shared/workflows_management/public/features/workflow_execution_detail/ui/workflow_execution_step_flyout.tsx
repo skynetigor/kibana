@@ -18,15 +18,10 @@ import {
   EuiFieldSearch,
   EuiFlexGroup,
   EuiFlexItem,
-  EuiFlyout,
-  EuiFlyoutBody,
-  EuiFlyoutHeader,
   EuiHorizontalRule,
   EuiLoadingSpinner,
   EuiPopover,
   EuiText,
-  EuiTextTruncate,
-  EuiTitle,
   EuiToken,
   EuiToolTip,
   useEuiTheme,
@@ -34,6 +29,7 @@ import {
 import type { Criteria, EuiBasicTableColumn } from '@elastic/eui';
 import { css } from '@emotion/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlyoutTemplate } from '@kbn/flyout-template';
 import { i18n } from '@kbn/i18n';
 import type { WorkflowExecutionDto, WorkflowStepExecutionDto } from '@kbn/workflows';
 import { ExecutionStatus } from '@kbn/workflows';
@@ -58,7 +54,6 @@ import {
 import { useWorkflowUrlState } from '../../../hooks/use_workflow_url_state';
 import { appendKeyPath } from '../../../shared/lib/flatten_key_paths';
 import { formatDuration } from '../../../shared/lib/format_duration';
-import { StepIcon } from '../../../shared/ui/step_icons/step_icon';
 import { TokenUsageBreakdown } from '../../../shared/ui/token_usage_badge/token_usage_breakdown';
 import {
   buildIterationPseudoStep,
@@ -654,7 +649,7 @@ export const WorkflowExecutionStepFlyout = ({
   }
 
   return (
-    <EuiFlyout
+    <FlyoutTemplate
       aria-label={i18n.translate('workflows.executionFlyout.stepAriaLabel', {
         defaultMessage: 'Step {name}',
         values: { name: stepName },
@@ -665,68 +660,16 @@ export const WorkflowExecutionStepFlyout = ({
       // The execution panel is size "m". EUI rejects a child that is also "m".
       size="s"
       ownFocus={false}
-      paddingSize="none"
+      paddingSize="m"
       closeButtonProps={{ 'data-test-subj': 'workflowExecutionFlyoutStepClose' }}
       data-test-subj="workflowExecutionStepFlyout"
     >
-      <EuiFlyoutHeader css={{ padding: 0 }}>
+      <FlyoutTemplate.Header title={stepName} collapsed />
+      <FlyoutTemplate.Body>
         <div
           css={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: euiTheme.size.s,
-            flexShrink: 0,
-            boxSizing: 'border-box',
-            minHeight: 48,
-            paddingBlock: euiTheme.size.s,
-            paddingInline: euiTheme.size.s,
-            borderBottom: euiTheme.border.thin,
-          }}
-        >
-          {(selectedLightStep?.stepType ?? activeStepExecution?.stepType) && (
-            <StepIcon
-              stepType={selectedLightStep?.stepType ?? activeStepExecution?.stepType ?? ''}
-              executionStatus={selectedLightStep?.status ?? activeStepExecution?.status}
-              size="m"
-              css={{ flexShrink: 0 }}
-            />
-          )}
-          <EuiTitle
-            size="xs"
-            css={{
-              flex: 1,
-              minWidth: 0,
-              marginBottom: 0,
-            }}
-          >
-            <h2
-              css={{
-                minWidth: 0,
-                margin: 0,
-                color: euiTheme.colors.title,
-              }}
-            >
-              <EuiTextTruncate text={stepName} />
-            </h2>
-          </EuiTitle>
-        </div>
-      </EuiFlyoutHeader>
-      <EuiFlyoutBody
-        css={css`
-          .euiFlyoutBody__overflowContent {
-            padding: 0;
-          }
-        `}
-      >
-        <div
-          css={{
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            paddingInline: euiTheme.size.base,
-            paddingBottom: euiTheme.size.base,
             display: 'flex',
             flexDirection: 'column',
-            gap: 0,
             minWidth: 0,
           }}
         >
@@ -892,7 +835,7 @@ export const WorkflowExecutionStepFlyout = ({
             </>
           )}
         </div>
-      </EuiFlyoutBody>
-    </EuiFlyout>
+      </FlyoutTemplate.Body>
+    </FlyoutTemplate>
   );
 };
