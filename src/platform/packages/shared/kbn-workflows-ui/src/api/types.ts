@@ -13,6 +13,7 @@ import type {
   ExecutionType,
   UpdatedWorkflowResponseDto,
   WorkflowDetailDto,
+  WorkflowExecutionLogEntry,
   WorkflowExecutionSortField,
   WorkflowExecutionSortOrder,
   WorkflowsEventsLogDocumentSource,
@@ -155,17 +156,8 @@ export interface GetExecutionLogsParams {
   sortOrder?: 'asc' | 'desc';
 }
 
-export interface WorkflowExecutionLogEntry {
-  id: string;
-  timestamp: string;
-  level?: 'trace' | 'debug' | 'info' | 'warn' | 'error';
-  message: string;
-  stepId?: string;
-  stepName?: string;
-  connectorType?: string;
-  duration?: number;
-  additionalData?: Record<string, unknown>;
-}
+// Defined in @kbn/workflows so @kbn/workflows-extensions can use it without depending on this package.
+export type { WorkflowExecutionLogEntry };
 
 export interface WorkflowExecutionLogsResponse {
   logs: WorkflowExecutionLogEntry[];

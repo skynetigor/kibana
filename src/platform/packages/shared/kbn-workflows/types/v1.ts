@@ -293,6 +293,18 @@ export interface WorkflowExecutionLogModel {
   level: string;
 }
 
+export interface WorkflowExecutionLogEntry {
+  id: string;
+  timestamp: string;
+  level?: 'trace' | 'debug' | 'info' | 'warn' | 'error';
+  message: string;
+  stepId?: string;
+  stepName?: string;
+  connectorType?: string;
+  duration?: number;
+  additionalData?: Record<string, unknown>;
+}
+
 export interface WorkflowExecutionDto {
   spaceId: string;
   id: string;
