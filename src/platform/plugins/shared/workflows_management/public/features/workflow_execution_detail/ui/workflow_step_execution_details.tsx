@@ -26,16 +26,12 @@ import type {
 } from '@kbn/workflows';
 import { ExecutionStatus, isTerminalStatus } from '@kbn/workflows';
 import type { JsonModelSchemaType } from '@kbn/workflows/spec/schema/common/json_model_schema';
-import type { StepLogsApi, StepLogsConfig } from '@kbn/workflows-extensions/public';
-import { useWorkflowsApi } from '@kbn/workflows-ui';
 import { ForeachIterationsSection } from './foreach_iterations_section';
 import { NestedWorkflowExecutionLinks } from './nested_workflow_execution_links';
 import { type ApprovalLabels, ResumeExecutionButton } from './resume_execution_button';
 import { StepExecutionDataView } from './step_execution_data_view';
-import { StepLogsView } from './step_logs_view';
 import { WorkflowExecutionOverview } from './workflow_execution_overview';
 import type { WorkflowExecutionLinkInfo } from '../../../hooks/navigation/use_navigate_to_execution';
-import { useKibana } from '../../../hooks/use_kibana';
 
 interface WorkflowStepExecutionDetailsProps {
   workflowExecutionId: string;
@@ -80,33 +76,6 @@ export const WorkflowStepExecutionDetails = React.memo<WorkflowStepExecutionDeta
     parentWorkflowExecution,
     onSelectStepExecution,
   }) => {
-    const { workflowsExtensions } = useKibana().services;
-    const api = useWorkflowsApi();
-
-    const logsConfig: StepLogsConfig | undefined = useMemo(
-      () =>
-        stepExecution?.stepType
-          ? workflowsExtensions.getStepDefinition(stepExecution.stepType)?.logs ?? {
-              enabled: false,
-            }
-          : undefined,
-      [stepExecution?.stepType, workflowsExtensions]
-    );
-
-    const logsApi: StepLogsApi = useMemo(
-      () => ({
-        fetchLogs: async () => {
-          if (!stepExecution?.id) return [];
-          const response = await api.getExecutionLogs(workflowExecutionId, {
-            stepExecutionId: stepExecution.id,
-            sortOrder: 'asc',
-          });
-          return response.logs;
-        },
-      }),
-      [api, workflowExecutionId, stepExecution?.id]
-    );
-
     const isWaitingForInput = stepExecution?.status === ExecutionStatus.WAITING_FOR_INPUT;
 
     // Show data for terminal steps OR steps paused for input (they have input but no output yet)
@@ -205,11 +174,6 @@ export const WorkflowStepExecutionDetails = React.memo<WorkflowStepExecutionDeta
                 childWorkflowExecution={childWorkflowExecution}
                 parentWorkflowExecution={parentWorkflowExecution}
               />
-            </EuiFlexItem>
-          )}
-          {logsConfig?.enabled && (
-            <EuiFlexItem css={{ overflowY: 'auto' }}>
-              <StepLogsView stepExecution={stepExecution} config={logsConfig} logsApi={logsApi} />
             </EuiFlexItem>
           )}
           {isFinished ? (

@@ -35,6 +35,7 @@ dependsOn:
   - '@kbn/logging'
   - '@kbn/core-http-common'
   - '@kbn/connector-schemas'
+  - '@kbn/workflows-ui'
 tags:
   - plugin
   - prod

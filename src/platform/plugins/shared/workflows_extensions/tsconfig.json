@@ -29,6 +29,7 @@
     "@kbn/logging-mocks",
     "@kbn/logging",
     "@kbn/core-http-common",
+    "@kbn/workflows-ui"
   ],
   "exclude": ["target/**/*"]
 }
