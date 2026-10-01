@@ -528,7 +528,14 @@ export class WorkflowExecutionRepository {
       ],
     });
 
-    return getBulkUpdaterWriteResult(items[0]) === 'updated';
+    const writeResult = getBulkUpdaterWriteResult(items[0]);
+    if (writeResult === 'conflict') {
+      // The write never landed and the state is unknown; do not report it as a lost race.
+      throw new Error(
+        `Promoting queued workflow execution ${params.workflowExecutionId} failed: version conflict after retries`
+      );
+    }
+    return writeResult === 'updated';
   }
 
   /**

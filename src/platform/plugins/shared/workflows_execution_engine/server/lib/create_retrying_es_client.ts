@@ -10,6 +10,11 @@
 import type { ElasticsearchClient, Logger } from '@kbn/core/server';
 import { retryTransientEsErrors } from './retry_transient_es_errors';
 
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  value !== null &&
+  (typeof value === 'object' || typeof value === 'function') &&
+  typeof (value as { then?: unknown }).then === 'function';
+
 const wrapTarget = (target: object, logger: Logger, cache: WeakMap<object, unknown>): object => {
   const cached = cache.get(target);
   if (cached) return cached as object;
@@ -19,11 +24,27 @@ const wrapTarget = (target: object, logger: Logger, cache: WeakMap<object, unkno
       const value = Reflect.get(t, prop, receiver);
 
       if (typeof value === 'function') {
-        return (...args: unknown[]) =>
-          retryTransientEsErrors(
-            () => (value as (...a: unknown[]) => Promise<unknown>).apply(t, args),
+        return (...args: unknown[]) => {
+          const invoke = () => (value as (...a: unknown[]) => unknown).apply(t, args);
+          const firstResult = invoke();
+          // Synchronous members (e.g. `child()`) must keep returning their real value.
+          if (!isThenable(firstResult)) {
+            return firstResult;
+          }
+          // Reuse the in-flight first attempt so the call is not issued twice.
+          let pendingFirst: PromiseLike<unknown> | undefined = firstResult;
+          return retryTransientEsErrors(
+            async () => {
+              if (pendingFirst) {
+                const first = pendingFirst;
+                pendingFirst = undefined;
+                return first;
+              }
+              return invoke();
+            },
             { logger }
           );
+        };
       }
 
       if (value !== null && typeof value === 'object') {

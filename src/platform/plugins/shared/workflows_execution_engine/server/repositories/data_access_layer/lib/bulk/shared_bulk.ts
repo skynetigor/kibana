@@ -20,6 +20,7 @@ import type {
   UpdaterSource,
 } from './types';
 import {
+  type BulkItem,
   type BulkItemResponse,
   type BulkItemResult,
   type BulkPlainItem,
@@ -172,17 +173,39 @@ const mgetUpdaterSources = async <TExecution extends { id: string }>(
     return foundById;
   }
 
-  const mgetDocs = updaterBatch.flatMap(({ item }) =>
+  // Several updaters may target the same id with different projections: request the union
+  // (or the full source if any of them asks for it) so each updater sees the fields it needs.
+  const projectionById = new Map<string, Set<string> | null>();
+  for (const { item } of updaterBatch) {
+    const existing = projectionById.get(item.documentId);
+    if (existing !== null) {
+      if (item.sourceFields.length === 0) {
+        projectionById.set(item.documentId, null);
+      } else {
+        const fields = existing ?? new Set<string>();
+        item.sourceFields.forEach((field) => fields.add(field));
+        projectionById.set(item.documentId, fields);
+      }
+    }
+  }
+
+  const mgetDocs = Array.from(projectionById.entries()).flatMap(([documentId, fields]) =>
     fallbackIndexes.map((index) => ({
-      _id: item.documentId,
+      _id: documentId,
       _index: index,
-      ...(item.sourceFields.length > 0 ? { _source: { includes: [...item.sourceFields] } } : {}),
+      ...(fields ? { _source: { includes: Array.from(fields) } } : {}),
     }))
   );
 
   const mgetResponse = await esClient.mget<TExecution>({ docs: mgetDocs });
 
   for (const doc of mgetResponse.docs) {
+    // A per-document error is a storage failure, not a missing document.
+    if ('error' in doc && doc.error) {
+      throw new Error(
+        `Bulk updater read failed for ${doc._id} in ${doc._index}: ${JSON.stringify(doc.error)}`
+      );
+    }
     if (
       'found' in doc &&
       doc.found &&
@@ -358,6 +381,20 @@ const applySettled = (
   return nextHasErrors;
 };
 
+// Plain non-OCC updates already get `retry_on_conflict` server-side in Elasticsearch, so
+// re-sending the identical patch client-side would only multiply the attempts.
+const getClientRetryBudget = <TExecution extends { id: string }>(
+  item: BulkItem<TExecution>
+): number => {
+  if (item.operation === 'create') {
+    return 0;
+  }
+  if (!isBulkUpdaterItem(item) && item.seqNo === undefined) {
+    return 0;
+  }
+  return item.retryOnConflict ?? 0;
+};
+
 export async function sharedBulk<TExecution extends { id: string }>(params: {
   esClient: ElasticsearchClient;
   request: BulkRequestOptions<TExecution>;
@@ -374,7 +411,7 @@ export async function sharedBulk<TExecution extends { id: string }>(params: {
   let queuedItems: Array<QueueItem<TExecution>> = request.items.map((item, index) => ({
     item,
     originalIndex: index,
-    remainingRetries: item.operation === 'create' ? 0 : item.retryOnConflict ?? 0,
+    remainingRetries: getClientRetryBudget(item),
   }));
 
   const result = new Array<BulkItemResponse>(request.items.length);

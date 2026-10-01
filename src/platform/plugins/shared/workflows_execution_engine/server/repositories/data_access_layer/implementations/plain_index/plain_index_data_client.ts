@@ -10,6 +10,7 @@
 import type { estypes } from '@elastic/elasticsearch';
 import type { ElasticsearchClient, Logger } from '@kbn/core/server';
 
+import { createRetryingEsClient } from '../../../../lib/create_retrying_es_client';
 import { sharedBulk } from '../../lib/bulk/shared_bulk';
 import { getExecutionsByIds } from '../../lib/get_executions_by_ids';
 import type {
@@ -33,7 +34,12 @@ export interface PlainIndexDataClientDeps {
 export class PlainIndexDataClient<TExecution extends { id: string }>
   implements DataClient<TExecution>
 {
-  constructor(private readonly deps: PlainIndexDataClientDeps) {}
+  private readonly deps: PlainIndexDataClientDeps;
+
+  constructor(deps: PlainIndexDataClientDeps) {
+    // Retries live in the class so every instance gets them regardless of how it was built.
+    this.deps = { ...deps, esClient: createRetryingEsClient(deps.esClient, deps.logger) };
+  }
 
   public async search(
     request: ExecutionsSearchRequest

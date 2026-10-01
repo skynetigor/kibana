@@ -950,7 +950,12 @@ export class WorkflowExecutionQueryService {
         ],
       });
 
-      return getBulkUpdaterWriteResult(items[0]) === 'updated';
+      const writeResult = getBulkUpdaterWriteResult(items[0]);
+      if (writeResult === 'conflict') {
+        // The claim never landed and the state is unknown; do not report it as already claimed.
+        throw new Error(`Version conflict after retries marking step ${stepExecutionId}`);
+      }
+      return writeResult === 'updated';
     } catch (error) {
       this.deps.logger.error(
         `Failed to mark step execution ${stepExecutionId} as responded: ${error}`

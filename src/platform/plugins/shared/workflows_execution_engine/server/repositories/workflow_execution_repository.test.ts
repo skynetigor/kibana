@@ -1341,7 +1341,7 @@ describe('WorkflowExecutionRepository', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false when a leftover version conflict means another writer won', async () => {
+    it('throws when a leftover version conflict means the promotion never landed', async () => {
       workflowExecutionsDataClient.bulk.mockResolvedValue(
         asBulkResponse({
           errors: true,
@@ -1358,12 +1358,12 @@ describe('WorkflowExecutionRepository', () => {
         })
       );
 
-      const result = await repository.tryCasPromoteQueuedWorkflowExecutionToPending({
-        workflowExecutionId: 'exec-1',
-        spaceId: 'default',
-      });
-
-      expect(result).toBe(false);
+      await expect(
+        repository.tryCasPromoteQueuedWorkflowExecutionToPending({
+          workflowExecutionId: 'exec-1',
+          spaceId: 'default',
+        })
+      ).rejects.toThrow('version conflict after retries');
     });
 
     it('returns false when the execution document is not found', async () => {
