@@ -12,7 +12,6 @@ import { isRetryableEsClientError } from '@kbn/core-elasticsearch-server-utils';
 import type { EsWorkflowExecution, EsWorkflowStepExecution } from '@kbn/workflows';
 import { createOrUpdateIndex } from './helpers';
 import { PlainIndexDataClient } from './plain_index_data_client';
-import { createRetryingEsClient } from '../../../../lib/create_retrying_es_client';
 import {
   WORKFLOWS_EXECUTIONS_INDEX,
   WORKFLOWS_STEP_EXECUTIONS_INDEX,
@@ -35,11 +34,9 @@ export class PlainIndexDataClientBundle implements DataClientBundle {
   async initSetup(_coreSetup: CoreSetup): Promise<void> {}
 
   async initStart(coreStart: CoreStart): Promise<void> {
-    const esClient = createRetryingEsClient(
-      coreStart.elasticsearch.client.asInternalUser,
-      this.deps.logger
-    );
-    this.esClient = await this.init(esClient, this.deps.logger);
+    const esClient = coreStart.elasticsearch.client.asInternalUser;
+    const { logger } = this.deps;
+    this.esClient = await this.init(esClient, logger);
   }
 
   async stop(): Promise<void> {
