@@ -48,6 +48,12 @@ const runWrapped = (script: string): { code: number; output: string; stderr: str
 };
 
 describe('remote host script wrappers', () => {
+  it('runs python with unbuffered stdout and stderr', () => {
+    expect(buildRemoteHostPythonScript('print("progress")')).toContain(
+      "python3 -u << 'ENDOFSCRIPT'"
+    );
+  });
+
   it('runs a javascript import and returns its value', () => {
     const result = runWrapped(
       buildRemoteHostJavascriptScript(`import os from 'node:os';\nreturn os.hostname();`)

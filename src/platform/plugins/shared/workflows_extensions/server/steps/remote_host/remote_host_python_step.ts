@@ -33,7 +33,7 @@ export const buildRemoteHostPythonScript = (code: string): string => {
     .split('\n')
     .map((line) => `    ${line}`)
     .join('\n');
-  return `python3 << 'ENDOFSCRIPT'
+  return `python3 -u << 'ENDOFSCRIPT'
 import json as __json, os as __os, asyncio as __asyncio
 
 async def __main():
