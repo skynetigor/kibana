@@ -15,6 +15,7 @@ import {
   parseJobStatus,
   parseScriptOutput,
   pollJob,
+  RemoteHostUnreachableError,
   startJob,
   wrapUserScript,
 } from './remote_host_job';
@@ -38,13 +39,14 @@ const ctx = {
 const b64 = (value: string): string => Buffer.from(value).toString('base64');
 
 const statusJson = (payload: {
-  status: 'running' | 'terminated';
+  status: 'running' | 'terminated' | 'lost';
   exitCode?: number;
   stdout?: string;
   stderr?: string;
   stdoutOffset?: number;
   stderrOffset?: number;
   output?: string;
+  pid?: number;
 }): string =>
   JSON.stringify({
     status: payload.status,
@@ -54,6 +56,7 @@ const statusJson = (payload: {
     stdoutOffset: payload.stdoutOffset ?? 0,
     stderrOffset: payload.stderrOffset ?? 0,
     output: payload.output ? b64(payload.output) : '',
+    ...(payload.pid != null ? { pid: payload.pid } : {}),
   });
 
 describe('wrapUserScript', () => {
@@ -135,6 +138,30 @@ describe('parseJobStatus', () => {
   it('throws when the last line is not JSON', () => {
     expect(() => parseJobStatus('STATUS=DONE')).toThrow('invalid JSON');
   });
+
+  it('keeps a lost status and the pid', () => {
+    const result = parseJobStatus(
+      statusJson({
+        status: 'lost',
+        pid: 4242,
+        stdout: 'partial',
+        stderr: 'killed',
+        stdoutOffset: 7,
+        stderrOffset: 6,
+      })
+    );
+
+    expect(result).toEqual({
+      status: 'lost',
+      stdout: 'partial',
+      stderr: 'killed',
+      stdoutOffset: 7,
+      stderrOffset: 6,
+      exitCode: 0,
+      output: undefined,
+      pid: 4242,
+    });
+  });
 });
 
 describe('startJob', () => {
@@ -168,14 +195,30 @@ describe('startJob', () => {
       ctx,
       expect.stringContaining('command -v setsid')
     );
+    const workdir = getWorkdir(result.jobId);
     expect(mockedExecScript).toHaveBeenCalledWith(
       ctx,
-      expect.stringContaining(`setsid bash -c 'WORKDIR="${getWorkdir(result.jobId)}"`)
+      expect.stringContaining(
+        `setsid bash -c 'echo $$ > "${workdir}/pid.txt"; WORKDIR="${workdir}"`
+      )
     );
     expect(mockedExecScript).toHaveBeenCalledWith(
       ctx,
-      expect.stringContaining(`else\n  bash -c 'WORKDIR="${getWorkdir(result.jobId)}"`)
+      expect.stringContaining(
+        `else\n  bash -c 'echo $$ > "${workdir}/pid.txt"; WORKDIR="${workdir}"`
+      )
     );
+  });
+
+  it('checks the recorded PID before reading the exit code', async () => {
+    const result = await startJob(ctx, 'echo hi');
+    const script = mockedExecScript.mock.calls[0][1];
+    const pidCheck = script.indexOf('kill -0 "$PID"');
+    const exitCodeCheck = script.indexOf(`elif [ -f "${getWorkdir(result.jobId)}/code.txt" ]`);
+
+    expect(pidCheck).toBeGreaterThan(-1);
+    expect(exitCodeCheck).toBeGreaterThan(pidCheck);
+    expect(script).toContain('"status":"lost"');
   });
 
   it('caps STEP_OUTPUT reads at maxBytes before encoding', async () => {
@@ -255,10 +298,31 @@ describe('pollJob', () => {
     expect(result.status).toBe('running');
     expect(result.stdout).toBe('out');
     expect(result.stdoutOffset).toBe(3);
-    expect(mockedExecScript).toHaveBeenCalledWith(
-      ctx,
-      expect.stringContaining(`${getWorkdir('job-1')}/code.txt`)
-    );
+    const script = mockedExecScript.mock.calls[0][1];
+    const pidCheck = script.indexOf('kill -0 "$PID"');
+    const exitCodeCheck = script.indexOf(`elif [ -f "${getWorkdir('job-1')}/code.txt" ]`);
+
+    expect(script).toContain(`${getWorkdir('job-1')}/code.txt`);
+    expect(script).toContain('"status":"lost"');
+    expect(pidCheck).toBeGreaterThan(-1);
+    expect(exitCodeCheck).toBeGreaterThan(pidCheck);
+  });
+
+  it('parses a lost status when the PID is gone', async () => {
+    mockedExecScript.mockResolvedValue({
+      stdout: statusJson({ status: 'lost', pid: 42, stderr: 'Killed', stdout: 'partial' }),
+      stderr: '',
+      code: 0,
+    });
+
+    const result = await pollJob(ctx, { jobId: 'job-1', stdoutOffset: 0, stderrOffset: 0 });
+
+    expect(result).toMatchObject({
+      status: 'lost',
+      pid: 42,
+      stderr: 'Killed',
+      stdout: 'partial',
+    });
   });
 
   it('caps STEP_OUTPUT reads at maxBytes before encoding', async () => {
@@ -279,6 +343,21 @@ describe('pollJob', () => {
     await expect(
       pollJob(ctx, { jobId: 'job-1', stdoutOffset: 0, stderrOffset: 0 })
     ).rejects.toThrow('Failed to poll remote command: nope');
+  });
+
+  it('throws RemoteHostUnreachableError when SSH itself fails', async () => {
+    mockedExecScript.mockResolvedValue({
+      stdout: '',
+      stderr: 'Connection timed out',
+      code: 255,
+    });
+
+    await expect(
+      pollJob(ctx, { jobId: 'job-1', stdoutOffset: 0, stderrOffset: 0 })
+    ).rejects.toBeInstanceOf(RemoteHostUnreachableError);
+    await expect(
+      pollJob(ctx, { jobId: 'job-1', stdoutOffset: 0, stderrOffset: 0 })
+    ).rejects.toThrow('Connection timed out');
   });
 });
 

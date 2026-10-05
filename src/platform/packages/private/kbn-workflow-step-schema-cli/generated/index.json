@@ -802,6 +802,7 @@
     "shodan.getHostInfo",
     "shodan.getServices",
     "shodan.searchHosts",
+    "significantEvents.resolveModel",
     "slack",
     "slack2.createConversation",
     "slack2.getConversationHistory",
@@ -834,6 +835,8 @@
     "snowflake.runQuery",
     "ssh",
     "ssh.downloadFile",
+    "ssh.node",
+    "ssh.python",
     "ssh.run",
     "ssh.uploadFile",
     "sublime_security.getAsaVerdict",
@@ -993,11 +996,11 @@
   "variants": {
     "strict": {
       "path": "strict/schema.json",
-      "sha256": "848b08242faedd069aec9d52d8d6f8508f22bd314a3520bc2cfc38f8d9980205"
+      "sha256": "3642e8e67954fcd2990e3530e4ad31ba69c0dad75e9d61964fc157d534903713"
     },
     "template": {
       "path": "template/schema.json",
-      "sha256": "76c451e82518bfc3912bc3f90b0f67c46f6e3624e2a9a8c815ca60598c6ac601"
+      "sha256": "992da4fa91dc119bdb4a7eed14804fbfce03959faf2be0dc8c459c807cb2d828"
     }
   }
 }

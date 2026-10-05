@@ -12,7 +12,13 @@ import { ExecutionError } from '@kbn/workflows/server';
 import { z } from '@kbn/zod/v4';
 import type { ConnectorCallContext } from './execute_in_connector';
 import type { RemoteHostJobStatus } from './remote_host_job';
-import { killJob, parseScriptOutput, pollJob, startJob } from './remote_host_job';
+import {
+  killJob,
+  parseScriptOutput,
+  pollJob,
+  RemoteHostUnreachableError,
+  startJob,
+} from './remote_host_job';
 import { remoteHostRunCommandStepCommonDefinition } from '../../../common/steps/remote_host';
 import { createPollServerStepDefinition } from '../../step_registry/types';
 
@@ -32,6 +38,29 @@ const logCommandStreams = (
 ): void => {
   if (result.stdout) logger.info(result.stdout);
   if (result.stderr) logger.warn(result.stderr);
+};
+
+const lostProcessMessage = (result: RemoteHostJobStatus): string => {
+  const subject =
+    result.pid != null ? `Remote command process ${result.pid}` : 'Remote command process';
+  const message = `${subject} is no longer running and did not record an exit code. It was likely killed by the operating system or an external signal.`;
+  return result.stderr ? `${message}\n${result.stderr}` : message;
+};
+
+const failIfProcessLost = (
+  logger: { info: (message: string) => void; warn: (message: string) => void },
+  result: RemoteHostJobStatus
+): void => {
+  if (result.status !== 'lost') {
+    return;
+  }
+
+  logCommandStreams(logger, result);
+  throw new ExecutionError({
+    type: 'RemoteProcessLost',
+    message: lostProcessMessage(result),
+    details: result.pid != null ? { pid: result.pid } : undefined,
+  });
 };
 
 const completeCommand = (
@@ -106,6 +135,7 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         };
       }
 
+      failIfProcessLost(context.logger, result);
       return completeCommand(context.logger, result);
     },
     poll: async (context) => {
@@ -114,15 +144,33 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         throw new Error('Invalid state for polling remote command execution');
       }
 
-      const result = await pollJob(
-        toConnectorContext(config['connector-id'], context, getActionsStart),
-        {
-          jobId: state.jobId,
-          stdoutOffset: state.stdoutOffset,
-          stderrOffset: state.stderrOffset,
-        },
-        context.maxStepSizeBytes ?? 0
-      );
+      let result: RemoteHostJobStatus;
+      try {
+        result = await pollJob(
+          toConnectorContext(config['connector-id'], context, getActionsStart),
+          {
+            jobId: state.jobId,
+            stdoutOffset: state.stdoutOffset,
+            stderrOffset: state.stderrOffset,
+          },
+          context.maxStepSizeBytes ?? 0
+        );
+      } catch (error) {
+        if (context.abortSignal.aborted || !(error instanceof RemoteHostUnreachableError)) {
+          throw error;
+        }
+
+        context.logger.warn(
+          `SSH host is unreachable (${error.message}). The remote command is still running; polling will continue.`
+        );
+        return {
+          state: {
+            jobId: state.jobId,
+            stdoutOffset: state.stdoutOffset,
+            stderrOffset: state.stderrOffset,
+          },
+        };
+      }
 
       if (result.status === 'running') {
         logCommandStreams(context.logger, result);
@@ -135,6 +183,7 @@ export const createRemoteHostRunCommandStepDefinition = ({ getActionsStart }: De
         };
       }
 
+      failIfProcessLost(context.logger, result);
       return completeCommand(context.logger, result);
     },
     onCancel: async (context) => {
