@@ -70,6 +70,7 @@
     ".slack2",
     ".slack_api",
     ".snowflake",
+    ".solarwinds_platform",
     ".ssh",
     ".sublime_security",
     ".swimlane",
@@ -606,6 +607,9 @@
     "nightshift.composeHydrateNotifications",
     "nightshift.cortexHydrate",
     "nightshift.cortexOptimize",
+    "nightshift.decisionTreeHydrate",
+    "nightshift.decisionTreePrepare",
+    "nightshift.decisionTreeReinforce",
     "nightshift.ensureInvestigationAgent",
     "nightshift.memoryMaterializeToSandbox",
     "nightshift.memoryOptimize",
@@ -833,6 +837,12 @@
     "snowflake.listTables",
     "snowflake.listViews",
     "snowflake.runQuery",
+    "solarwinds_platform.acknowledgeAlert",
+    "solarwinds_platform.getAlert",
+    "solarwinds_platform.getNode",
+    "solarwinds_platform.listActiveAlerts",
+    "solarwinds_platform.query",
+    "solarwinds_platform.searchNodes",
     "ssh",
     "ssh.downloadFile",
     "ssh.node",
@@ -950,16 +960,17 @@
     "ai.attachmentDeleted",
     "ai.attachmentUpdated",
     "ai.conversation.metadataUpdated",
+    "ai.conversation.updated",
     "alert",
-    "alerting.episodeAcked",
-    "alerting.episodeActivated",
-    "alerting.episodeAssigned",
-    "alerting.episodeDeactivated",
-    "alerting.episodeSnoozed",
-    "alerting.episodeTagged",
-    "alerting.episodeUnacked",
-    "alerting.episodeUnassigned",
-    "alerting.episodeUnsnoozed",
+    "alerting.actions.alertAcked",
+    "alerting.actions.alertActivated",
+    "alerting.actions.alertAssigned",
+    "alerting.actions.alertDeactivated",
+    "alerting.actions.alertSnoozed",
+    "alerting.actions.alertTagged",
+    "alerting.actions.alertUnacked",
+    "alerting.actions.alertUnassigned",
+    "alerting.actions.alertUnsnoozed",
     "alerting.ruleCreated",
     "alerting.ruleDeleted",
     "alerting.ruleDisabled",
@@ -996,11 +1007,11 @@
   "variants": {
     "strict": {
       "path": "strict/schema.json",
-      "sha256": "3642e8e67954fcd2990e3530e4ad31ba69c0dad75e9d61964fc157d534903713"
+      "sha256": "c60a28d00b200ae92e79a8ddd05a6f70ad03ae20ee4c54f0a2bdd5c3e8263811"
     },
     "template": {
       "path": "template/schema.json",
-      "sha256": "992da4fa91dc119bdb4a7eed14804fbfce03959faf2be0dc8c459c807cb2d828"
+      "sha256": "80b1a3c56c93e673af9c6178460d60e826f1051c973e2ed4548511bc617d739b"
     }
   }
 }
