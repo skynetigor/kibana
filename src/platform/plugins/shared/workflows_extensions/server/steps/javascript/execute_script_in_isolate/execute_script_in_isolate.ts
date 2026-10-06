@@ -45,6 +45,8 @@ export const executeScriptInIsolate = async ({
     isolate,
     executionTimeoutMs
   );
+  // Same as above: the timer can fire during context/bridge setup, before the race below.
+  wallClockTimeout.catch(() => {});
 
   try {
     const ivmContext = await isolate.createContext();
