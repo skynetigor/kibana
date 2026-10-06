@@ -10,6 +10,7 @@
 export {
   assertValidDuration,
   DURATION_REGEX,
+  formatDuration,
   isValidDuration,
   MAX_DURATION_LENGTH,
   parseDuration,

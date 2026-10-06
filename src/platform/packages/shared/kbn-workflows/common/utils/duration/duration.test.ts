@@ -10,6 +10,7 @@
 import {
   assertValidDuration,
   DURATION_REGEX,
+  formatDuration,
   isValidDuration,
   MAX_DURATION_LENGTH,
   parseDuration,
@@ -260,4 +261,48 @@ describe('parseDuration', () => {
       expect(parseDuration(input)).toBe(expected);
     });
   });
+});
+
+describe('formatDuration', () => {
+  test.each([
+    [0, '0ms'],
+    [1, '1ms'],
+    [500, '500ms'],
+    [1000, '1s'],
+    [60 * 1000, '1m'],
+    [90 * 60 * 1000, '1h30m'],
+    [24 * 60 * 60 * 1000, '1d'],
+    [7 * 24 * 60 * 60 * 1000, '1w'],
+    [3600000 + 500, '1h500ms'],
+    [((7 + 2) * 24 * 60 * 60 + 3 * 3600 + 4 * 60 + 5) * 1000 + 6, '1w2d3h4m5s6ms'],
+  ])('formats %p ms as %s', (milliseconds, expected) => {
+    expect(formatDuration(milliseconds)).toBe(expected);
+  });
+
+  it('drops fractions of a millisecond', () => {
+    expect(formatDuration(1999.9)).toBe('1s999ms');
+    expect(formatDuration(0.5)).toBe('0ms');
+  });
+
+  it.each([1, 999, 1000, 61000, 3723004, 2 * 7 * 24 * 3600 * 1000 + 17])(
+    'round-trips %p ms through parseDuration',
+    (milliseconds) => {
+      const formatted = formatDuration(milliseconds);
+      expect(isValidDuration(formatted)).toBe(true);
+      expect(parseDuration(formatted)).toBe(milliseconds);
+    }
+  );
+
+  it('formats the largest safe integer as a valid duration', () => {
+    const formatted = formatDuration(Number.MAX_SAFE_INTEGER);
+    expect(isValidDuration(formatted)).toBe(true);
+    expect(parseDuration(formatted)).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it.each([-1, NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1, '5s' as unknown as number])(
+    'throws for %p',
+    (milliseconds) => {
+      expect(() => formatDuration(milliseconds)).toThrow('Invalid duration in milliseconds');
+    }
+  );
 });
