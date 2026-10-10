@@ -62,3 +62,37 @@ export function parseDuration(duration: string): number {
   }
   return total;
 }
+
+/**
+ * Converts milliseconds to a compound duration string with units in descending order, the inverse of
+ * {@link parseDuration}: `5400000` becomes `"1h30m"` and `0` becomes `"0ms"`.
+ * Fractions of a millisecond are dropped.
+ */
+export function formatDuration(milliseconds: number): string {
+  if (
+    typeof milliseconds !== 'number' ||
+    !Number.isFinite(milliseconds) ||
+    milliseconds < 0 ||
+    milliseconds > Number.MAX_SAFE_INTEGER
+  ) {
+    throw new Error(
+      `Invalid duration in milliseconds: ${milliseconds}. Use a non-negative number up to ${Number.MAX_SAFE_INTEGER}.`
+    );
+  }
+
+  let remaining = Math.floor(milliseconds);
+  if (remaining === 0) {
+    return '0ms';
+  }
+
+  const unitsDescending = (Object.keys(DURATION_MS) as Array<keyof typeof DURATION_MS>).reverse();
+  let formatted = '';
+  for (const unit of unitsDescending) {
+    const count = Math.floor(remaining / DURATION_MS[unit]);
+    if (count > 0) {
+      formatted += `${count}${unit}`;
+      remaining -= count * DURATION_MS[unit];
+    }
+  }
+  return formatted;
+}
