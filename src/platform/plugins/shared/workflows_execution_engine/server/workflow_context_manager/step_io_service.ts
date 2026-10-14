@@ -230,15 +230,24 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
         // An output may have been written while the fetch was in flight.
         if (this.state.getStepIo(doc.id, 'output') === undefined) {
           const output = doc.output ?? null;
-          const size = safeOutputSize(output) ?? undefined;
-          this.cache.set(doc.id, 'output', output, size);
-          // Outputs written before a resume are not in the counters yet.
-          if (size !== undefined && !this.measuredSizes.has(doc.id)) {
-            this.measuredSizes.set(doc.id, size);
-            this.measuredTotalBytes += size;
+          // `data.set` outputs loaded at resume are owned by state, not the LRU.
+          if (this.state.getUnloadedVariableExecutionIds().has(doc.id)) {
+            this.state.adoptVariableOutput(doc.id, output);
+          } else {
+            const size = safeOutputSize(output) ?? undefined;
+            this.cache.set(doc.id, 'output', output, size);
+            // Outputs written before a resume are not in the counters yet.
+            if (size !== undefined && !this.measuredSizes.has(doc.id)) {
+              this.measuredSizes.set(doc.id, size);
+              this.measuredTotalBytes += size;
+            }
+            fetched.push({ id: doc.id, output });
           }
-          fetched.push({ id: doc.id, output });
         }
+      }
+      // Executions with no stored document have nothing to load; stop asking for them.
+      for (const id of missing) {
+        this.state.adoptVariableOutput(id, null);
       }
       // The LRU may reject oversized outputs or evict earlier ones while the rest are inserted.
       // Keep those in a read-scoped copy so callers can still read the full requested set.

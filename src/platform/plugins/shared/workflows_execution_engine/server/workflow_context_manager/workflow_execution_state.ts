@@ -22,6 +22,9 @@ import type { StepExecutionRepository } from '../repositories/step_execution_rep
 import type { WorkflowExecutionRepository } from '../repositories/workflow_execution_repository';
 import { sumTokenUsage } from '../utils';
 
+const isPlainObject = (value: unknown): value is Record<string, JsonValue> =>
+  value != null && typeof value === 'object' && !Array.isArray(value);
+
 /** Context for the step that failed during this run; used to build workflow_execution_failed event. */
 export interface FailedStepContext {
   stepId: string;
@@ -80,6 +83,10 @@ export class WorkflowExecutionState {
 
   /** Execution IDs of `data.set` steps in creation order. Avoids scanning every execution. */
   private dataSetExecutionIds = new Set<string>();
+  /** Flushed `data.set` outputs still needed to build `variables`; see `retainVariableOutput`. */
+  private variableOutputs = new Map<string, Record<string, JsonValue>>();
+  /** `data.set` executions loaded at resume whose output is not in `variableOutputs` yet. */
+  private unloadedVariableIds = new Set<string>();
   private stepIoVersion = 0;
 
   constructor(
@@ -254,7 +261,9 @@ export class WorkflowExecutionState {
     stepExecutionId: string,
     type: 'input' | 'output'
   ): JsonValue | null | undefined {
-    return this.stepIo.get(stepExecutionId)?.[type];
+    const live = this.stepIo.get(stepExecutionId)?.[type];
+    if (live !== undefined || type === 'input') return live;
+    return this.variableOutputs.get(stepExecutionId);
   }
 
   /**
@@ -270,23 +279,71 @@ export class WorkflowExecutionState {
    * always dropped. The `input` is kept only while the step is still running, so
    * foreach context re-evaluation across loop iterations keeps working; once the step
    * is finished its input is dropped too and re-fetched on demand by `StepIoService`.
-   * Outputs of `data.set` steps are kept: they are small variable maps that every later
-   * node reads through `variables`, so dropping them would force a refetch per node run.
+   * Outputs of `data.set` steps move to a separate variable store (see
+   * `retainVariableOutput`) that drops outputs overwritten by later executions.
    */
   public clearFlushedOutputs(ids: ReadonlyArray<string>): void {
     for (const id of ids) {
       const io = this.stepIo.get(id);
       if (io) {
         const keepInput = io.input !== undefined && !this.isStepFinished(id);
-        const keepOutput = io.output !== undefined && this.dataSetExecutionIds.has(id);
         if (io.input !== undefined && !keepInput) this.evictedInputIds.add(id);
-        if (keepInput || keepOutput) {
-          this.stepIo.set(id, {
-            ...(keepInput ? { input: io.input } : {}),
-            ...(keepOutput ? { output: io.output } : {}),
-          });
+        if (this.dataSetExecutionIds.has(id) && isPlainObject(io.output)) {
+          this.retainVariableOutput(id, io.output);
+        }
+        if (keepInput) {
+          this.stepIo.set(id, { input: io.input });
         } else {
           this.stepIo.delete(id);
+        }
+      }
+    }
+  }
+
+  /**
+   * Execution IDs of `data.set` steps loaded at resume whose output has not been fetched yet.
+   * `StepIoService.rehydrate` fetches them once and hands them back via `adoptVariableOutput`.
+   */
+  public getUnloadedVariableExecutionIds(): ReadonlySet<string> {
+    return this.unloadedVariableIds;
+  }
+
+  /** Stores a `data.set` output fetched from Elasticsearch after resume. */
+  public adoptVariableOutput(stepExecutionId: string, output: JsonValue | null): void {
+    if (!this.unloadedVariableIds.delete(stepExecutionId)) return;
+    this.stepIoVersion++;
+    if (isPlainObject(output)) this.retainVariableOutput(stepExecutionId, output);
+  }
+
+  /**
+   * Keeps a flushed `data.set` output readable through `getStepIo`, because `variables` is
+   * built from all of them. Earlier outputs that this one fully overwrites are dropped, so
+   * memory is bounded by the distinct variables rather than by the number of executions.
+   * An output is only shadowed when every reader that sees it also sees the newer one.
+   */
+  private retainVariableOutput(stepExecutionId: string, output: Record<string, JsonValue>): void {
+    this.variableOutputs.set(stepExecutionId, output);
+    const step = this.stepExecutions.get(stepExecutionId);
+    if (!step) return;
+    const keys = Object.keys(output);
+    const scopes = getParallelBranchScopes(step.scopeStack ?? []);
+    for (const [otherId, otherOutput] of this.variableOutputs) {
+      const other = this.stepExecutions.get(otherId);
+      const isOlderOverwrittenOutput =
+        otherId !== stepExecutionId &&
+        other !== undefined &&
+        other.globalExecutionIndex < step.globalExecutionIndex &&
+        Object.keys(otherOutput).every((key) => key in output);
+      if (isOlderOverwrittenOutput) {
+        const otherScopes = getParallelBranchScopes(other.scopeStack ?? []);
+        const sameBranches =
+          otherScopes.length === scopes.length &&
+          otherScopes.every(
+            (scope, index) =>
+              scope.fanOut === scopes[index].fanOut && scope.branch === scopes[index].branch
+          );
+        if (scopes.length === 0 || (keys.length > 0 && sameBranches)) {
+          this.variableOutputs.delete(otherId);
         }
       }
     }
@@ -342,6 +399,9 @@ export class WorkflowExecutionState {
   public ingestLoadedStepDocs(steps: ReadonlyArray<StepExecutionMetadata>): void {
     for (const step of steps) {
       this.stepExecutions.set(step.id, step);
+      if (step.stepType === 'data.set' && !this.variableOutputs.has(step.id)) {
+        this.unloadedVariableIds.add(step.id);
+      }
     }
     this.buildStepIdExecutionIdIndex();
   }

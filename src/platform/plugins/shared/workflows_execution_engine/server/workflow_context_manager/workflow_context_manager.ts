@@ -48,8 +48,8 @@ import { isSerializedError } from '../utils/errors';
  *    Falls back to all predecessors when analysis is ambiguous (`null`) or when
  *    the node references no steps explicitly (size === 0) — conservative to
  *    guard against analysis gaps.
- * 2. All `data.set` executions — needed by `getVariables`, only when the node may
- *    reference `variables`.
+ * 2. `data.set` executions not yet loaded after resume — needed by `getVariables`,
+ *    only when the node may reference `variables`.
  * 3. Active scope-stack frames — needed by `enrichStepContextAccordingToStepScope`.
  */
 export function resolveRehydrationTargets(
@@ -73,12 +73,11 @@ export function resolveRehydrationTargets(
     }
   }
 
-  // `getVariables()` reads every `data.set` output, so those must be resident when the
-  // node can read `variables`. Skipping them otherwise avoids re-fetching (and thrashing
-  // the LRU with) a potentially huge set of outputs on every node run.
+  // `getVariables()` reads every `data.set` output. State keeps those itself, so only the
+  // ones loaded at resume need a one-time fetch; after that they are never refetched.
   if (nodeMayReferenceVariables(node)) {
-    for (const step of state.getDataSetStepExecutions()) {
-      neededIds.add(step.id);
+    for (const id of state.getUnloadedVariableExecutionIds()) {
+      neededIds.add(id);
     }
   }
 

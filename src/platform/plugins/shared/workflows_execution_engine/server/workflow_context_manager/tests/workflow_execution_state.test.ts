@@ -527,6 +527,32 @@ describe('WorkflowExecutionState', () => {
     });
   });
 
+  describe('data.set output retention', () => {
+    const addDataSet = (id: string, output: Record<string, number>) => {
+      underTest.upsertStep({ id, stepId: 'setVars', stepType: 'data.set' });
+      underTest.setStepIo(id, { output });
+      underTest.clearFlushedOutputs([id]);
+    };
+
+    it('keeps only data.set outputs that later executions do not fully overwrite', () => {
+      addDataSet('exec-1', { counter: 1 });
+      addDataSet('exec-2', { counter: 2 });
+      addDataSet('exec-3', { counter: 3, other: 1 });
+
+      expect(underTest.getStepIo('exec-1', 'output')).toBeUndefined();
+      expect(underTest.getStepIo('exec-2', 'output')).toBeUndefined();
+      expect(underTest.getStepIo('exec-3', 'output')).toEqual({ counter: 3, other: 1 });
+    });
+
+    it('keeps an earlier output that still owns a variable', () => {
+      addDataSet('exec-1', { first: 1 });
+      addDataSet('exec-2', { second: 2 });
+
+      expect(underTest.getStepIo('exec-1', 'output')).toEqual({ first: 1 });
+      expect(underTest.getStepIo('exec-2', 'output')).toEqual({ second: 2 });
+    });
+  });
+
   describe('getStepExecutionsByStepId', () => {
     it('should return all step executions for the provided step id', () => {
       underTest.upsertStep({
