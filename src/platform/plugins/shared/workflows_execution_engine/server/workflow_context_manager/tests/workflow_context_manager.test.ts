@@ -153,6 +153,7 @@ describe('WorkflowContextManager', () => {
       () => workflowExecutionState.getDataSetStepExecutions().length
     );
     workflowExecutionState.getStepIoVersion = jest.fn(() => ioVersion);
+    workflowExecutionState.getUnloadedVariableExecutionIds = jest.fn(() => new Set<string>());
     const stepIoService = {
       hasEvictedOutputs: jest.fn().mockReturnValue(false),
       rehydrate: jest.fn().mockResolvedValue(undefined),
