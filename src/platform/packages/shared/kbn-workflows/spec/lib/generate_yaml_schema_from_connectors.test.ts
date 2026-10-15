@@ -12,6 +12,7 @@ import {
   CONNECTOR_ID_MAX_LENGTH,
   type ConnectorContractUnion,
   type CustomTriggerSchemaInput,
+  DEFAULT_ELASTICSEARCH_STEP_TIMEOUT,
   generateYamlSchemaFromConnectors,
   getWorkflowJsonSchema,
 } from '../..';
@@ -312,6 +313,117 @@ describe('generateYamlSchemaFromConnectors', () => {
       expect(
         (result.data as { steps: Array<{ 'on-failure': unknown }> }).steps[0]['on-failure']
       ).toEqual(onFailure);
+    });
+  });
+
+  describe('elasticsearch step timeout', () => {
+    const connectors: ConnectorContractUnion[] = [
+      {
+        summary: 'Search',
+        description: null,
+        type: 'elasticsearch.search',
+        paramsSchema: z.object({ index: z.string() }),
+        outputSchema: z.unknown(),
+      },
+      {
+        summary: 'Request',
+        description: null,
+        type: 'elasticsearch.request',
+        paramsSchema: z.object({ path: z.string() }),
+        outputSchema: z.unknown(),
+      },
+      {
+        summary: 'Console',
+        description: null,
+        type: 'console',
+        paramsSchema: z.object({ message: z.string() }),
+        outputSchema: z.unknown(),
+      },
+    ];
+    const schema = generateYamlSchemaFromConnectors(connectors);
+
+    const parsedTimeout = (data: unknown): string | undefined =>
+      (data as { steps: Array<{ timeout?: string }> }).steps[0].timeout;
+
+    it('uses 5m when an elasticsearch step omits timeout', () => {
+      const result = schema.safeParse({
+        ...BASE_WORKFLOW,
+        steps: [{ name: 'search', type: 'elasticsearch.search', with: { index: 'logs' } }],
+      });
+
+      expect(result.success).toBe(true);
+      expect(parsedTimeout(result.data)).toBe(DEFAULT_ELASTICSEARCH_STEP_TIMEOUT);
+    });
+
+    it('uses 5m when elasticsearch.request omits timeout', () => {
+      const result = schema.safeParse({
+        ...BASE_WORKFLOW,
+        steps: [{ name: 'request', type: 'elasticsearch.request', with: { path: '/_search' } }],
+      });
+
+      expect(result.success).toBe(true);
+      expect(parsedTimeout(result.data)).toBe(DEFAULT_ELASTICSEARCH_STEP_TIMEOUT);
+    });
+
+    it('keeps an author duration', () => {
+      const result = schema.safeParse({
+        ...BASE_WORKFLOW,
+        steps: [
+          {
+            name: 'search',
+            type: 'elasticsearch.search',
+            timeout: '10m',
+            with: { index: 'logs' },
+          },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+      expect(parsedTimeout(result.data)).toBe('10m');
+    });
+
+    it('keeps an author Liquid template', () => {
+      const timeout = "{{ inputs.wait | default: '10m' }}";
+      const result = schema.safeParse({
+        ...BASE_WORKFLOW,
+        steps: [
+          {
+            name: 'search',
+            type: 'elasticsearch.search',
+            timeout,
+            with: { index: 'logs' },
+          },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+      expect(parsedTimeout(result.data)).toBe(timeout);
+    });
+
+    it('rejects a timeout that is neither a duration nor a template', () => {
+      const result = schema.safeParse({
+        ...BASE_WORKFLOW,
+        steps: [
+          {
+            name: 'search',
+            type: 'elasticsearch.search',
+            timeout: 'soon',
+            with: { index: 'logs' },
+          },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('leaves timeout unset on a non-elasticsearch step', () => {
+      const result = schema.safeParse({
+        ...BASE_WORKFLOW,
+        steps: [{ name: 'log', type: 'console', with: { message: 'hi' } }],
+      });
+
+      expect(result.success).toBe(true);
+      expect(parsedTimeout(result.data)).toBeUndefined();
     });
   });
 });

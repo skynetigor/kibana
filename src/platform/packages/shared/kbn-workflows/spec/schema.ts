@@ -238,6 +238,9 @@ export const DynamicDurationSchema = z
     "Duration (`5s`) or Liquid that renders to one (`{{ inputs.waitFor | default: '5s' }}`)."
   );
 
+/** Step timeout used for `elasticsearch.*` steps when the author omits `timeout`. */
+export const DEFAULT_ELASTICSEARCH_STEP_TIMEOUT = '5m' as const;
+
 export const DynamicTimeoutPropSchema = z.object({
   timeout: DynamicTimeoutSchema.optional(),
 });

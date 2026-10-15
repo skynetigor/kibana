@@ -15,6 +15,8 @@ import { KIBANA_TYPE_ALIASES } from '../kibana/aliases';
 import {
   BaseConnectorStepSchema,
   DataSetStepSchema,
+  DEFAULT_ELASTICSEARCH_STEP_TIMEOUT,
+  DynamicTimeoutSchema,
   getForEachStepSchema,
   getIfStepSchema,
   getMergeStepSchema,
@@ -185,6 +187,16 @@ function hasNoRequiredFields(schema: z.ZodType): boolean {
   );
 }
 
+/** Default step timeout for an elasticsearch connector. An author value replaces it. */
+function elasticsearchStepTimeoutField(connectorType: string): { timeout: z.ZodType } | undefined {
+  if (!connectorType.startsWith('elasticsearch.')) {
+    return undefined;
+  }
+  return {
+    timeout: DynamicTimeoutSchema.default(DEFAULT_ELASTICSEARCH_STEP_TIMEOUT),
+  };
+}
+
 function generateStepSchemaForConnector(
   connector: ConnectorContractUnion,
   stepSchema: z.ZodType,
@@ -212,6 +224,7 @@ function generateStepSchemaForConnector(
     ...connectorIdSchema,
     'on-failure': getOnFailureStepSchema(stepSchema, loose).optional(),
     ...(connector.configSchema && connector.configSchema.shape),
+    ...elasticsearchStepTimeoutField(connector.type),
   });
 }
 
