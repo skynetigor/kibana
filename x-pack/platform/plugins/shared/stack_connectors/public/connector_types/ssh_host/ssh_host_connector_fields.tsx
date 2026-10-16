@@ -171,6 +171,27 @@ const SshHostConnectorFieldsComponent: React.FunctionComponent<ActionConnectorFi
       />
       <EuiSpacer size="m" />
       <UseField
+        path="config.hostKey"
+        component={TextField}
+        config={{
+          label: i18n.translate('xpack.stackConnectors.components.sshHost.hostKeyLabel', {
+            defaultMessage: 'Host public key (optional)',
+          }),
+          helpText: i18n.translate('xpack.stackConnectors.components.sshHost.hostKeyHelp', {
+            defaultMessage:
+              'Pins the server key, for example "ssh-ed25519 AAAA...". Without it, the first key seen is trusted.',
+          }),
+        }}
+        componentProps={{
+          euiFieldProps: {
+            readOnly,
+            fullWidth: true,
+            'data-test-subj': 'sshHostKeyInput',
+          },
+        }}
+      />
+      <EuiSpacer size="m" />
+      <UseField
         path="config.skipHostKeyVerification"
         component={ToggleField}
         config={{
