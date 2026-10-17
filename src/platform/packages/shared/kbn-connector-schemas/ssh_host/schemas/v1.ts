@@ -15,6 +15,8 @@ export const ConfigSchema = lazySchema(() =>
       host: z.string().min(1).max(253),
       authType: z.enum(['privateKey', 'password']).default('privateKey'),
       skipHostKeyVerification: z.boolean().default(false),
+      // Expected server public key, e.g. "ssh-ed25519 AAAA...". Pins the host when set.
+      hostKey: z.string().max(8192).optional(),
     })
     .strict()
 );

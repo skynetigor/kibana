@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { execFile } from 'child_process';
 import {
   closeSync,
@@ -13,6 +13,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeSync,
@@ -114,7 +115,15 @@ let privateSshDir: string | undefined;
 const getPrivateSshDir = (): string => {
   if (!privateSshDir || !existsSync(privateSshDir)) {
     // OpenSSH ControlPath is capped around 104 chars; keep this under /tmp.
-    privateSshDir = mkdtempSync(join('/tmp', 'kbn_ssh_'));
+    const dir = mkdtempSync(join('/tmp', 'kbn_ssh_'));
+    privateSshDir = dir;
+    process.once('exit', () => {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch (e) {
+        // best effort cleanup
+      }
+    });
   }
   return privateSshDir;
 };
@@ -466,12 +475,44 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
       return ['-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null'];
     }
 
-    return [
-      '-o',
-      'StrictHostKeyChecking=accept-new',
-      '-o',
-      `UserKnownHostsFile=${this.getKnownHostsPath()}`,
-    ];
+    const hostKey = this.config.hostKey?.trim();
+
+    // No trust on first use: the known_hosts store is per process, so a learned key would not
+    // survive restarts or other Kibana nodes and the first connection could be intercepted.
+    if (!hostKey) {
+      throw new Error(
+        'SSH host key is required unless host key verification is explicitly skipped'
+      );
+    }
+    if (!/^[^\s]+ [^\s]+( [^\r\n]*)?$/.test(hostKey)) {
+      throw new Error('Invalid SSH host key');
+    }
+
+    const knownHostsPath = this.getKnownHostsPath();
+    const { hostname, port } = parseHost(this.config.host);
+    const hostPattern = port === DEFAULT_SSH_PORT ? hostname : `[${hostname}]:${port}`;
+    this.writeKnownHosts(knownHostsPath, `${hostPattern} ${hostKey}\n`);
+    return ['-o', 'StrictHostKeyChecking=yes', '-o', `UserKnownHostsFile=${knownHostsPath}`];
+  }
+
+  // Rewrites only when content changed, via temp file + rename so ssh never reads a partial file.
+  private writeKnownHosts(path: string, content: string): void {
+    if (existsSync(path) && readFileSync(path, 'utf8') === content) {
+      return;
+    }
+    const tempPath = `${path}.${process.pid}.${randomBytes(6).toString('hex')}`;
+    try {
+      const fd = openSync(tempPath, 'w', 0o600);
+      try {
+        writeSync(fd, content);
+      } finally {
+        closeSync(fd);
+      }
+      renameSync(tempPath, path);
+    } catch (error) {
+      rmSync(tempPath, { force: true });
+      throw error;
+    }
   }
 
   private getKnownHostsPath(): string {
@@ -485,9 +526,15 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
     // Credentials are part of the key so rotated secrets never reuse an old master.
     const id = createHash('sha256')
       .update(
-        [this.connector.id, username, hostname, port, password ?? '', sshPrivateKey ?? ''].join(
-          '\0'
-        )
+        [
+          this.connector.id,
+          username,
+          hostname,
+          port,
+          password ?? '',
+          sshPrivateKey ?? '',
+          this.config.hostKey?.trim() ?? '',
+        ].join('\0')
       )
       .digest('hex')
       .slice(0, 12);

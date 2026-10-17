@@ -124,6 +124,9 @@ export const parseJobStatus = (stdout: string): RemoteHostJobStatus => {
 /** Raw bytes of each stream returned by one status call. The rest is picked up by the next poll. */
 const MAX_STREAM_CHUNK_BYTES = 1024 * 1024;
 
+/** Raw bytes of each stream returned by the final status call. Terminated and lost jobs are never polled again. */
+const MAX_FINAL_STREAM_BYTES = 4 * 1024 * 1024;
+
 const BASH_STATUS_HELPERS = `_b64_from() {
   local off="$1" len="$2" f="$3"
   tail -c +$(( off + 1 )) "$f" 2>/dev/null | head -c "$len" 2>/dev/null | base64 -w 0 2>/dev/null \\
@@ -136,12 +139,18 @@ _take() {
   [ "$n" -lt 0 ] && n=0
   [ "$3" -gt 0 ] && [ "$n" -gt "$3" ] && n="$3"
   echo "$n"
+}
+_tail_start() {
+  local s="$1"
+  [ "$(( $2 - s ))" -gt "$3" ] && s=$(( $2 - $3 ))
+  [ "$s" -gt "$2" ] && s="$2"
+  echo "$s"
 }`;
 
 /**
  * Reads from a size snapshot, so the returned offset matches the bytes read.
  * A running job reads at most one chunk per stream and the next poll picks up the rest.
- * Terminated and lost jobs are final and never polled again, so they read everything that is left.
+ * Terminated and lost jobs use readFinalStreamsScript instead, because they are never polled again.
  */
 const readStreamsScript = (
   stdoutFile: string,
@@ -157,6 +166,24 @@ STDOUT=$(_b64_from ${stdoutOffset} "$STDOUT_N" "${stdoutFile}")
 STDERR=$(_b64_from ${stderrOffset} "$STDERR_N" "${stderrFile}")
 STDOUT_END=$(( ${stdoutOffset} + STDOUT_N ))
 STDERR_END=$(( ${stderrOffset} + STDERR_N ))`;
+
+/**
+ * Reads what is left of each stream for a final status, capped at the last MAX_FINAL_STREAM_BYTES.
+ * The tail is kept because it holds the failure reason. The offsets always end at the file size.
+ */
+const readFinalStreamsScript = (
+  stdoutFile: string,
+  stderrFile: string,
+  stdoutOffset: number,
+  stderrOffset: number
+): string => `STDOUT_SIZE=$(_fsize "${stdoutFile}")
+STDERR_SIZE=$(_fsize "${stderrFile}")
+STDOUT_START=$(_tail_start ${stdoutOffset} "$STDOUT_SIZE" ${MAX_FINAL_STREAM_BYTES})
+STDERR_START=$(_tail_start ${stderrOffset} "$STDERR_SIZE" ${MAX_FINAL_STREAM_BYTES})
+STDOUT=$(_b64_from "$STDOUT_START" $(( STDOUT_SIZE - STDOUT_START )) "${stdoutFile}")
+STDERR=$(_b64_from "$STDERR_START" $(( STDERR_SIZE - STDERR_START )) "${stderrFile}")
+STDOUT_END=$STDOUT_SIZE
+STDERR_END=$STDERR_SIZE`;
 
 const printTerminatedStatus = (
   workdir: string,
@@ -179,7 +206,7 @@ const printTerminatedStatus = (
       : '';
 
   return `EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
-${readStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset, 0)}
+${readFinalStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset)}
 OUTPUT=''
 if [ -f "${outputFile}" ]; then
   ${sizeGuard}OUTPUT=$(_b64_from 0 "$(_fsize "${outputFile}")" "${outputFile}")
@@ -205,7 +232,7 @@ const printLostStatus = (workdir: string, stdoutOffset: number, stderrOffset: nu
   const stdoutFile = `${workdir}/stdout.txt`;
   const stderrFile = `${workdir}/stderr.txt`;
 
-  return `${readStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset, 0)}
+  return `${readFinalStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset)}
 case "$PID" in
   ''|*[!0-9]*) LOST_PID=null ;;
   *) LOST_PID=$PID ;;
