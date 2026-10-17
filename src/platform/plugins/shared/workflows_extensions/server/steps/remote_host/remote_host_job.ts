@@ -58,6 +58,8 @@ interface JobStatusPayload {
   pid?: number | null;
 }
 
+const START_CLEANUP_TIMEOUT_MS = 30000;
+
 const createJobId = (): string => randomUUID();
 
 /** Shell expression for the job directory. Expands inside double quotes on the remote host. */
@@ -140,23 +142,30 @@ _take() {
 
 /**
  * Reads from a size snapshot, so the returned offset matches the bytes read.
- * A running job reads at most one chunk per stream and the next poll picks up the rest.
- * Terminated and lost jobs are final and never polled again, so they read everything that is left.
+ * Every status reads at most one chunk per stream and sets REMAINING to the bytes left behind.
+ * Terminated and lost jobs report running while REMAINING is above zero, so the next poll drains the rest.
  */
 const readStreamsScript = (
   stdoutFile: string,
   stderrFile: string,
   stdoutOffset: number,
-  stderrOffset: number,
-  chunkLimit: number = MAX_STREAM_CHUNK_BYTES
+  stderrOffset: number
 ): string => `STDOUT_SIZE=$(_fsize "${stdoutFile}")
 STDERR_SIZE=$(_fsize "${stderrFile}")
-STDOUT_N=$(_take ${stdoutOffset} "$STDOUT_SIZE" ${chunkLimit})
-STDERR_N=$(_take ${stderrOffset} "$STDERR_SIZE" ${chunkLimit})
+STDOUT_N=$(_take ${stdoutOffset} "$STDOUT_SIZE" ${MAX_STREAM_CHUNK_BYTES})
+STDERR_N=$(_take ${stderrOffset} "$STDERR_SIZE" ${MAX_STREAM_CHUNK_BYTES})
 STDOUT=$(_b64_from ${stdoutOffset} "$STDOUT_N" "${stdoutFile}")
 STDERR=$(_b64_from ${stderrOffset} "$STDERR_N" "${stderrFile}")
 STDOUT_END=$(( ${stdoutOffset} + STDOUT_N ))
-STDERR_END=$(( ${stderrOffset} + STDERR_N ))`;
+STDERR_END=$(( ${stderrOffset} + STDERR_N ))
+REMAINING=$(( STDOUT_SIZE - STDOUT_END + STDERR_SIZE - STDERR_END ))`;
+
+/** Reports the chunk as running and stops, so the final status is only sent once all output is read. */
+const PRINT_DRAINING_STATUS = `if [ "$REMAINING" -gt 0 ]; then
+  printf '{"status":"running","exitCode":0,"stdout":"%s","stderr":"%s","stdoutOffset":%s,"stderrOffset":%s,"output":""}\\n' \\
+    "$STDOUT" "$STDERR" "$STDOUT_END" "$STDERR_END"
+  exit 0
+fi`;
 
 const printTerminatedStatus = (
   workdir: string,
@@ -179,7 +188,8 @@ const printTerminatedStatus = (
       : '';
 
   return `EXIT_CODE=$(cat "${codeFile}" 2>/dev/null || echo '0')
-${readStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset, 0)}
+${readStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset)}
+${PRINT_DRAINING_STATUS}
 OUTPUT=''
 if [ -f "${outputFile}" ]; then
   ${sizeGuard}OUTPUT=$(_b64_from 0 "$(_fsize "${outputFile}")" "${outputFile}")
@@ -205,7 +215,7 @@ const printLostStatus = (workdir: string, stdoutOffset: number, stderrOffset: nu
   const stdoutFile = `${workdir}/stdout.txt`;
   const stderrFile = `${workdir}/stderr.txt`;
 
-  return `${readStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset, 0)}
+  return `${readStreamsScript(stdoutFile, stderrFile, stdoutOffset, stderrOffset)}
 case "$PID" in
   ''|*[!0-9]*) LOST_PID=null ;;
   *) LOST_PID=$PID ;;
@@ -214,6 +224,7 @@ if [ "$LOST_PID" != null ]; then
   kill -9 -"$LOST_PID" 2>/dev/null || true
 fi
 rm -f "${workdir}/env.sh" "${workdir}/script.sh"
+${PRINT_DRAINING_STATUS}
 printf '{"status":"lost","exitCode":0,"pid":%s,"stdout":"%s","stderr":"%s","stdoutOffset":%s,"stderrOffset":%s,"output":""}\\n' \\
   "$LOST_PID" "$STDOUT" "$STDERR" "$STDOUT_END" "$STDERR_END"`;
 };
@@ -348,19 +359,30 @@ export async function startJob(
   const outputLimit = Math.max(0, Math.floor(maxBytes));
   const envScript = hasEnv ? envRecordToScript(env) : undefined;
 
-  // The private (0700) job directory is created first, so uploaded files are never exposed.
-  const workdir = await prepareWorkdir(ctx, jobId);
-  const scriptFile = `${workdir}/script.sh`;
+  // The job ID is not in poll state until startup returns, so cancellation has to be handled here.
+  // The transport may ignore the abort signal, so the signal is checked after each remote call.
+  const throwIfAborted = (): void => {
+    if (ctx.abortSignal?.aborted) {
+      throw new Error('Remote command start was cancelled');
+    }
+  };
 
   try {
+    // The private (0700) job directory is created first, so uploaded files are never exposed.
+    const workdir = await prepareWorkdir(ctx, jobId);
+    const scriptFile = `${workdir}/script.sh`;
+    throwIfAborted();
+
     if (envScript !== undefined) {
       await uploadFile(ctx, { remotePath: `${workdir}/env.sh`, content: envScript });
+      throwIfAborted();
     }
 
     await uploadFile(ctx, {
       remotePath: scriptFile,
       content: wrapUserScript(script, hasEnv, cwd),
     });
+    throwIfAborted();
 
     const { stdout, stderr, code } = await execScript(
       ctx,
@@ -369,11 +391,18 @@ export async function startJob(
     if (code !== 0) {
       throw new Error(`Failed to start remote command: ${stderr}`);
     }
+    // The launcher may finish after the abort, so the started process is killed here.
+    throwIfAborted();
 
     return { ...parseJobStatus(stdout), jobId };
   } catch (error) {
-    // Best effort: do not leave env.sh and script.sh behind when the job never started.
-    await killJob(ctx, jobId).catch(() => undefined);
+    // Best effort: do not leave a running process or env.sh and script.sh behind.
+    // The step signal may have fired already, so the kill call gets a fresh one.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), START_CLEANUP_TIMEOUT_MS);
+    await killJob({ ...ctx, abortSignal: controller.signal }, jobId)
+      .catch(() => undefined)
+      .finally(() => clearTimeout(timer));
     throw error;
   }
 }

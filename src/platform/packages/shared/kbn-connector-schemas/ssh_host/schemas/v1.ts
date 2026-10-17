@@ -15,6 +15,12 @@ export const ConfigSchema = lazySchema(() =>
       host: z.string().min(1).max(253),
       authType: z.enum(['privateKey', 'password']).default('privateKey'),
       skipHostKeyVerification: z.boolean().default(false),
+      // Pinned public key in known_hosts format without the host, e.g. "ssh-ed25519 AAAA...".
+      hostKey: z
+        .string()
+        .max(4096)
+        .regex(/^[A-Za-z0-9@.-]+ [A-Za-z0-9+/=]+( [^\r\n]*)?$/)
+        .optional(),
     })
     .strict()
 );
