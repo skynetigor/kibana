@@ -6,7 +6,7 @@
  */
 
 import { execFile } from 'child_process';
-import { writeFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { actionsConfigMock } from '@kbn/actions-plugin/server/actions_config.mock';
 import { actionsMock } from '@kbn/actions-plugin/server/mocks';
 import { loggingSystemMock } from '@kbn/core-logging-server-mocks';
@@ -22,6 +22,8 @@ jest.mock('child_process', () => {
 });
 
 const mockedExecFile = execFile as jest.MockedFunction<typeof execFile>;
+
+const DEFAULT_HOST_KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDefault';
 
 const mockExecFileSuccess = (stdout = '', stderr = '') => {
   mockedExecFile.mockImplementation((bin, args, options, callback) => {
@@ -41,6 +43,7 @@ describe('SshHostConnector', () => {
       password?: string | null;
       sshPrivateKey?: string | null;
       skipHostKeyVerification?: boolean;
+      hostKey?: string;
       configurationUtilities?: ReturnType<typeof actionsConfigMock.create>;
     } = {}
   ) =>
@@ -50,6 +53,7 @@ describe('SshHostConnector', () => {
         host: overrides.host ?? 'example.com',
         authType: overrides.authType ?? AUTH_TYPE.PrivateKey,
         skipHostKeyVerification: overrides.skipHostKeyVerification ?? false,
+        hostKey: overrides.hostKey ?? DEFAULT_HOST_KEY,
       },
       connector: { id: overrides.id ?? '1', type: CONNECTOR_ID },
       secrets: {
@@ -97,10 +101,29 @@ describe('SshHostConnector', () => {
       expect(args).toContain('-p');
       expect(args).toContain('22');
       expect((args as string[]).join(' ')).not.toMatch(/alice@example.com "/);
-      expect(args).toContain('StrictHostKeyChecking=accept-new');
+      expect(args).toContain('StrictHostKeyChecking=yes');
       expect(args).toEqual(
         expect.arrayContaining(['-o', expect.stringMatching(/^UserKnownHostsFile=.+kbn_ssh_kh_/)])
       );
+    });
+
+    it('refuses to connect without a pinned host key unless verification is skipped', async () => {
+      const connector = createConnector({ hostKey: '' });
+
+      await expect(connector.exec({ script: 'true' })).rejects.toThrow(/host key is required/);
+      expect(mockedExecFile).not.toHaveBeenCalled();
+    });
+
+    it('enforces a pinned host key with strict checking', async () => {
+      const hostKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPinned';
+      const connector = createConnector({ hostKey, host: 'example.com:2222' });
+      await connector.exec({ script: 'true' });
+
+      const args = mockedExecFile.mock.calls[0][1] as string[];
+      expect(args).toContain('StrictHostKeyChecking=yes');
+      const knownHostsArg = args.find((arg) => arg.startsWith('UserKnownHostsFile='));
+      const knownHostsPath = (knownHostsArg ?? '').replace('UserKnownHostsFile=', '');
+      expect(readFileSync(knownHostsPath, 'utf8')).toBe(`[example.com]:2222 ${hostKey}\n`);
     });
 
     it('skips host key verification only when explicitly enabled', async () => {

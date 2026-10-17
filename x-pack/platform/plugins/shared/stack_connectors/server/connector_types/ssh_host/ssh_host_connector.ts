@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { execFile } from 'child_process';
 import {
   closeSync,
@@ -13,6 +13,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeSync,
@@ -94,6 +95,8 @@ export const parseHost = (host: string): { hostname: string; port: number } => {
   return { hostname: host.slice(0, lastColon), port };
 };
 
+const SAFE_USERNAME_REGEX = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
+
 const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
 
 const withoutSshAgent = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
@@ -110,7 +113,7 @@ const scpDestination = (username: string, hostname: string, remotePath: string):
 
 let privateSshDir: string | undefined;
 
-// Per-process 0700 directory (mkdtemp) for the ControlPath socket and known_hosts files.
+// Per-process 0700 directory (mkdtemp) for the ControlPath socket and pinned known_hosts files.
 const getPrivateSshDir = (): string => {
   if (!privateSshDir || !existsSync(privateSshDir)) {
     // OpenSSH ControlPath is capped around 104 chars; keep this under /tmp.
@@ -451,43 +454,91 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
     const { hostname } = parseHost(this.config.host);
     this.configurationUtilities.ensureHostnameAllowed(hostname);
 
-    // A leading '-' would make ssh/scp parse the destination as a local option.
+    // Restrict to a safe grammar: a leading '-' would be parsed as an option, and ':', '@', '/' or
+    // '[' would let scp parse a different host out of the destination and bypass allowedHosts.
     const { username } = this.secrets;
-    if (username.startsWith('-') || /\s/.test(username)) {
+    if (!SAFE_USERNAME_REGEX.test(username)) {
       throw new Error('Invalid SSH username');
     }
     if (hostname.startsWith('-')) {
       throw new Error('Invalid SSH host');
     }
+
+    // No trust on first use: a host key must be pinned unless verification is explicitly skipped.
+    const { hostKey, skipHostKeyVerification } = this.config;
+    if (!skipHostKeyVerification && !hostKey) {
+      throw new Error(
+        'A host key is required. Set hostKey to the server public key, or enable skipHostKeyVerification.'
+      );
+    }
   }
 
   private getHostKeyArgs(): string[] {
-    if (this.config.skipHostKeyVerification) {
+    const { hostKey, skipHostKeyVerification } = this.config;
+    if (skipHostKeyVerification || !hostKey) {
       return ['-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null'];
     }
 
+    // Pinned key: the connection fails unless the server presents exactly this key.
     return [
       '-o',
-      'StrictHostKeyChecking=accept-new',
+      'StrictHostKeyChecking=yes',
       '-o',
-      `UserKnownHostsFile=${this.getKnownHostsPath()}`,
+      `UserKnownHostsFile=${this.writePinnedKnownHosts(hostKey)}`,
     ];
   }
 
+  private writePinnedKnownHosts(hostKey: string): string {
+    const { hostname, port } = parseHost(this.config.host);
+    const hostPattern = port === 22 ? hostname : `[${hostname}]:${port}`;
+    const path = this.getKnownHostsPath();
+    const content = `${hostPattern} ${hostKey.trim()}\n`;
+
+    // Content is part of the file name, so an existing file with the right content can be reused.
+    if (existsSync(path) && readFileSync(path, 'utf8') === content) {
+      return path;
+    }
+
+    // Write to a temp file and rename so a concurrent ssh never reads a partial file.
+    const tempPath = `${path}.${process.pid}.${randomBytes(4).toString('hex')}`;
+    const fd = openSync(tempPath, 'wx', 0o600);
+    try {
+      writeSync(fd, content);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(tempPath, path);
+    return path;
+  }
+
   private getKnownHostsPath(): string {
-    const id = createHash('sha256').update(this.connector.id).digest('hex').slice(0, 16);
+    const { hostname, port } = parseHost(this.config.host);
+    const { hostKey } = this.config;
+    // Host and pinned key are part of the name so a changed config never reuses an old file.
+    const id = createHash('sha256')
+      .update([this.connector.id, hostname, port, hostKey ?? ''].join('\0'))
+      .digest('hex')
+      .slice(0, 16);
     return join(getPrivateSshDir(), `kbn_ssh_kh_${id}`);
   }
 
   private getControlPath(): string {
     const { hostname, port } = parseHost(this.config.host);
     const { username, password, sshPrivateKey } = this.secrets;
-    // Credentials are part of the key so rotated secrets never reuse an old master.
+    const { hostKey, skipHostKeyVerification } = this.config;
+    // Credentials and host key policy are part of the key so a changed config never reuses an old master.
     const id = createHash('sha256')
       .update(
-        [this.connector.id, username, hostname, port, password ?? '', sshPrivateKey ?? ''].join(
-          '\0'
-        )
+        [
+          this.connector.id,
+          username,
+          hostname,
+          port,
+          password ?? '',
+          sshPrivateKey ?? '',
+          hostKey ?? '',
+          skipHostKeyVerification ? '1' : '0',
+        ].join('\0')
       )
       .digest('hex')
       .slice(0, 12);
