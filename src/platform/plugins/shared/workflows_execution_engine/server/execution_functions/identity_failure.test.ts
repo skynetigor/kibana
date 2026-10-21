@@ -92,7 +92,10 @@ const setup = () => {
     seqNo++;
     return { errors: false, items: [{ id: 'child', index: '.workflows-executions' }] };
   });
-  const repository = new WorkflowExecutionRepository(dataClient);
+  const repository = new WorkflowExecutionRepository(dataClient, {
+    getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
+    bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
+  });
   jest.spyOn(repository, 'tryUpdateWorkflowExecutionWithVersion');
   jest.spyOn(repository, 'getWorkflowExecutionById').mockImplementation(async () => execution);
   jest.spyOn(repository, 'updateWorkflowExecution').mockImplementation(async (update) => {

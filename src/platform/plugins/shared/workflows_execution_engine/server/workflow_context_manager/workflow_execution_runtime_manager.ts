@@ -179,12 +179,7 @@ export class WorkflowExecutionRuntimeManager {
   }
 
   public setWorkflowOutputs(outputs: Record<string, unknown>): void {
-    this.workflowExecutionState.updateWorkflowExecution({
-      context: {
-        ...(this.workflowExecution.context || {}),
-        output: outputs,
-      },
-    });
+    this.stepIoService.setWorkflowOutput(outputs);
   }
 
   public setWorkflowStatus(status: ExecutionStatus): void {
@@ -469,7 +464,7 @@ export class WorkflowExecutionRuntimeManager {
     };
     this.workflowExecutionState.updateWorkflowExecution(updatedWorkflowExecution);
     this.logWorkflowStart();
-    await this.stepIoService.flush();
+    await Promise.all([this.stepIoService.flush(), this.workflowExecutionState.flush()]);
   }
 
   public async resume(): Promise<void> {

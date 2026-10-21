@@ -15,6 +15,7 @@ import type { DocumentVersionManager } from './document_version_manager';
 
 import type { SharedBulkItem } from '../../lib/bulk/shared_bulk';
 import { sharedBulk } from '../../lib/bulk/shared_bulk';
+import { attachExecutionIoIdsToHits, withExecutionIoIds } from '../../lib/with_execution_io_ids';
 import type {
   BulkItemResponse,
   BulkPlainItem,
@@ -77,7 +78,7 @@ export class DataStreamDataClient<TExecution extends { id: string }>
         });
       }
     });
-    return searchResponse;
+    return attachExecutionIoIdsToHits(searchResponse);
   }
 
   public async count(request: ExecutionsCountRequest): Promise<estypes.CountResponse> {
@@ -143,7 +144,7 @@ export class DataStreamDataClient<TExecution extends { id: string }>
         if (!isSoftDeleted(doc._source) && !foundIds.has(docId)) {
           foundIds.add(docId);
           items.push({
-            document: { ...doc._source, id: docId } as TExecution,
+            document: withExecutionIoIds({ ...doc._source, id: docId } as TExecution),
             index: doc._index,
             seqNo: doc._seq_no,
             primaryTerm: doc._primary_term,
@@ -174,7 +175,7 @@ export class DataStreamDataClient<TExecution extends { id: string }>
         if (hit._id && hit._source && !isSoftDeleted(hit._source) && !foundIds.has(hit._id)) {
           foundIds.add(hit._id);
           items.push({
-            document: { ...hit._source, id: hit._id } as TExecution,
+            document: withExecutionIoIds({ ...hit._source, id: hit._id } as TExecution),
             index: hit._index,
             seqNo: hit._seq_no,
             primaryTerm: hit._primary_term,

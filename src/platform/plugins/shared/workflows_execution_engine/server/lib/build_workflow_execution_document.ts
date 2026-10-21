@@ -21,6 +21,7 @@ import {
   UNKNOWN_EXECUTION_IDENTITY,
 } from './execution_identity';
 import { normalizeEventChainVisitedWorkflowIds } from './telemetry/utils/extract_execution_metadata';
+import { executionIoId } from '../repositories/data_access_layer/implementations/executions_io/execution_io_id';
 import type { WorkflowExecutionForInputRendering } from '../workflow_context_manager/build_workflow_context';
 
 export interface BuildWorkflowExecutionDocumentParams {
@@ -83,8 +84,11 @@ export const buildWorkflowExecutionDocument = (
   const dispatchEventId =
     typeof metadata?.eventId === 'string' ? metadata.eventId.trim() || undefined : undefined;
   const missingIdentity = authenticatedUser == null;
+  const id = generateUuid();
   const workflowExecution: WorkflowExecutionForInputRendering = {
-    id: generateUuid(),
+    id,
+    inputId: executionIoId('input', id),
+    outputId: executionIoId('output', id),
     spaceId,
     workflowId: workflow.id,
     ...pickManagedWorkflowFields(workflow),

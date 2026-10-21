@@ -13,6 +13,7 @@ import { ExecutionStatus } from '@kbn/workflows';
 import { getInputsFromDefinition } from '@kbn/workflows/spec/lib/field_conversion';
 import type { JsonModelSchemaType } from '@kbn/workflows/spec/schema/common/json_model_schema';
 import { validateWorkflowInputs } from './validate_workflow_inputs';
+import type { ExecutionsIoClient } from '../repositories/data_access_layer/implementations/executions_io/executions_io_data_client';
 import type { WorkflowExecutionRepository } from '../repositories/workflow_execution_repository';
 
 jest.mock('@kbn/workflows/spec/lib/field_conversion', () => ({
@@ -28,6 +29,7 @@ describe('validateWorkflowInputs', () => {
   const executionId = 'exec-123';
   let mockRepository: jest.Mocked<Pick<WorkflowExecutionRepository, 'updateWorkflowExecution'>>;
   let mockLogger: jest.Mocked<Pick<Logger, 'error'>>;
+  let mockIoClient: jest.Mocked<Pick<ExecutionsIoClient, 'bulkCreate' | 'getByIds'>>;
 
   // Format-shape coverage (legacy array vs JSON Schema, root-level vs trigger-level
   // inputs, multiple manual triggers) is owned by the `getInputsFromDefinition` unit
@@ -75,8 +77,28 @@ describe('validateWorkflowInputs', () => {
     validateWorkflowInputs(
       workflowExecution,
       mockRepository as unknown as WorkflowExecutionRepository,
-      mockLogger as unknown as Logger
+      mockLogger as unknown as Logger,
+      mockIoClient as unknown as ExecutionsIoClient
     );
+
+  const expectInputStored = (value: unknown) => {
+    expect(mockIoClient.bulkCreate).toHaveBeenCalledWith({
+      documents: [
+        expect.objectContaining({
+          executionId,
+          type: 'input',
+          value,
+        }),
+      ],
+    });
+    expect(mockRepository.updateWorkflowExecution).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: executionId,
+        inputId: `input:${executionId}`,
+        inputSize: expect.any(Number),
+      })
+    );
+  };
 
   const setInputsSchema = (schema: JsonModelSchemaType | undefined) => {
     mockGetInputsFromDefinition.mockReturnValue(schema);
@@ -89,6 +111,10 @@ describe('validateWorkflowInputs', () => {
     mockLogger = {
       error: jest.fn(),
     };
+    mockIoClient = {
+      getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
+      bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
+    };
     mockGetInputsFromDefinition.mockReset();
     mockGetInputsFromDefinition.mockReturnValue(undefined);
   });
@@ -97,7 +123,7 @@ describe('validateWorkflowInputs', () => {
     const result = await callValidate(createWorkflowExecution({ inputs: {} }));
 
     expect(result).toBe(true);
-    expect(mockRepository.updateWorkflowExecution).not.toHaveBeenCalled();
+    expectInputStored({});
   });
 
   it('should return true when input definition has no properties', async () => {
@@ -106,7 +132,7 @@ describe('validateWorkflowInputs', () => {
     const result = await callValidate(createWorkflowExecution({ inputs: {} }));
 
     expect(result).toBe(true);
-    expect(mockRepository.updateWorkflowExecution).not.toHaveBeenCalled();
+    expectInputStored({});
   });
 
   it('should return true when all required inputs are provided', async () => {
@@ -123,7 +149,7 @@ describe('validateWorkflowInputs', () => {
     );
 
     expect(result).toBe(true);
-    expect(mockRepository.updateWorkflowExecution).not.toHaveBeenCalled();
+    expectInputStored({ name: 'hello', count: 5 });
   });
 
   it('should return true when optional inputs are omitted', async () => {
@@ -267,10 +293,7 @@ describe('validateWorkflowInputs', () => {
 
     expect(result).toBe(true);
     expect(workflowExecution.context.inputs).toEqual({ name: 'rendered-name' });
-    expect(mockRepository.updateWorkflowExecution).toHaveBeenCalledWith({
-      id: executionId,
-      context: { inputs: { name: 'rendered-name' } },
-    });
+    expectInputStored({ name: 'rendered-name' });
   });
 
   it('should persist dynamic default input values once before runtime', async () => {
@@ -289,10 +312,7 @@ describe('validateWorkflowInputs', () => {
     expect(result).toBe(true);
     expect(renderedTime).toEqual(expect.any(String));
     expect(renderedTime).not.toBe('{{ now }}');
-    expect(mockRepository.updateWorkflowExecution).toHaveBeenCalledWith({
-      id: executionId,
-      context: { inputs: { time: renderedTime } },
-    });
+    expectInputStored({ time: renderedTime });
   });
 
   it('should render explicit expressions in provided input values before validation', async () => {
@@ -319,10 +339,7 @@ describe('validateWorkflowInputs', () => {
 
     expect(result).toBe(true);
     expect(workflowExecution.context.inputs).toEqual({ severity: 'high' });
-    expect(mockRepository.updateWorkflowExecution).toHaveBeenCalledWith({
-      id: executionId,
-      context: { inputs: { severity: 'high' } },
-    });
+    expectInputStored({ severity: 'high' });
   });
 
   it('should preserve provided values that resemble Liquid templates', async () => {
@@ -346,7 +363,7 @@ describe('validateWorkflowInputs', () => {
 
     expect(result).toBe(true);
     expect(workflowExecution.context.inputs).toEqual(inputs);
-    expect(mockRepository.updateWorkflowExecution).not.toHaveBeenCalled();
+    expectInputStored(inputs);
   });
 
   it('should preserve nested provided data while rendering explicit expressions', async () => {
@@ -428,7 +445,11 @@ describe('validateWorkflowInputs', () => {
   });
 
   it('should return false and log error when updateWorkflowExecution fails', async () => {
-    mockRepository.updateWorkflowExecution.mockRejectedValueOnce(new Error('ES unavailable'));
+    mockRepository.updateWorkflowExecution.mockImplementation(async (update) => {
+      if (update.status === ExecutionStatus.FAILED) {
+        throw new Error('ES unavailable');
+      }
+    });
 
     setInputsSchema({
       properties: {

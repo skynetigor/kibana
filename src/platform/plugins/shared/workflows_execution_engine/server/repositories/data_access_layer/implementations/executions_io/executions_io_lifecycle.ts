@@ -27,13 +27,13 @@ export class ExecutionsIoLifecycle {
   }
 
   async init(coreStart: CoreStart, esClient: ElasticsearchClient, logger: Logger): Promise<void> {
-    await coreStart.dataStreams.initializeClient(WORKFLOWS_EXECUTIONS_IO_DATA_STREAM);
     this.esClient = esClient;
     this.metadataManager = new DataStreamMetadataManager({
       esClient,
       dataStreamName: WORKFLOWS_EXECUTIONS_IO_DATA_STREAM,
       logger,
     });
+    await coreStart.dataStreams.initializeClient(WORKFLOWS_EXECUTIONS_IO_DATA_STREAM);
     await this.metadataManager.init();
   }
 

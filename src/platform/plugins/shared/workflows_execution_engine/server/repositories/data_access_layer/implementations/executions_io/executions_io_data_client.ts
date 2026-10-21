@@ -22,8 +22,10 @@ import type {
 } from '../../types';
 import type { DataStreamMetadataManager } from '../data_stream/data_stream_metadata_manager';
 
-/** IO value submitted for create. The document id is assigned by {@link ExecutionsIoDataClient.bulkCreate}. */
-export type ExecutionIoCreateDocument = Omit<EsExecutionIo, 'id'>;
+/** IO value submitted for create. The document id and timestamp are assigned by {@link ExecutionsIoDataClient.bulkCreate}. */
+export type ExecutionIoCreateDocument = Omit<EsExecutionIo, 'id' | '@timestamp'> & {
+  '@timestamp'?: string;
+};
 
 export interface ExecutionsIoBulkCreateRequest {
   refresh?: boolean | 'wait_for';

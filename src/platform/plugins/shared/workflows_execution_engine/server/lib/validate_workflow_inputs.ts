@@ -7,26 +7,24 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { isDeepStrictEqual } from 'node:util';
 import type { CoreStart, Logger } from '@kbn/core/server';
+import type { JsonValue } from '@kbn/utility-types';
 import { ExecutionStatus } from '@kbn/workflows';
 import { buildFieldsZodValidator } from '@kbn/workflows/spec/lib/build_fields_zod_validator';
 import {
   applyInputDefaults,
   getInputsFromDefinition,
 } from '@kbn/workflows/spec/lib/field_conversion';
+import { executionIoId } from '../repositories/data_access_layer/implementations/executions_io/execution_io_id';
+import type { ExecutionsIoClient } from '../repositories/data_access_layer/implementations/executions_io/executions_io_data_client';
 import type { WorkflowExecutionRepository } from '../repositories/workflow_execution_repository';
+import { safeOutputSize } from '../step/errors';
 import { WorkflowTemplatingEngine } from '../templating_engine';
 import {
   buildInputDefaultRenderContext,
   type WorkflowExecutionForInputRendering,
 } from '../workflow_context_manager/build_workflow_context';
 import type { ContextDependencies } from '../workflow_context_manager/types';
-
-const hasInputChanges = (
-  currentInputs: Record<string, unknown> | undefined,
-  nextInputs: Record<string, unknown> | undefined
-): boolean => !isDeepStrictEqual(currentInputs, nextInputs);
 
 /**
  * Validates workflow inputs against the workflow's input schema.
@@ -38,15 +36,56 @@ export const validateWorkflowInputs = async (
   workflowExecution: WorkflowExecutionForInputRendering,
   workflowExecutionRepository: WorkflowExecutionRepository,
   logger: Logger,
+  executionsIoDataClient: ExecutionsIoClient,
   coreStart?: CoreStart,
   dependencies?: ContextDependencies
 ): Promise<boolean> => {
+  const persistWorkflowInput = async (value: unknown) => {
+    if (!workflowExecution.id || value === undefined) {
+      return;
+    }
+    const size = safeOutputSize(value) ?? 0;
+    try {
+      await executionsIoDataClient.bulkCreate({
+        documents: [
+          {
+            executionId: workflowExecution.id,
+            type: 'input',
+            value: value as JsonValue,
+            size,
+          },
+        ],
+      });
+    } catch (error) {
+      logger.error(
+        `Failed to store workflow input for execution ${workflowExecution.id}: ${error}`
+      );
+    }
+    try {
+      await workflowExecutionRepository.updateWorkflowExecution({
+        id: workflowExecution.id,
+        inputId: executionIoId('input', workflowExecution.id),
+        inputSize: size,
+      });
+    } catch (error) {
+      logger.error(
+        `Failed to store workflow input size for execution ${workflowExecution.id}: ${error}`
+      );
+    }
+    workflowExecution.context = {
+      ...(workflowExecution.context ?? {}),
+      inputs: value,
+    };
+  };
+
   if (!workflowExecution.workflowDefinition) {
+    await persistWorkflowInput(workflowExecution.context?.inputs);
     return true;
   }
   const normalizedSchema = getInputsFromDefinition(workflowExecution.workflowDefinition);
   const validator = buildFieldsZodValidator(normalizedSchema);
   if (!normalizedSchema?.properties) {
+    await persistWorkflowInput(workflowExecution.context?.inputs);
     return true;
   }
   const renderContext = buildInputDefaultRenderContext(workflowExecution, coreStart, dependencies);
@@ -88,6 +127,7 @@ export const validateWorkflowInputs = async (
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    await persistWorkflowInput(renderContext.inputs);
     try {
       await workflowExecutionRepository.updateWorkflowExecution({
         id: workflowExecution.id,
@@ -110,6 +150,7 @@ export const validateWorkflowInputs = async (
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
       .join('; ');
 
+    await persistWorkflowInput(inputsWithDefaults ?? renderContext.inputs);
     try {
       await workflowExecutionRepository.updateWorkflowExecution({
         id: workflowExecution.id,
@@ -128,17 +169,7 @@ export const validateWorkflowInputs = async (
     return false;
   }
 
-  if (hasInputChanges(renderContext.inputs, inputsWithDefaults)) {
-    const context = {
-      ...(workflowExecution.context ?? {}),
-      ...(inputsWithDefaults !== undefined ? { inputs: inputsWithDefaults } : {}),
-    };
-    workflowExecution.context = context;
-    await workflowExecutionRepository.updateWorkflowExecution({
-      id: workflowExecution.id,
-      context,
-    });
-  }
+  await persistWorkflowInput(inputsWithDefaults);
 
   return true;
 };

@@ -125,6 +125,7 @@ describe('WorkflowExecutionRuntimeManager', () => {
       getStepExecutionsByStepId: jest.fn(),
       getAllStepExecutions: jest.fn().mockReturnValue([]),
       upsertStep: jest.fn(),
+      flush: jest.fn().mockResolvedValue(undefined),
     } as unknown as WorkflowExecutionState;
 
     const topologicalOrder = ['node1', 'node2', 'node3'];
@@ -178,6 +179,7 @@ describe('WorkflowExecutionRuntimeManager', () => {
       // Drives the eviction work that used to live in this class — tests that
       // observe stale-loop eviction now spy on this method directly.
       evictCompletedLoopsOnResume: jest.fn(),
+      setWorkflowOutput: jest.fn(),
     } as unknown as StepIoService;
 
     underTest = new WorkflowExecutionRuntimeManager({
@@ -899,11 +901,10 @@ describe('WorkflowExecutionRuntimeManager', () => {
   });
 
   describe('setWorkflowOutputs', () => {
-    it('should update context with output', () => {
+    it('should queue workflow output on the IO service', () => {
       underTest.setWorkflowOutputs({ result: 'done' });
-      expect(workflowExecutionState.updateWorkflowExecution).toHaveBeenCalledWith({
-        context: expect.objectContaining({ output: { result: 'done' } }),
-      });
+      expect(stepIoService.setWorkflowOutput).toHaveBeenCalledWith({ result: 'done' });
+      expect(workflowExecutionState.updateWorkflowExecution).not.toHaveBeenCalled();
     });
   });
 

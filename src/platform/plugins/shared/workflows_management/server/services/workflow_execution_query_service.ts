@@ -41,6 +41,7 @@ import {
   type GetExecutionStepExecutionsResult,
 } from '../api/lib/get_execution_step_executions';
 import { getWorkflowExecution } from '../api/lib/get_workflow_execution';
+import { hydrateExecutionIo } from '../api/lib/hydrate_execution_io';
 import {
   searchStepExecutions,
   type StepExecutionListResult,
@@ -134,6 +135,7 @@ export class WorkflowExecutionQueryService {
     return getWorkflowExecution({
       workflowExecutionsDataClient: this.deps.workflowExecutionsDataClient,
       stepExecutionsDataClient: this.deps.stepExecutionsDataClient,
+      executionsIoDataClient: this.deps.executionsIoDataClient,
       logger: this.deps.logger,
       workflowExecutionId: executionId,
       spaceId,
@@ -366,9 +368,7 @@ export class WorkflowExecutionQueryService {
     params: SearchStepExecutionsParams,
     spaceId: string
   ): Promise<StepExecutionListResult> {
-    const sourceExcludes: string[] = [];
-    if (!params.includeInput) sourceExcludes.push('input');
-    if (!params.includeOutput) sourceExcludes.push('output');
+    const sourceExcludes = ['input', 'output'];
 
     // An explicitly empty array means "no runs", so the clause is built whenever the caller
     // supplied one at all — an empty `terms` matches nothing, which is what was asked for.
@@ -376,7 +376,7 @@ export class WorkflowExecutionQueryService {
       terms: { workflowRunId: params.workflowExecutionIds },
     };
 
-    return searchStepExecutions({
+    const result = await searchStepExecutions({
       stepExecutionsDataClient: this.deps.stepExecutionsDataClient,
       logger: this.deps.logger,
       workflowId: params.workflowId,
@@ -391,6 +391,15 @@ export class WorkflowExecutionQueryService {
       startedAfter: params.startedAfter,
       startedBefore: params.startedBefore,
     });
+    if (params.includeInput || params.includeOutput) {
+      await hydrateExecutionIo({
+        executionsIoDataClient: this.deps.executionsIoDataClient,
+        stepExecutions: result.results,
+        includeInput: params.includeInput,
+        includeOutput: params.includeOutput,
+      });
+    }
+    return result;
   }
 
   async getExecutionLogs(params: ExecutionLogsParams): Promise<LogSearchResult> {

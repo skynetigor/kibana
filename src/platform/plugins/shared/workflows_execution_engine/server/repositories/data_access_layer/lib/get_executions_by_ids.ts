@@ -9,6 +9,7 @@
 
 import type { ElasticsearchClient, Logger } from '@kbn/core/server';
 
+import { withExecutionIoIds } from './with_execution_io_ids';
 import type {
   GetExecutionByIdsItem,
   GetExecutionsByIdsOptions,
@@ -58,7 +59,7 @@ export const getExecutionsByIds = async <TExecution extends { id: string }>({
   for (const doc of response.docs) {
     if ('found' in doc && doc.found && doc._source && doc._id) {
       // `_source.includes` can omit `id`; callers key the result by document.id.
-      const source = { ...doc._source, id: doc._id } as TExecution;
+      const source = withExecutionIoIds({ ...doc._source, id: doc._id } as TExecution);
       items.push({
         document: source,
         index: doc._index,

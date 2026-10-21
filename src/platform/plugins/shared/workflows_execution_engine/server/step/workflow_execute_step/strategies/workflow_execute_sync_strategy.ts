@@ -187,9 +187,12 @@ export class WorkflowExecuteSyncStrategy {
         return { status: 'failed', error: await this.buildChildFailureError(execution) };
       }
 
+      const storedOutput = await this.workflowExecutionRepository.getWorkflowExecutionOutput(
+        execution
+      );
       let output: JsonValue;
-      if (execution.context?.output) {
-        output = execution.context.output as JsonValue;
+      if (storedOutput !== undefined) {
+        output = storedOutput;
       } else {
         const stepExecutions =
           await this.stepExecutionRepository.getStepExecutionsByWorkflowExecution(
