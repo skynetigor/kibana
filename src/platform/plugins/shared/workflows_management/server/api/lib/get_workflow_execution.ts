@@ -84,9 +84,7 @@ export const getWorkflowExecution = async ({
 
     await hydrateExecutionIo({
       executionsIoDataClient,
-      workflowExecution: doc,
       stepExecutions,
-      includeWorkflowIo: true,
       includeInput,
       includeOutput,
     });

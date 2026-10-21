@@ -49,9 +49,5 @@ export const WORKFLOWS_EXECUTIONS_INDEX_MAPPINGS = {
     // query usage by producing step and resolved connector.
     stepUsage: STEP_USAGE_MAPPING,
     version: mappings.long(),
-    inputId: mappings.keyword({ index: false }),
-    inputSize: mappings.long(),
-    outputId: mappings.keyword({ index: false }),
-    outputSize: mappings.long(),
   },
 };

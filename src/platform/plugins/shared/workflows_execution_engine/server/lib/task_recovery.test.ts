@@ -38,10 +38,7 @@ import { WorkflowExecutionRepository } from '../repositories/workflow_execution_
 const createRecoveryTestHarness = () => {
   const workflowExecutionsDataClient = createMockWorkflowDataClient();
   const stepExecutionsDataClient = createMockStepDataClient();
-  const repository = new WorkflowExecutionRepository(workflowExecutionsDataClient, {
-    getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-    bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-  });
+  const repository = new WorkflowExecutionRepository(workflowExecutionsDataClient);
   const stepExecutionRepository = new StepExecutionRepository(stepExecutionsDataClient);
   jest.spyOn(stepExecutionRepository, 'markNonTerminalStepsFailed').mockResolvedValue(undefined);
   workflowExecutionsDataClient.bulk.mockResolvedValue({
@@ -655,10 +652,7 @@ describe('markScheduledExecutionFailedAfterTaskError', () => {
   beforeEach(() => {
     workflowExecutionsDataClient = createMockWorkflowDataClient();
     const stepExecutionsDataClient = createMockStepDataClient();
-    repository = new WorkflowExecutionRepository(workflowExecutionsDataClient, {
-      getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-      bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-    });
+    repository = new WorkflowExecutionRepository(workflowExecutionsDataClient);
     stepExecutionRepository = new StepExecutionRepository(stepExecutionsDataClient);
     jest.spyOn(stepExecutionRepository, 'markNonTerminalStepsFailed').mockResolvedValue(undefined);
     jest.spyOn(logger, 'warn').mockImplementation(() => {});
@@ -790,10 +784,7 @@ describe('failExecutionMissingIdentity', () => {
   beforeEach(() => {
     workflowExecutionsDataClient = createMockWorkflowDataClient();
     const stepExecutionsDataClient = createMockStepDataClient();
-    repository = new WorkflowExecutionRepository(workflowExecutionsDataClient, {
-      getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-      bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-    });
+    repository = new WorkflowExecutionRepository(workflowExecutionsDataClient);
     stepExecutionRepository = new StepExecutionRepository(stepExecutionsDataClient);
     jest.spyOn(stepExecutionRepository, 'markNonTerminalStepsFailed').mockResolvedValue(undefined);
     jest.spyOn(logger, 'warn').mockImplementation(() => {});

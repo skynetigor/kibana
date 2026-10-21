@@ -909,7 +909,18 @@ export class WorkflowExecutionQueryService {
       return null;
     }
 
-    return response.hits.hits[0]._source ?? null;
+    const stepExecution = response.hits.hits[0]._source ?? null;
+    if (!stepExecution) {
+      return null;
+    }
+
+    await hydrateExecutionIo({
+      executionsIoDataClient: this.deps.executionsIoDataClient,
+      stepExecutions: [stepExecution],
+      includeInput: true,
+      includeOutput: true,
+    });
+    return stepExecution;
   }
 
   /**

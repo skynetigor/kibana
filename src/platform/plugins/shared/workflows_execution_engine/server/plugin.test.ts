@@ -58,10 +58,7 @@ describe('checkAndSkipIfExistingScheduledExecution', () => {
 
   beforeEach(() => {
     workflowExecutionsDataClient = createMockWorkflowDataClient();
-    workflowExecutionRepository = new WorkflowExecutionRepository(workflowExecutionsDataClient, {
-      getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-      bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-    });
+    workflowExecutionRepository = new WorkflowExecutionRepository(workflowExecutionsDataClient);
     stepExecutionRepository = new StepExecutionRepository(createMockStepDataClient());
     jest.spyOn(stepExecutionRepository, 'markNonTerminalStepsFailed').mockResolvedValue(undefined);
     logger = loggingSystemMock.create().get();

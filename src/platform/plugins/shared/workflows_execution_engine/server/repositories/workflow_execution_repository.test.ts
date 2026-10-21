@@ -13,7 +13,6 @@ import {
   NonTerminalExecutionStatuses,
 } from '@kbn/workflows';
 import type { WorkflowExecutionsDataClient } from './data_access_layer';
-import type { ExecutionsIoClient } from './data_access_layer/implementations/executions_io/executions_io_data_client';
 import {
   createMockGetExecutionsByIdsResponse,
   createMockWorkflowDataClient,
@@ -33,18 +32,10 @@ const asCountResponse = (value: unknown) =>
 describe('WorkflowExecutionRepository', () => {
   let repository: WorkflowExecutionRepository;
   let workflowExecutionsDataClient: jest.Mocked<WorkflowExecutionsDataClient>;
-  let executionsIoDataClient: jest.Mocked<ExecutionsIoClient>;
 
   beforeEach(() => {
     workflowExecutionsDataClient = createMockWorkflowDataClient();
-    executionsIoDataClient = {
-      getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-      bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-    };
-    repository = new WorkflowExecutionRepository(
-      workflowExecutionsDataClient,
-      executionsIoDataClient
-    );
+    repository = new WorkflowExecutionRepository(workflowExecutionsDataClient);
     // Default success response; tests that need specific items override this.
     workflowExecutionsDataClient.bulk.mockResolvedValue(
       asBulkResponse({ errors: false, items: [] })
@@ -483,61 +474,6 @@ describe('WorkflowExecutionRepository', () => {
       const result = await repository.getWorkflowExecutionById('non-existent', 'space1');
 
       expect(result).toBeNull();
-    });
-
-    it('returns the stored workflow output for the execution output id', async () => {
-      executionsIoDataClient.getByIds.mockResolvedValue({
-        items: [
-          {
-            index: '.workflows-executions-io',
-            document: {
-              id: 'output:execution-1',
-              executionId: 'execution-1',
-              type: 'output',
-              value: { result: 'done' },
-              size: 1,
-              '@timestamp': '2026-01-01T00:00:00.000Z',
-            },
-          },
-        ],
-        missing: [],
-      });
-
-      await expect(
-        repository.getWorkflowExecutionOutput({ outputId: 'output:execution-1' })
-      ).resolves.toEqual({ result: 'done' });
-      expect(executionsIoDataClient.getByIds).toHaveBeenCalledWith(['output:execution-1']);
-    });
-
-    it('returns undefined when the execution has no output id', async () => {
-      await expect(repository.getWorkflowExecutionOutput({})).resolves.toBeUndefined();
-      expect(executionsIoDataClient.getByIds).not.toHaveBeenCalled();
-    });
-
-    it('returns undefined when the stored output is missing or null', async () => {
-      await expect(
-        repository.getWorkflowExecutionOutput({ outputId: 'output:missing' })
-      ).resolves.toBeUndefined();
-
-      executionsIoDataClient.getByIds.mockResolvedValue({
-        items: [
-          {
-            index: '.workflows-executions-io',
-            document: {
-              id: 'output:execution-1',
-              executionId: 'execution-1',
-              type: 'output',
-              value: null,
-              size: 0,
-              '@timestamp': '2026-01-01T00:00:00.000Z',
-            },
-          },
-        ],
-        missing: [],
-      });
-      await expect(
-        repository.getWorkflowExecutionOutput({ outputId: 'output:execution-1' })
-      ).resolves.toBeUndefined();
     });
 
     it('should throw error for non-404 errors', async () => {

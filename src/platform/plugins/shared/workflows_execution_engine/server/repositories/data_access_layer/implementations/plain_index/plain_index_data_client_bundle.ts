@@ -59,6 +59,7 @@ export class PlainIndexDataClientBundle implements DataClientBundle {
       esClient: this.esClient,
       logger: this.deps.logger,
       indexName: WORKFLOWS_STEP_EXECUTIONS_INDEX,
+      stampExecutionIoIds: true,
     });
   }
 

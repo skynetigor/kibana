@@ -194,10 +194,7 @@ export class WorkflowsExecutionEnginePlugin
     const workflowExecutionsDataClient = this.dataClientBundle.createWorkflowDataClient();
     const stepExecutionsDataClient = this.dataClientBundle.createStepDataClient();
     return {
-      workflowExecutionRepository: new WorkflowExecutionRepository(
-        workflowExecutionsDataClient,
-        this.executionsIoLifecycle.createClient(this.logger)
-      ),
+      workflowExecutionRepository: new WorkflowExecutionRepository(workflowExecutionsDataClient),
       stepExecutionRepository: new StepExecutionRepository(stepExecutionsDataClient),
     };
   }
@@ -1490,7 +1487,6 @@ export class WorkflowsExecutionEnginePlugin
         workflowExecution,
         workflowExecutionRepository,
         this.logger,
-        this.executionsIoLifecycle.createClient(this.logger),
         coreStart,
         dependencies
       );

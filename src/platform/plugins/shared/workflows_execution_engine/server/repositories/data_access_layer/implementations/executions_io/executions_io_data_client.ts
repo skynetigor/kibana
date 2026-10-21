@@ -52,7 +52,7 @@ interface LegacyExecutionIoSource {
 type IoHit = GetExecutionsByIdsResponse<EsExecutionIo>['items'][number];
 
 /**
- * Reads and writes workflow and step IO on the executions IO data stream.
+ * Reads and writes step input and output on the executions IO data stream.
  * `getByIds` checks the two newest backing indexes, searches the IO data stream
  * for anything older, then the legacy plain execution indexes. Each id is created once.
  */

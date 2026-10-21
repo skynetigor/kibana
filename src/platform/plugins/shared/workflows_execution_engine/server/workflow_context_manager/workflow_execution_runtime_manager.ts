@@ -179,7 +179,12 @@ export class WorkflowExecutionRuntimeManager {
   }
 
   public setWorkflowOutputs(outputs: Record<string, unknown>): void {
-    this.stepIoService.setWorkflowOutput(outputs);
+    this.workflowExecutionState.updateWorkflowExecution({
+      context: {
+        ...(this.workflowExecution.context || {}),
+        output: outputs,
+      },
+    });
   }
 
   public setWorkflowStatus(status: ExecutionStatus): void {

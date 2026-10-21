@@ -469,17 +469,17 @@ describe('getWorkflowExecution', () => {
   });
 
   describe('execution IO hydration', () => {
-    const executionWithIds = {
+    const executionWithContext = {
       ...baseExecutionDoc,
       id: 'exec-1',
-      inputId: 'input:exec-1',
-      outputId: 'output:exec-1',
-      context: {},
+      context: { inputs: { name: 'ada' }, output: { ok: true } },
     };
 
     beforeEach(() => {
       mockWorkflowDataClient.getByIds.mockResolvedValue(
-        createMockGetExecutionsByIdsResponse([executionWithIds] as unknown as EsWorkflowExecution[])
+        createMockGetExecutionsByIdsResponse([
+          executionWithContext,
+        ] as unknown as EsWorkflowExecution[])
       );
       mockStepDataClient.getByIds.mockResolvedValue(
         mockStepGetByIds([
@@ -494,27 +494,9 @@ describe('getWorkflowExecution', () => {
       );
     });
 
-    it('attaches workflow and step output from the IO client when includeOutput is true', async () => {
+    it('attaches step output from the IO client when includeOutput is true', async () => {
       mockExecutionsIoDataClient.getByIds.mockResolvedValue({
         items: [
-          {
-            document: {
-              id: 'input:exec-1',
-              executionId: 'exec-1',
-              type: 'input',
-              value: { name: 'ada' },
-              size: 1,
-            },
-          },
-          {
-            document: {
-              id: 'output:exec-1',
-              executionId: 'exec-1',
-              type: 'output',
-              value: { ok: true },
-              size: 1,
-            },
-          },
           {
             document: {
               id: 'output:step-doc-1',
@@ -537,6 +519,7 @@ describe('getWorkflowExecution', () => {
         includeOutput: true,
       });
 
+      expect(mockExecutionsIoDataClient.getByIds).toHaveBeenCalledWith(['output:step-doc-1']);
       expect(result?.context).toEqual(
         expect.objectContaining({ inputs: { name: 'ada' }, output: { ok: true } })
       );
@@ -554,9 +537,10 @@ describe('getWorkflowExecution', () => {
         includeOutput: false,
       });
 
-      const requestedIds = mockExecutionsIoDataClient.getByIds.mock.calls[0]?.[0] as string[];
-      expect(requestedIds).toEqual(expect.arrayContaining(['input:exec-1', 'output:exec-1']));
-      expect(requestedIds).not.toContain('output:step-doc-1');
+      expect(mockExecutionsIoDataClient.getByIds).not.toHaveBeenCalled();
+      expect(result?.context).toEqual(
+        expect.objectContaining({ inputs: { name: 'ada' }, output: { ok: true } })
+      );
       expect(result?.stepExecutions?.[0].output).toBeUndefined();
     });
   });

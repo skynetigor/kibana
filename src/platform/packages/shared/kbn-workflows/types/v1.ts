@@ -199,14 +199,6 @@ export interface EsWorkflowExecution {
   usage?: WorkflowTokenUsage;
   /** Per-step counterpart to the summed `usage`, in step-finish order. */
   stepUsage?: WorkflowStepTokenUsage[];
-  /** IO document id for this execution's input. Derived from the execution id. */
-  inputId?: string;
-  /** Byte size of the input stored on the IO data stream. */
-  inputSize?: number;
-  /** IO document id for this execution's output. Derived from the execution id. */
-  outputId?: string;
-  /** Byte size of the output stored on the IO data stream. */
-  outputSize?: number;
   /**
    * Workflow document version (`_source.version`) captured when the execution was
    * created.

@@ -119,6 +119,7 @@ describe('getExecutionsByIds', () => {
       ids: ['exec-1'],
       defaultIndex: DEFAULT_INDEX,
       logger,
+      stampExecutionIoIds: true,
     });
 
     expect(result.items[0].document).toEqual(
@@ -156,6 +157,7 @@ describe('getExecutionsByIds', () => {
       defaultIndex: DEFAULT_INDEX,
       options: { sourceIncludes: ['spaceId', 'status'] },
       logger,
+      stampExecutionIoIds: true,
     });
 
     expect(result.items).toEqual([

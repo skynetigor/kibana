@@ -44,7 +44,6 @@ describe('WorkflowExecuteSyncStrategy', () => {
 
     mockExecRepo = {
       getWorkflowExecutionById: jest.fn(),
-      getWorkflowExecutionOutput: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     mockStepRepo = {
@@ -339,10 +338,8 @@ describe('WorkflowExecuteSyncStrategy', () => {
       mockExecRepo.getWorkflowExecutionById.mockResolvedValue({
         id: 'child-exec-1',
         status: ExecutionStatus.COMPLETED,
-        outputId: 'output:child-exec-1',
-        context: {},
+        context: { output: { result: 'done' } },
       } as any);
-      mockExecRepo.getWorkflowExecutionOutput.mockResolvedValue({ result: 'done' });
 
       const result = await strategy.execute(
         createMockWorkflow(),
@@ -655,10 +652,8 @@ describe('WorkflowExecuteSyncStrategy', () => {
       mockExecRepo.getWorkflowExecutionById.mockResolvedValue({
         id: 'child-exec-1',
         status: ExecutionStatus.COMPLETED,
-        outputId: 'output:child-exec-1',
-        context: {},
+        context: { output: { result: 'done' } },
       } as any);
-      mockExecRepo.getWorkflowExecutionOutput.mockResolvedValue({ result: 'done' });
 
       const result = await strategy.resume('default');
 

@@ -81,11 +81,7 @@ describe('runWorkflow', () => {
         new Error('The workload binding does not match the expected service account.')
       );
     const workflowExecutionRepository = new WorkflowExecutionRepository(
-      createMockWorkflowDataClient(),
-      {
-        getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-        bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-      }
+      createMockWorkflowDataClient()
     );
     jest.spyOn(workflowExecutionRepository, 'updateWorkflowExecution').mockResolvedValue(undefined);
     jest.spyOn(workflowExecutionRepository, 'getWorkflowExecutionById').mockResolvedValue({

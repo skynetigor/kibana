@@ -71,8 +71,6 @@ export type StepIoStateAccessor = Pick<
   | 'ingestLoadedStepDocs'
   | 'flush'
   | 'setStepIoSize'
-  | 'setWorkflowIoSize'
-  | 'assignWorkflowContextIo'
   | 'getWorkflowExecution'
   | 'updateWorkflowExecution'
 >;
@@ -295,7 +293,7 @@ export class WorkflowExecutionState {
     this.buildStepIdExecutionIdIndex();
   }
 
-  /** Writes pending workflow and step metadata. Payloads are not included. */
+  /** Writes pending workflow document changes and step metadata. Step payloads stay on the IO stream. */
   public async flush(): Promise<void> {
     const stepChanges = this.drainPendingStepChanges();
     await Promise.all([
@@ -308,21 +306,6 @@ export class WorkflowExecutionState {
 
   public setStepIoSize(stepExecutionId: string, side: 'input' | 'output', size: number): void {
     this.updateStep(stepExecutionId, side === 'input' ? { inputSize: size } : { outputSize: size });
-  }
-
-  public setWorkflowIoSize(side: 'input' | 'output', size: number): void {
-    this.updateWorkflowExecution(side === 'input' ? { inputSize: size } : { outputSize: size });
-  }
-
-  /** Puts workflow input or output on the in-memory document without queueing a metadata write. */
-  public assignWorkflowContextIo(partial: { inputs?: unknown; output?: unknown }): void {
-    this.workflowExecution = {
-      ...this.workflowExecution,
-      context: {
-        ...(this.workflowExecution.context ?? {}),
-        ...partial,
-      },
-    };
   }
 
   public async flushWorkflowDoc(): Promise<void> {

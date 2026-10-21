@@ -179,7 +179,6 @@ describe('WorkflowExecutionRuntimeManager', () => {
       // Drives the eviction work that used to live in this class — tests that
       // observe stale-loop eviction now spy on this method directly.
       evictCompletedLoopsOnResume: jest.fn(),
-      setWorkflowOutput: jest.fn(),
     } as unknown as StepIoService;
 
     underTest = new WorkflowExecutionRuntimeManager({
@@ -901,10 +900,14 @@ describe('WorkflowExecutionRuntimeManager', () => {
   });
 
   describe('setWorkflowOutputs', () => {
-    it('should queue workflow output on the IO service', () => {
+    it('should update workflow execution context with output', () => {
       underTest.setWorkflowOutputs({ result: 'done' });
-      expect(stepIoService.setWorkflowOutput).toHaveBeenCalledWith({ result: 'done' });
-      expect(workflowExecutionState.updateWorkflowExecution).not.toHaveBeenCalled();
+      expect(workflowExecutionState.updateWorkflowExecution).toHaveBeenCalledWith({
+        context: {
+          ...(workflowExecution.context || {}),
+          output: { result: 'done' },
+        },
+      });
     });
   });
 

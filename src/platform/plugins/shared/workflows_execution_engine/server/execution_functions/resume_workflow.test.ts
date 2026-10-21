@@ -56,11 +56,7 @@ describe('resumeWorkflow', () => {
         new Error('The workload binding does not match the expected service account.')
       );
     const workflowExecutionRepository = new WorkflowExecutionRepository(
-      createMockWorkflowDataClient(),
-      {
-        getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-        bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-      }
+      createMockWorkflowDataClient()
     );
     jest.spyOn(workflowExecutionRepository, 'updateWorkflowExecution').mockResolvedValue(undefined);
     jest.spyOn(workflowExecutionRepository, 'getWorkflowExecutionById').mockResolvedValue({
@@ -273,11 +269,7 @@ describe('resumeWorkflow', () => {
               getByIds: jest.fn().mockResolvedValue({
                 items: [{ document: { id: workflowRunId, workflowId: 'workflow', spaceId } }],
               }),
-            }),
-            {
-              getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-              bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-            }
+            })
           ),
           stepExecutionRepository: mockStepExecutionRepositoryForResume,
         });
@@ -337,11 +329,7 @@ describe('resumeWorkflow', () => {
               getByIds: jest.fn().mockResolvedValue({
                 items: [{ document: { id: workflowRunId, workflowId: 'workflow', spaceId } }],
               }),
-            }),
-            {
-              getByIds: jest.fn().mockResolvedValue({ items: [], missing: [] }),
-              bulkCreate: jest.fn().mockResolvedValue({ items: [], errors: false }),
-            }
+            })
           ),
           stepExecutionRepository: mockStepExecutionRepositoryForResume,
         });

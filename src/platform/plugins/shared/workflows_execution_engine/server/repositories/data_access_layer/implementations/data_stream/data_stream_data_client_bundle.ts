@@ -127,6 +127,7 @@ export class DataStreamDataClientBundle implements DataClientBundle {
       additionalIndexesToQuery: ['.workflows-step-executions'],
       logger: this.deps.logger,
       dateField: 'startedAt',
+      stampExecutionIoIds: true,
     });
   }
 }

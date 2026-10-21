@@ -149,7 +149,7 @@ export interface StepIoLifecycle {
  *   - on-demand rehydration of evicted outputs from ES
  *   - resume-time output orchestration (`load()`)
  *   - stale-loop iteration cleanup
- *   - create-once persistence of step and workflow input/output
+ *   - create-once persistence of step input and output
  *
  * Dependency direction: state → workflowExecutionRepository;
  * service → state (via narrow `StepIoStateAccessor`) and
@@ -182,8 +182,6 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
    * original value on disk.
    */
   private pendingIoChanges = new Map<string, { input?: JsonValue; output?: JsonValue | null }>();
-  /** Workflow output waiting for the next IO create. */
-  private pendingWorkflowOutput: Record<string, unknown> | undefined;
 
   /**
    * Every step execution id whose `output` has been evicted from memory.
@@ -417,12 +415,6 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
     this.pendingIoChanges.set(stepExecutionId, existing);
   }
 
-  /** Queues workflow output for the next IO flush and keeps it in memory for the running context. */
-  public setWorkflowOutput(output: Record<string, unknown>): void {
-    this.pendingWorkflowOutput = output;
-    this.state.assignWorkflowContextIo({ output });
-  }
-
   /**
    * Writes a step's output to the IO map and marks it dirty for the next
    * flush. Lifecycle fields (status, finishedAt, error, etc.) are the
@@ -593,7 +585,6 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
       metadata.push(stripIo(step));
     }
     this.state.ingestLoadedStepDocs(metadata);
-    await this.hydrateWorkflowIo();
 
     const pinnedIdsToFetch = this.markDeferredAfterLoad(foundSteps);
     const ioIds = [
@@ -1247,22 +1238,6 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
     );
   }
 
-  private async hydrateWorkflowIo(): Promise<void> {
-    const execution = this.state.getWorkflowExecution();
-    const ids = [execution.inputId, execution.outputId].filter((id): id is string => Boolean(id));
-    const documents = await this.fetchIo(ids);
-    const byId = new Map(documents.map((document) => [document.id, document.value]));
-    const inputs = execution.inputId ? byId.get(execution.inputId) : undefined;
-    const output = execution.outputId ? byId.get(execution.outputId) : undefined;
-    if (inputs === undefined && output === undefined) {
-      return;
-    }
-    this.state.assignWorkflowContextIo({
-      ...(inputs !== undefined ? { inputs } : {}),
-      ...(output !== undefined ? { output } : {}),
-    });
-  }
-
   private async fetchIo(ids: string[]) {
     if (ids.length === 0) {
       return [];
@@ -1279,10 +1254,8 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
   private async persistPendingIo(): Promise<ReadonlyArray<string>> {
     const ioPartials = this.pendingIoChanges;
     this.pendingIoChanges = new Map();
-    const workflowOutput = this.pendingWorkflowOutput;
-    this.pendingWorkflowOutput = undefined;
 
-    if (ioPartials.size === 0 && workflowOutput === undefined) {
+    if (ioPartials.size === 0) {
       return [];
     }
 
@@ -1317,41 +1290,21 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
       }
     }
 
-    if (workflowOutput !== undefined) {
-      const size = safeOutputSize(workflowOutput) ?? 0;
-      documents.push({
-        executionId: this.state.getWorkflowExecutionId(),
-        type: 'output',
-        value: workflowOutput as JsonValue,
-        size,
-      });
-      this.state.setWorkflowIoSize('output', size);
-    }
-
     if (documents.length === 0) {
       return flushedIds;
     }
 
     const restorePending = (onlyIds?: ReadonlyArray<string>) => {
       const selected = new Map(ioPartials);
-      let restoreWorkflowOutput = workflowOutput !== undefined;
       if (onlyIds) {
         selected.clear();
-        restoreWorkflowOutput = false;
         for (const id of onlyIds) {
           const parsed = parseExecutionIoId(id);
           if (!parsed) {
             for (const [stepExecutionId, part] of ioPartials) {
               selected.set(stepExecutionId, part);
             }
-            restoreWorkflowOutput = workflowOutput !== undefined;
             break;
-          }
-          if (
-            parsed.type === 'output' &&
-            parsed.executionId === this.state.getWorkflowExecutionId()
-          ) {
-            restoreWorkflowOutput = workflowOutput !== undefined;
           }
           const part = ioPartials.get(parsed.executionId);
           if (part) {
@@ -1366,9 +1319,6 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
       for (const [stepExecutionId, part] of selected) {
         const newer = this.pendingIoChanges.get(stepExecutionId);
         this.pendingIoChanges.set(stepExecutionId, newer ? { ...part, ...newer } : part);
-      }
-      if (restoreWorkflowOutput && this.pendingWorkflowOutput === undefined) {
-        this.pendingWorkflowOutput = workflowOutput;
       }
     };
 

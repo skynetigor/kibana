@@ -82,7 +82,6 @@ const createMockInit = (
 
   const workflowExecutionRepository = {
     getWorkflowExecutionById: jest.fn(),
-    getWorkflowExecutionOutput: jest.fn().mockResolvedValue(undefined),
   } as unknown as jest.Mocked<WorkflowExecutionRepository>;
 
   const stepExecutionRepository = {
@@ -406,12 +405,8 @@ describe('WorkflowExecuteStepImpl', () => {
       ).getWorkflowExecutionById.mockResolvedValue({
         id: 'child-exec-1',
         status: ExecutionStatus.COMPLETED,
-        outputId: 'output:child-exec-1',
-        context: {},
+        context: { output: { result: 'success' } },
       } as any);
-      (
-        init.workflowExecutionRepository as jest.Mocked<WorkflowExecutionRepository>
-      ).getWorkflowExecutionOutput.mockResolvedValue({ result: 'success' });
 
       const step = new WorkflowExecuteStepImpl(init);
       await step.run();
@@ -533,12 +528,8 @@ describe('WorkflowExecuteStepImpl', () => {
       ).getWorkflowExecutionById.mockResolvedValue({
         id: 'child-exec-1',
         status: ExecutionStatus.COMPLETED,
-        outputId: 'output:child-exec-1',
-        context: {},
+        context: { output: { result: 'success' } },
       } as any);
-      (
-        init.workflowExecutionRepository as jest.Mocked<WorkflowExecutionRepository>
-      ).getWorkflowExecutionOutput.mockResolvedValue({ result: 'success' });
 
       const step = new WorkflowExecuteStepImpl(init);
       await step.run();

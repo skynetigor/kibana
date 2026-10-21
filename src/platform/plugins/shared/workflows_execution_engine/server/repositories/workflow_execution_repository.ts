@@ -8,7 +8,6 @@
  */
 
 import type { estypes } from '@elastic/elasticsearch';
-import type { JsonValue } from '@kbn/utility-types';
 import type { EsWorkflowExecution } from '@kbn/workflows';
 import {
   ConcurrencySlotOccupyingExecutionStatuses,
@@ -16,7 +15,6 @@ import {
   NonTerminalExecutionStatuses,
 } from '@kbn/workflows';
 import type { WorkflowExecutionsDataClient } from './data_access_layer';
-import type { ExecutionsIoClient } from './data_access_layer/implementations/executions_io/executions_io_data_client';
 import { getBulkUpdaterWriteResult } from './data_access_layer/lib/bulk/bulk_updater_write_result';
 
 /**
@@ -34,10 +32,7 @@ const isCreateConflict = (error: { type?: string } | undefined): boolean =>
   error?.type === 'version_conflict_engine_exception';
 
 export class WorkflowExecutionRepository {
-  constructor(
-    private workflowExecutionsDataClient: WorkflowExecutionsDataClient,
-    private executionsIoDataClient: ExecutionsIoClient
-  ) {}
+  constructor(private workflowExecutionsDataClient: WorkflowExecutionsDataClient) {}
 
   /**
    * Retrieves a workflow execution by its ID from Elasticsearch.
@@ -63,18 +58,6 @@ export class WorkflowExecutionRepository {
     }
 
     return doc;
-  }
-
-  /** Reads the stored workflow output. A missing or null value returns undefined. */
-  public async getWorkflowExecutionOutput(
-    execution: Pick<EsWorkflowExecution, 'outputId'>
-  ): Promise<JsonValue | undefined> {
-    if (!execution.outputId) {
-      return undefined;
-    }
-    const { items } = await this.executionsIoDataClient.getByIds([execution.outputId]);
-    const value = items.find((item) => item.document.id === execution.outputId)?.document.value;
-    return value === undefined || value === null ? undefined : value;
   }
 
   /**
@@ -157,10 +140,10 @@ export class WorkflowExecutionRepository {
       items: [
         {
           operation: 'create',
-          document: workflowExecutionDocumentWithoutIo({
+          document: {
             ...workflowExecution,
             id: workflowExecutionId,
-          }),
+          },
         },
       ],
       refresh: options.refresh ?? false,
@@ -699,15 +682,4 @@ export class WorkflowExecutionRepository {
 
     return { results, total, nextSearchAfter };
   }
-}
-
-/** Payloads live on the IO data stream. Resume input stays on the execution document. */
-function workflowExecutionDocumentWithoutIo(
-  workflowExecution: Partial<EsWorkflowExecution> & { id: string }
-): Partial<EsWorkflowExecution> & { id: string } {
-  if (!workflowExecution.context) {
-    return workflowExecution;
-  }
-  const { inputs: _inputs, output: _output, ...context } = workflowExecution.context;
-  return { ...workflowExecution, context };
 }
