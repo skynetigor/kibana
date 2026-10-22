@@ -115,7 +115,7 @@ export async function workflowExecutionLoop(params: WorkflowExecutionLoopParams)
 
   // Flush the final state (including terminal status) to Elasticsearch
   const finalStateFlushSpan = apm.startSpan('final state flush', 'workflow', 'persistence');
-  await params.stepIoService.flush();
+  await Promise.all([params.stepIoService.flush(), params.workflowExecutionState.flush()]);
   finalStateFlushSpan?.end();
 
   // Workflow-end cleanup for transiently-rehydrated outputs. The per-step

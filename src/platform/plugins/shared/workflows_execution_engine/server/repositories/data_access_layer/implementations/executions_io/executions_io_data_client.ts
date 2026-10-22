@@ -22,8 +22,10 @@ import type {
 } from '../../types';
 import type { DataStreamMetadataManager } from '../data_stream/data_stream_metadata_manager';
 
-/** IO value submitted for create. The document id is assigned by {@link ExecutionsIoDataClient.bulkCreate}. */
-export type ExecutionIoCreateDocument = Omit<EsExecutionIo, 'id'>;
+/** IO value submitted for create. The document id and timestamp are assigned by {@link ExecutionsIoDataClient.bulkCreate}. */
+export type ExecutionIoCreateDocument = Omit<EsExecutionIo, 'id' | '@timestamp'> & {
+  '@timestamp'?: string;
+};
 
 export interface ExecutionsIoBulkCreateRequest {
   refresh?: boolean | 'wait_for';
@@ -50,7 +52,7 @@ interface LegacyExecutionIoSource {
 type IoHit = GetExecutionsByIdsResponse<EsExecutionIo>['items'][number];
 
 /**
- * Reads and writes workflow and step IO on the executions IO data stream.
+ * Reads and writes step input and output on the executions IO data stream.
  * `getByIds` checks the two newest backing indexes, searches the IO data stream
  * for anything older, then the legacy plain execution indexes. Each id is created once.
  */

@@ -41,6 +41,7 @@ describe('workflowExecutionLoop', () => {
     },
     workflowExecutionState: {
       updateWorkflowExecution: jest.fn(),
+      flush: jest.fn().mockResolvedValue(undefined),
     },
     stepIoService: {
       flush: jest.fn().mockResolvedValue(undefined),

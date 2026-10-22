@@ -334,7 +334,7 @@ describe('WorkflowExecuteSyncStrategy', () => {
       mockStepRuntime.getCurrentStepState.mockReturnValue(waitState);
     });
 
-    it('should return completed with workflow.output from child execution', async () => {
+    it('should return completed with the stored workflow output', async () => {
       mockExecRepo.getWorkflowExecutionById.mockResolvedValue({
         id: 'child-exec-1',
         status: ExecutionStatus.COMPLETED,

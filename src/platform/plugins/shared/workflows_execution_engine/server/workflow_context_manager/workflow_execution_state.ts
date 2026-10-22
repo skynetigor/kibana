@@ -17,6 +17,8 @@ import type {
 } from '@kbn/workflows';
 import { isTerminalStatus } from '@kbn/workflows';
 import { areParallelBranchesCompatible, getParallelBranchScopes } from './parallel_branch_scope';
+import { executionIoId } from '../repositories/data_access_layer/implementations/executions_io/execution_io_id';
+import type { StepExecutionRepository } from '../repositories/step_execution_repository';
 import type { WorkflowExecutionRepository } from '../repositories/workflow_execution_repository';
 import { sumTokenUsage } from '../utils';
 
@@ -66,9 +68,11 @@ export type StepIoStateAccessor = Pick<
   | 'getWorkflowExecutionId'
   | 'getWorkflowExecutionScopeStack'
   | 'getWorkflowExecutionStepExecutionIds'
-  | 'drainPendingStepChanges'
   | 'ingestLoadedStepDocs'
-  | 'flushWorkflowDoc'
+  | 'flush'
+  | 'updateStep'
+  | 'getWorkflowExecution'
+  | 'updateWorkflowExecution'
 >;
 
 /**
@@ -104,6 +108,7 @@ export class WorkflowExecutionState {
   constructor(
     initialWorkflowExecution: EsWorkflowExecution,
     private workflowExecutionRepository: WorkflowExecutionRepository,
+    private stepExecutionRepository: StepExecutionRepository,
     private logger?: Logger
   ) {
     this.workflowExecution = initialWorkflowExecution;
@@ -264,10 +269,8 @@ export class WorkflowExecutionState {
   // ----- ES persistence primitives -----------------------------------------
 
   /**
-   * Drains pending step-document changes. Returns a `Map<id, partial>` whose
-   * values are pure metadata (no `input` / `output`). The caller (the IO
-   * service) merges this with its own IO partials and runs the combined
-   * `bulkUpsert`. Returns an empty map when nothing is pending.
+   * Drains pending step-document changes. Values are metadata only.
+   * Returns an empty map when nothing is pending.
    */
   public drainPendingStepChanges(): Map<string, Partial<StepExecutionMetadata>> {
     if (!this.stepDocumentsChanges.size) {
@@ -288,6 +291,17 @@ export class WorkflowExecutionState {
       this.stepExecutions.set(step.id, step);
     }
     this.buildStepIdExecutionIdIndex();
+  }
+
+  /** Writes pending workflow document changes and step metadata. Step payloads stay on the IO stream. */
+  public async flush(): Promise<void> {
+    const stepChanges = this.drainPendingStepChanges();
+    await Promise.all([
+      this.flushWorkflowDoc(),
+      stepChanges.size > 0
+        ? this.stepExecutionRepository.bulkUpsert(Array.from(stepChanges.values()))
+        : Promise.resolve(),
+    ]);
   }
 
   public async flushWorkflowDoc(): Promise<void> {
@@ -376,6 +390,8 @@ export class WorkflowExecutionState {
     const newStep = {
       ...step,
       id,
+      inputId: executionIoId('input', id),
+      outputId: executionIoId('output', id),
       scopeStack: step.scopeStack ?? [],
       globalExecutionIndex: this.stepExecutions.size,
       stepExecutionIndex: previousExecutionCount,
@@ -395,7 +411,7 @@ export class WorkflowExecutionState {
     });
   }
 
-  private updateStep(stepId: string, step: Partial<StepExecutionMetadata>) {
+  public updateStep(stepId: string, step: Partial<StepExecutionMetadata>) {
     const existingStep = this.stepExecutions.get(stepId);
     if (!existingStep) {
       // upsertStep already routed us through createStep when the step was

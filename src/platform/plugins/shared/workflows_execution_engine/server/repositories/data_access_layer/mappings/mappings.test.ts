@@ -142,6 +142,10 @@ describe('ES FLS allowlist cross-repo sync', () => {
       'usage.*',
       'stepUsage.*',
       'hitl.*',
+      'inputId',
+      'inputSize',
+      'outputId',
+      'outputSize',
     ].sort();
 
     const derived = [

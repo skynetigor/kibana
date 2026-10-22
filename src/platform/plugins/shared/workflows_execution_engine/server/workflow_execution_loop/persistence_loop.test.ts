@@ -29,6 +29,9 @@ const makeParams = (
         .fn()
         .mockImplementation(() => new Promise<void>((resolve) => setTimeout(resolve, flushDelay))),
     },
+    workflowExecutionState: {
+      flush: jest.fn().mockResolvedValue(undefined),
+    },
     eventQueue: {
       flush: jest.fn().mockResolvedValue(undefined),
     },
