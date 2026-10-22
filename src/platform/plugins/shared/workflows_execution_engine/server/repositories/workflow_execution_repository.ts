@@ -134,16 +134,12 @@ export class WorkflowExecutionRepository {
     if (!workflowExecution.id) {
       throw new Error('Workflow execution ID is required for creation');
     }
-    const workflowExecutionId = workflowExecution.id;
 
     const response = await this.workflowExecutionsDataClient.bulk({
       items: [
         {
           operation: 'create',
-          document: {
-            ...workflowExecution,
-            id: workflowExecutionId,
-          },
+          document: workflowExecution as Partial<EsWorkflowExecution> & { id: string },
         },
       ],
       refresh: options.refresh ?? false,

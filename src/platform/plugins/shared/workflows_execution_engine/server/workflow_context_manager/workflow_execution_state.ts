@@ -70,7 +70,7 @@ export type StepIoStateAccessor = Pick<
   | 'getWorkflowExecutionStepExecutionIds'
   | 'ingestLoadedStepDocs'
   | 'flush'
-  | 'setStepIoSize'
+  | 'updateStep'
   | 'getWorkflowExecution'
   | 'updateWorkflowExecution'
 >;
@@ -304,10 +304,6 @@ export class WorkflowExecutionState {
     ]);
   }
 
-  public setStepIoSize(stepExecutionId: string, side: 'input' | 'output', size: number): void {
-    this.updateStep(stepExecutionId, side === 'input' ? { inputSize: size } : { outputSize: size });
-  }
-
   public async flushWorkflowDoc(): Promise<void> {
     const changes = this.workflowDocumentChanges;
     this.workflowDocumentChanges = undefined;
@@ -415,7 +411,7 @@ export class WorkflowExecutionState {
     });
   }
 
-  private updateStep(stepId: string, step: Partial<StepExecutionMetadata>) {
+  public updateStep(stepId: string, step: Partial<StepExecutionMetadata>) {
     const existingStep = this.stepExecutions.get(stepId);
     if (!existingStep) {
       // upsertStep already routed us through createStep when the step was

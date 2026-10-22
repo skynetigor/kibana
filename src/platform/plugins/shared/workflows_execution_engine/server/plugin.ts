@@ -80,7 +80,6 @@ import {
 } from './lib/workflow_task_run_event_fields';
 import { WorkflowsMeteringService } from './metering/metering_service';
 import { createDataClientBundle, type DataClientBundle } from './repositories/data_access_layer';
-import { ExecutionsIoLifecycle } from './repositories/data_access_layer/implementations/executions_io/executions_io_lifecycle';
 import { LogsRepository } from './repositories/logs_repository';
 import { initializeLogsRepositoryDataStream } from './repositories/logs_repository/data_stream';
 import { StepExecutionRepository } from './repositories/step_execution_repository';
@@ -185,7 +184,6 @@ export class WorkflowsExecutionEnginePlugin
   private internalResumeWorkflowExecutionHandler?: InternalResumeWorkflowExecution;
 
   private dataClientBundle!: DataClientBundle;
-  private readonly executionsIoLifecycle = new ExecutionsIoLifecycle();
 
   private createScopedRepositories(): {
     workflowExecutionRepository: WorkflowExecutionRepository;
@@ -290,7 +288,6 @@ export class WorkflowsExecutionEnginePlugin
       logger: this.logger,
     });
     void this.dataClientBundle.initSetup(core);
-    this.executionsIoLifecycle.register(core, config.storage.dataRetention);
 
     const setupDependencies: SetupDependencies = { cloudSetup: plugins.cloud };
     this.setupDependencies = setupDependencies;
@@ -1228,7 +1225,6 @@ export class WorkflowsExecutionEnginePlugin
     void this.dataClientBundle.initStart(coreStart);
 
     const esClient = coreStart.elasticsearch.client.asInternalUser;
-    void this.executionsIoLifecycle.init(coreStart, esClient, this.logger);
     void ensureWorkflowsDataStreamsRolledOver(this.logger.get('data-stream-rollover'), esClient);
 
     // Initialize ConcurrencyManager with dependencies
@@ -2097,13 +2093,12 @@ export class WorkflowsExecutionEnginePlugin
       __internalStorage: {
         workflowExecutionsDataClient: this.dataClientBundle.createWorkflowDataClient(),
         stepExecutionsDataClient: this.dataClientBundle.createStepDataClient(),
-        executionsIoDataClient: this.executionsIoLifecycle.createClient(this.logger),
+        executionsIoDataClient: this.dataClientBundle.createIoDataClient(),
       },
     };
   }
 
   public stop() {
-    this.executionsIoLifecycle.stop();
     void this.dataClientBundle.stop();
   }
 
