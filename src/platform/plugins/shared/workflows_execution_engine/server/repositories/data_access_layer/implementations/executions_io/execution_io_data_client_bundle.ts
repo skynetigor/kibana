@@ -28,6 +28,7 @@ import { DataStreamMetadataManager } from '../data_stream/data_stream_metadata_m
 /**
  * Registers and starts the IO data stream. Legacy `input` / `output` reads fall
  * back to the plain execution indexes inside {@link ExecutionsIoDataClient}.
+ * This bundle is used to create a single instance of the {@link ExecutionsIoDataClient}
  */
 export class ExecutionIoDataClientBundle {
   private esClient!: ElasticsearchClient;
