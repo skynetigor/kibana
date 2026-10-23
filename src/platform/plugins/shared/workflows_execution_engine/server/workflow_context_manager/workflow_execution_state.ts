@@ -180,7 +180,7 @@ export class WorkflowExecutionState {
     return this.dataSetExecutionIds.size;
   }
 
-  /** Monotonic counter bumped on every `setStepIo`; lets callers memoise IO-derived aggregates. */
+  /** Monotonic counter bumped on every `data.set` output write; lets callers memoise the variables aggregate. */
   public getStepIoVersion(): number {
     return this.stepIoVersion;
   }
@@ -238,7 +238,10 @@ export class WorkflowExecutionState {
     stepExecutionId: string,
     io: { input?: JsonValue; output?: JsonValue | null }
   ): void {
-    this.stepIoVersion++;
+    // Only `data.set` outputs feed the memoised variables aggregate; other writes must not invalidate it.
+    if (io.output !== undefined && this.dataSetExecutionIds.has(stepExecutionId)) {
+      this.stepIoVersion++;
+    }
     if (io.input !== undefined) this.evictedInputIds.delete(stepExecutionId);
     const existing = this.stepIo.get(stepExecutionId) ?? {};
     this.stepIo.set(stepExecutionId, { ...existing, ...io });
@@ -270,21 +273,17 @@ export class WorkflowExecutionState {
    * always dropped. The `input` is kept only while the step is still running, so
    * foreach context re-evaluation across loop iterations keeps working; once the step
    * is finished its input is dropped too and re-fetched on demand by `StepIoService`.
-   * Outputs of `data.set` steps are kept: they are small variable maps that every later
-   * node reads through `variables`, so dropping them would force a refetch per node run.
+   * `data.set` outputs are dropped like any other, so resident memory stays bounded by
+   * the LRU budget no matter how many loop iterations ran.
    */
   public clearFlushedOutputs(ids: ReadonlyArray<string>): void {
     for (const id of ids) {
       const io = this.stepIo.get(id);
       if (io) {
         const keepInput = io.input !== undefined && !this.isStepFinished(id);
-        const keepOutput = io.output !== undefined && this.dataSetExecutionIds.has(id);
         if (io.input !== undefined && !keepInput) this.evictedInputIds.add(id);
-        if (keepInput || keepOutput) {
-          this.stepIo.set(id, {
-            ...(keepInput ? { input: io.input } : {}),
-            ...(keepOutput ? { output: io.output } : {}),
-          });
+        if (keepInput) {
+          this.stepIo.set(id, { input: io.input });
         } else {
           this.stepIo.delete(id);
         }

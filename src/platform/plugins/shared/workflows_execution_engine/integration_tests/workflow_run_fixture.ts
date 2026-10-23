@@ -31,13 +31,17 @@ jest.mock('../server/repositories/step_execution_repository');
 export class WorkflowRunFixture {
   public readonly taskAbortController = new AbortController();
   public readonly dependencies = mockContextDependencies();
-  public readonly loggerMock = {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    trace: jest.fn(),
-  } as unknown as Logger;
+  public readonly loggerMock: Logger = (() => {
+    const logger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      trace: jest.fn(),
+      get: jest.fn(() => logger),
+    };
+    return logger as unknown as Logger;
+  })();
   // Create shared execute mock so tests can verify calls regardless of which client is used
   private readonly sharedExecuteMock = jest.fn();
   public readonly unsecuredActionsClientMock = new UnsecuredActionsClientMock();
