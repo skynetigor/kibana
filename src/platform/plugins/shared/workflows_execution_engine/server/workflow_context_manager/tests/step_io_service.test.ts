@@ -11,7 +11,7 @@ import { ExecutionStatus } from '@kbn/workflows';
 import type { EsWorkflowExecution, EsWorkflowStepExecution } from '@kbn/workflows';
 import type { StepExecutionRepository } from '../../repositories/step_execution_repository';
 import type { WorkflowExecutionRepository } from '../../repositories/workflow_execution_repository';
-import { StepIoService } from '../step_io_service';
+import { OVERFLOW_RETENTION_CALLS, StepIoService } from '../step_io_service';
 import { WorkflowExecutionState } from '../workflow_execution_state';
 
 /**
@@ -270,7 +270,7 @@ describe('StepIoService', () => {
       expect(service.read('a', 'output')).toEqual({ v: 'a' });
     });
 
-    it('drops read-scoped overflow once a later rehydrate no longer requests it', async () => {
+    it('keeps overflow readable for a concurrent consumer after another rehydrate', async () => {
       const { service, stepExecutionRepository } = buildHarness({ maxBytes: 0 });
       stepExecutionRepository.getStepExecutionsByIds
         .mockResolvedValueOnce([
@@ -284,6 +284,20 @@ describe('StepIoService', () => {
       await service.rehydrate(['b']);
 
       expect(service.read('b', 'output')).toEqual({ v: 'b' });
+      expect(service.read('a', 'output')).toEqual({ v: 'a' });
+    });
+
+    it('drops overflow once it went unrequested for the retention window', async () => {
+      const { service, stepExecutionRepository } = buildHarness({ maxBytes: 0 });
+      stepExecutionRepository.getStepExecutionsByIds.mockResolvedValueOnce([
+        { id: 'a', output: { v: 'a' } } as unknown as EsWorkflowStepExecution,
+      ]);
+
+      await service.rehydrate(['a']);
+      for (let call = 0; call <= OVERFLOW_RETENTION_CALLS; call++) {
+        await service.rehydrate([]);
+      }
+
       expect(service.read('a', 'output')).toBeUndefined();
     });
 
