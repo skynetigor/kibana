@@ -34,6 +34,7 @@ describe('ExecutionsIoDataClient', () => {
     } as unknown as DataStreamMetadataManager;
     client = new ExecutionsIoDataClient({ esClient, metadataManager, logger });
     esClient.search.mockResolvedValue({ hits: { hits: [] } } as never);
+    esClient.mget.mockResolvedValue({ docs: [] } as never);
   });
 
   it('returns an empty result without reading Elasticsearch', async () => {
@@ -415,6 +416,51 @@ describe('ExecutionsIoDataClient', () => {
         error: expect.objectContaining({ type: 'version_conflict_engine_exception' }),
       })
     );
+  });
+
+  it('writes a duplicated id once and reports the repeat as a conflict', async () => {
+    esClient.bulk.mockResolvedValue({
+      errors: false,
+      items: [{ create: { _id: 'output:step-1', _index: NEWER_INDEX, status: 201 } }],
+    } as never);
+    const document = {
+      executionId: 'step-1',
+      type: 'output' as const,
+      value: { done: true },
+      size: 2,
+      '@timestamp': '2026-01-01T00:00:00.000Z',
+    };
+
+    const result = await client.bulkCreate({ documents: [document, document] });
+
+    expect(esClient.bulk.mock.calls[0][0].operations).toHaveLength(2);
+    expect(result.errors).toBe(true);
+    expect(result.items[0].error).toBeUndefined();
+    expect(result.items[1].error?.type).toBe('version_conflict_engine_exception');
+  });
+
+  it('chunks the existence check for large batches', async () => {
+    esClient.bulk.mockImplementation((async ({ operations }: { operations: unknown[] }) => ({
+      errors: false,
+      items: Array.from({ length: operations.length / 2 }, () => ({
+        create: { _id: 'x', _index: NEWER_INDEX, status: 201 },
+      })),
+    })) as never);
+    const documents = Array.from({ length: 1200 }, (_, i) => ({
+      executionId: `step-${i}`,
+      type: 'input' as const,
+      value: i,
+      size: 1,
+      '@timestamp': '2026-01-01T00:00:00.000Z',
+    }));
+
+    await client.bulkCreate({ documents });
+
+    esClient.mget.mock.calls.forEach(([params]) => {
+      expect(params.docs?.length).toBeLessThanOrEqual(1000);
+    });
+    expect(esClient.mget).toHaveBeenCalledTimes(3);
+    expect(esClient.bulk).toHaveBeenCalledTimes(2);
   });
 
   it('reports a write-index conflict per item instead of throwing', async () => {
