@@ -67,12 +67,16 @@ export class ExecutionsIoDataClient implements ExecutionsIoClient {
       return { items: [], missing: [] };
     }
 
-    const byId = await this.readRecentBackingIndexes(ids);
+    const byId = new Map<string, IoHit>();
+    for (const chunk of chunkArray(ids, MAX_IDS_PER_REQUEST)) {
+      const found = await this.readRecentBackingIndexes(chunk);
+      found.forEach((item, id) => byId.set(id, item));
+    }
     const missingIds = ids.filter((id) => !byId.has(id));
     if (missingIds.length > 0) {
-      const fallback = await this.readPlainIndexes(missingIds);
-      for (const [id, item] of fallback) {
-        byId.set(id, item);
+      for (const chunk of chunkArray(missingIds, MAX_IDS_PER_REQUEST)) {
+        const fallback = await this.readPlainIndexes(chunk);
+        fallback.forEach((item, id) => byId.set(id, item));
       }
     }
 
@@ -101,16 +105,27 @@ export class ExecutionsIoDataClient implements ExecutionsIoClient {
       id: executionIoId(document.type, document.executionId),
       '@timestamp': document['@timestamp'] || timestamp,
     }));
+    // Only the first document for an id is written; later duplicates are reported as conflicts.
+    const seenIds = new Set<string>();
+    const duplicateIndexes = new Set<number>();
+    documents.forEach(({ id }, index) => {
+      if (seenIds.has(id)) {
+        duplicateIndexes.add(index);
+      }
+      seenIds.add(id);
+    });
     // A data stream only enforces `_id` uniqueness in the write index, so ids that already
     // exist in older backing indexes are detected here and reported as conflicts.
-    const existingIds = await this.findExistingIds(documents.map(({ id }) => id));
-    const writable = documents.filter(({ id }) => !existingIds.has(id));
+    const existingIds = await this.findExistingIds([...seenIds]);
+    const writable = documents.flatMap((document, index) =>
+      duplicateIndexes.has(index) || existingIds.has(document.id) ? [] : [{ document, index }]
+    );
 
-    const writtenById = new Map<string, BulkItemResponse>();
-    if (writable.length > 0) {
+    const writtenByIndex = new Map<number, BulkItemResponse>();
+    for (const chunk of chunkArray(writable, MAX_BULK_DOCUMENTS)) {
       const response = await this.deps.esClient.bulk<EsExecutionIo>({
         refresh: request.refresh,
-        operations: writable.flatMap((document) => [
+        operations: chunk.flatMap(({ document }) => [
           {
             create: {
               _index: WORKFLOWS_EXECUTIONS_IO_DATA_STREAM,
@@ -120,14 +135,14 @@ export class ExecutionsIoDataClient implements ExecutionsIoClient {
           document,
         ]),
       });
-      writable.forEach((document, index) => {
-        writtenById.set(document.id, toBulkItemResponse(document.id, response.items[index]));
+      chunk.forEach(({ document, index }, chunkIndex) => {
+        writtenByIndex.set(index, toBulkItemResponse(document.id, response.items[chunkIndex]));
       });
     }
 
     const items = documents.map(
-      (document): BulkItemResponse =>
-        writtenById.get(document.id) ?? {
+      (document, index): BulkItemResponse =>
+        writtenByIndex.get(index) ?? {
           id: document.id,
           index: '',
           error: {
@@ -139,15 +154,14 @@ export class ExecutionsIoDataClient implements ExecutionsIoClient {
     return { items, errors: items.some((item) => item.error !== undefined) };
   }
 
+  // Uses realtime mget on the newest backing indexes, so ids written since the last refresh are seen.
   private async findExistingIds(ids: string[]): Promise<Set<string>> {
-    const response = await this.deps.esClient.search({
-      index: WORKFLOWS_EXECUTIONS_IO_DATA_STREAM,
-      ignore_unavailable: true,
-      size: ids.length,
-      _source: false,
-      query: { ids: { values: ids } },
-    });
-    return new Set(response.hits.hits.flatMap((hit) => (hit._id ? [hit._id] : [])));
+    const existing = new Set<string>();
+    for (const chunk of chunkArray(ids, MAX_IDS_PER_REQUEST)) {
+      const found = await this.readRecentBackingIndexes(chunk);
+      found.forEach((_, id) => existing.add(id));
+    }
+    return existing;
   }
 
   /** mget the two newest IO backing indexes, then search the data stream for the rest. */
@@ -316,7 +330,18 @@ export class ExecutionsIoDataClient implements ExecutionsIoClient {
   }
 }
 
-const isWorkflowIndex = (index: string): boolean => index.includes(WORKFLOWS_EXECUTIONS_INDEX);
+const MAX_IDS_PER_REQUEST = 500;
+const MAX_BULK_DOCUMENTS = 1000;
+
+const chunkArray = <T>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    chunks.push(items.slice(start, start + size));
+  }
+  return chunks;
+};
+
+const isWorkflowIndex = (index: string): boolean => index === WORKFLOWS_EXECUTIONS_INDEX;
 
 // Step docs keep IO at the top level; workflow docs keep it under `context` (`inputs` is plural).
 function sourceIncludesFor(index: string, types: Set<ExecutionIoType>): string[] {
