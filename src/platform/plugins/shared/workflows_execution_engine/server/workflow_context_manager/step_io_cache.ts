@@ -42,7 +42,11 @@ export class StepIoCache {
    * nothing resident: lru-cache treats a `maxSize` of 0 as unbounded and rejects
    * non-finite values, so both are mapped to valid sizes here.
    */
-  constructor(maxBytes: number, logger?: Logger) {
+  constructor(
+    maxBytes: number,
+    logger?: Logger,
+    onEvict?: (id: string, type: StepIoType, value: JsonValue | null) => void
+  ) {
     const cacheLogger = logger?.get('step_io_cache');
     let maxSize = 1;
     if (maxBytes > 0) {
@@ -52,15 +56,20 @@ export class StepIoCache {
       maxSize,
       // Fallback size used when the caller does not supply an explicit byte count.
       sizeCalculation: (entry: CacheEntry) => toValidSize(safeOutputSize(entry.value)),
-      dispose: cacheLogger
-        ? (_entry, key, reason) => {
-            if (reason === 'evict') {
-              cacheLogger.debug(
+      dispose:
+        cacheLogger || onEvict
+          ? (entry, key, reason) => {
+              if (reason !== 'evict') return;
+              cacheLogger?.debug(
                 `evicted step output [key=${key}] [cacheBytes=${this.lru.calculatedSize}]`
               );
+              const separator = key.indexOf('_');
+              const type = key.slice(0, separator);
+              if (type === 'input' || type === 'output') {
+                onEvict?.(key.slice(separator + 1), type, entry.value);
+              }
             }
-          }
-        : undefined,
+          : undefined,
     });
   }
 

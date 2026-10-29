@@ -18,6 +18,8 @@ import { safeOutputSize } from '../step/errors';
 
 export type { StepIoType } from './step_io_cache';
 
+const MAX_REQUESTED_IDS = 1000;
+
 export interface StepIoServiceInit {
   stepRepository: StepExecutionRepository;
   state: WorkflowExecutionState;
@@ -83,13 +85,14 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
   private readonly stepRepository: StepExecutionRepository;
   private readonly state: WorkflowExecutionState;
   private readonly cache: StepIoCache;
-  /** Rehydrated outputs the LRU could not retain; scoped to the latest requested working set. */
+  /** Rehydrated outputs the LRU could not retain; kept so concurrent consumers can still read them. */
   private readonly overflow = new Map<string, JsonValue | null>();
   /**
    * Inputs of finished steps, which state drops after flush. Fetched on demand and scoped
-   * to the latest requested working set, like `overflow`. `null` marks "no stored input".
+   * like `overflow`. `null` marks "no stored input".
    */
   private readonly inputOverflow = new Map<string, JsonValue | null>();
+  private readonly requested = new Set<string>();
   private rehydrateInFlight = 0;
   /** Execution-wide sizes of outputs written with a measured byte count, for telemetry. */
   private readonly measuredSizes = new Map<string, number>();
@@ -98,7 +101,24 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
   constructor({ stepRepository, state, maxBytes = Infinity, logger }: StepIoServiceInit) {
     this.stepRepository = stepRepository;
     this.state = state;
-    this.cache = new StepIoCache(maxBytes, logger);
+    this.cache = new StepIoCache(maxBytes, logger, (id, type, value) => {
+      // Outputs requested for a consumer stay readable after the LRU evicts them.
+      if (type === 'output' && this.requested.has(id)) this.overflow.set(id, value);
+    });
+  }
+
+  /** Marks ids as needed by consumers; bounded so `overflow` cannot grow without limit. */
+  private markRequested(ids: ReadonlyArray<string>): void {
+    for (const id of ids) {
+      this.requested.delete(id);
+      this.requested.add(id);
+    }
+    for (const id of this.requested) {
+      if (this.requested.size <= MAX_REQUESTED_IDS) break;
+      this.requested.delete(id);
+      this.overflow.delete(id);
+      this.inputOverflow.delete(id);
+    }
   }
 
   // ----- IO reads -----------------------------------------------------------
@@ -202,17 +222,9 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
     ids: ReadonlyArray<string>,
     inputIds: ReadonlyArray<string> = []
   ): Promise<void> {
-    // Drop overflow from earlier calls, unless another rehydrate is still in flight.
-    if (this.rehydrateInFlight === 0) {
-      const wanted = new Set(ids);
-      for (const id of this.overflow.keys()) {
-        if (!wanted.has(id)) this.overflow.delete(id);
-      }
-      const wantedInputs = new Set(inputIds);
-      for (const id of this.inputOverflow.keys()) {
-        if (!wantedInputs.has(id)) this.inputOverflow.delete(id);
-      }
-    }
+    // Overflow is shared by concurrent consumers (e.g. parallel branches), so it is never
+    // cleared here; entries are dropped when the step output is rewritten.
+    this.markRequested(ids);
     await this.rehydrateInputs(inputIds);
     const missing = ids.filter(
       (id) =>

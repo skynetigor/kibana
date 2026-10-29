@@ -270,7 +270,7 @@ describe('StepIoService', () => {
       expect(service.read('a', 'output')).toEqual({ v: 'a' });
     });
 
-    it('drops read-scoped overflow once a later rehydrate no longer requests it', async () => {
+    it('keeps overflow readable for concurrent consumers when a later rehydrate requests other ids', async () => {
       const { service, stepExecutionRepository } = buildHarness({ maxBytes: 0 });
       stepExecutionRepository.getStepExecutionsByIds
         .mockResolvedValueOnce([
@@ -284,34 +284,24 @@ describe('StepIoService', () => {
       await service.rehydrate(['b']);
 
       expect(service.read('b', 'output')).toEqual({ v: 'b' });
-      expect(service.read('a', 'output')).toBeUndefined();
+      expect(service.read('a', 'output')).toEqual({ v: 'a' });
     });
 
-    it('re-fetches requested outputs that were evicted by the inserts of the same call', async () => {
+    it('keeps requested outputs evicted by the inserts of the same call readable without re-fetching', async () => {
       const { service, state, stepExecutionRepository } = buildHarness({ maxBytes: 100 });
       // `a` is resident and already flushed, so only the cache holds it.
       service.write('a', 'output', { v: 'a' }, 95);
       state.clearFlushedOutputs(['a']);
-      stepExecutionRepository.getStepExecutionsByIds
-        // First fetch: `b` is the only cache miss. Inserting it pushes `a` out of the budget.
-        .mockResolvedValueOnce([
-          { id: 'b', output: { v: 'b' } } as unknown as EsWorkflowStepExecution,
-        ])
-        // Second fetch: the evicted resident `a`.
-        .mockResolvedValueOnce([
-          { id: 'a', output: { v: 'a' } } as unknown as EsWorkflowStepExecution,
-        ]);
+      // `b` is the only cache miss. Inserting it pushes `a` out of the budget into overflow.
+      stepExecutionRepository.getStepExecutionsByIds.mockResolvedValueOnce([
+        { id: 'b', output: { v: 'b' } } as unknown as EsWorkflowStepExecution,
+      ]);
 
       await service.rehydrate(['a', 'b']);
 
-      expect(stepExecutionRepository.getStepExecutionsByIds).toHaveBeenNthCalledWith(
-        1,
+      expect(stepExecutionRepository.getStepExecutionsByIds).toHaveBeenCalledTimes(1);
+      expect(stepExecutionRepository.getStepExecutionsByIds).toHaveBeenCalledWith(
         ['b'],
-        ['id', 'output']
-      );
-      expect(stepExecutionRepository.getStepExecutionsByIds).toHaveBeenNthCalledWith(
-        2,
-        ['a'],
         ['id', 'output']
       );
       expect(service.read('a', 'output')).toEqual({ v: 'a' });
