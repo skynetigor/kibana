@@ -18,6 +18,12 @@ import { safeOutputSize } from '../step/errors';
 
 export type { StepIoType } from './step_io_cache';
 
+const retainOnly = <T>(entries: Map<string, T>, keep: ReadonlySet<string>): void => {
+  for (const key of Array.from(entries.keys())) {
+    if (!keep.has(key)) entries.delete(key);
+  }
+};
+
 export interface StepIoServiceInit {
   stepRepository: StepExecutionRepository;
   state: WorkflowExecutionState;
@@ -83,14 +89,21 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
   private readonly stepRepository: StepExecutionRepository;
   private readonly state: WorkflowExecutionState;
   private readonly cache: StepIoCache;
-  /** Rehydrated outputs the LRU could not retain; scoped to the latest requested working set. */
+  /**
+   * Outputs of the latest `rehydrate` request that the LRU could not retain, either
+   * because it rejected or evicted them. Pruned to the latest requested IDs on each call.
+   */
   private readonly overflow = new Map<string, JsonValue | null>();
   /**
-   * Inputs of finished steps, which state drops after flush. Fetched on demand and scoped
-   * to the latest requested working set, like `overflow`. `null` marks "no stored input".
+   * Inputs of finished steps, which state drops after flush. Fetched on demand and pruned
+   * to the latest requested input IDs. `null` marks "no stored input".
    */
   private readonly inputOverflow = new Map<string, JsonValue | null>();
-  private rehydrateInFlight = 0;
+  /** Requests of `rehydrate` calls that have not finished yet. */
+  private readonly inFlight = new Set<{
+    ids: ReadonlySet<string>;
+    inputIds: ReadonlySet<string>;
+  }>();
   /** Execution-wide sizes of outputs written with a measured byte count, for telemetry. */
   private readonly measuredSizes = new Map<string, number>();
   private measuredTotalBytes = 0;
@@ -202,17 +215,34 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
     ids: ReadonlyArray<string>,
     inputIds: ReadonlyArray<string> = []
   ): Promise<void> {
-    // Drop overflow from earlier calls, unless another rehydrate is still in flight.
-    if (this.rehydrateInFlight === 0) {
-      const wanted = new Set(ids);
-      for (const id of this.overflow.keys()) {
-        if (!wanted.has(id)) this.overflow.delete(id);
-      }
-      const wantedInputs = new Set(inputIds);
-      for (const id of this.inputOverflow.keys()) {
-        if (!wantedInputs.has(id)) this.inputOverflow.delete(id);
-      }
+    // Overflow copies live only as long as the requests in flight, so they stay bounded
+    // by what the concurrent context builds need.
+    const request = { ids: new Set(ids), inputIds: new Set(inputIds) };
+    this.inFlight.add(request);
+    try {
+      this.pruneOverflow();
+      await this.rehydrateOutputs(ids, inputIds);
+    } finally {
+      this.inFlight.delete(request);
     }
+  }
+
+  /** Drops overflow entries that no in-flight `rehydrate` call asked for. */
+  private pruneOverflow(): void {
+    const keepOutputs = new Set<string>();
+    const keepInputs = new Set<string>();
+    for (const { ids, inputIds } of this.inFlight) {
+      ids.forEach((id) => keepOutputs.add(id));
+      inputIds.forEach((id) => keepInputs.add(id));
+    }
+    retainOnly(this.overflow, keepOutputs);
+    retainOnly(this.inputOverflow, keepInputs);
+  }
+
+  private async rehydrateOutputs(
+    ids: ReadonlyArray<string>,
+    inputIds: ReadonlyArray<string>
+  ): Promise<void> {
     await this.rehydrateInputs(inputIds);
     const missing = ids.filter(
       (id) =>
@@ -222,51 +252,42 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
     );
     if (missing.length === 0) return;
 
-    this.rehydrateInFlight++;
-    try {
-      const docs = await this.stepRepository.getStepExecutionsByIds(missing, ['id', 'output']);
-      const fetched: Array<{ id: string; output: JsonValue | null }> = [];
-      for (const doc of docs) {
-        // An output may have been written while the fetch was in flight.
-        if (this.state.getStepIo(doc.id, 'output') === undefined) {
-          const output = doc.output ?? null;
-          const size = safeOutputSize(output) ?? undefined;
-          this.cache.set(doc.id, 'output', output, size);
-          // Outputs written before a resume are not in the counters yet.
-          if (size !== undefined && !this.measuredSizes.has(doc.id)) {
-            this.measuredSizes.set(doc.id, size);
-            this.measuredTotalBytes += size;
-          }
-          fetched.push({ id: doc.id, output });
+    const docs = await this.stepRepository.getStepExecutionsByIds(missing, ['id', 'output']);
+    const fetched: Array<{ id: string; output: JsonValue | null }> = [];
+    for (const doc of docs) {
+      // An output may have been written while the fetch was in flight.
+      if (this.state.getStepIo(doc.id, 'output') === undefined) {
+        const output = doc.output ?? null;
+        const size = safeOutputSize(output) ?? undefined;
+        this.cache.set(doc.id, 'output', output, size);
+        // Outputs written before a resume are not in the counters yet.
+        if (size !== undefined && !this.measuredSizes.has(doc.id)) {
+          this.measuredSizes.set(doc.id, size);
+          this.measuredTotalBytes += size;
         }
+        fetched.push({ id: doc.id, output });
       }
-      // The LRU may reject oversized outputs or evict earlier ones while the rest are inserted.
-      // Keep those in a read-scoped copy so callers can still read the full requested set.
-      for (const { id, output } of fetched) {
-        if (!this.cache.has(id, 'output')) this.overflow.set(id, output);
+    }
+    // The LRU may reject oversized outputs. Keep those in the shared overflow copy so
+    // callers can still read the full requested set.
+    for (const { id, output } of fetched) {
+      if (!this.cache.has(id, 'output')) this.overflow.set(id, output);
+    }
+    // Inserts above may also have evicted requested outputs that were already resident.
+    const missingIds = new Set(missing);
+    const evicted = ids.filter(
+      (id) =>
+        !missingIds.has(id) &&
+        !this.cache.has(id, 'output') &&
+        !this.overflow.has(id) &&
+        this.state.getStepIo(id, 'output') === undefined
+    );
+    if (evicted.length === 0) return;
+    const evictedDocs = await this.stepRepository.getStepExecutionsByIds(evicted, ['id', 'output']);
+    for (const doc of evictedDocs) {
+      if (this.state.getStepIo(doc.id, 'output') === undefined) {
+        this.overflow.set(doc.id, doc.output ?? null);
       }
-      // The inserts above may also have evicted requested outputs that were already resident.
-      // Their state copy is cleared after flush, so re-fetch them into the read-scoped copy.
-      const missingIds = new Set(missing);
-      const evicted = ids.filter(
-        (id) =>
-          !missingIds.has(id) &&
-          !this.cache.has(id, 'output') &&
-          !this.overflow.has(id) &&
-          this.state.getStepIo(id, 'output') === undefined
-      );
-      if (evicted.length === 0) return;
-      const evictedDocs = await this.stepRepository.getStepExecutionsByIds(evicted, [
-        'id',
-        'output',
-      ]);
-      for (const doc of evictedDocs) {
-        if (this.state.getStepIo(doc.id, 'output') === undefined) {
-          this.overflow.set(doc.id, doc.output ?? null);
-        }
-      }
-    } finally {
-      this.rehydrateInFlight--;
     }
   }
 
@@ -281,17 +302,12 @@ export class StepIoService implements StepIoWriter, StepIoLifecycle {
     );
     if (missing.length === 0) return;
 
-    this.rehydrateInFlight++;
-    try {
-      const docs = await this.stepRepository.getStepExecutionsByIds(missing, ['id', 'input']);
-      const found = new Map(docs.map((doc) => [doc.id, doc.input ?? null]));
-      for (const id of missing) {
-        if (this.state.getStepIo(id, 'input') === undefined) {
-          this.inputOverflow.set(id, found.get(id) ?? null);
-        }
+    const docs = await this.stepRepository.getStepExecutionsByIds(missing, ['id', 'input']);
+    const found = new Map(docs.map((doc) => [doc.id, doc.input ?? null]));
+    for (const id of missing) {
+      if (this.state.getStepIo(id, 'input') === undefined) {
+        this.inputOverflow.set(id, found.get(id) ?? null);
       }
-    } finally {
-      this.rehydrateInFlight--;
     }
   }
 }

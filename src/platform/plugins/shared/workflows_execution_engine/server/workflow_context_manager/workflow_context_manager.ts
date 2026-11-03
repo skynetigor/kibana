@@ -41,6 +41,39 @@ import { buildStepExecutionId, isTemplateExpression } from '../utils';
 import { isSerializedError } from '../utils/errors';
 
 /**
+ * Whether an open foreach / dynamic parallel frame has a persisted input that only holds
+ * the foreach expression, so `buildForeachContext` must re-evaluate it.
+ */
+function hasLegacyOpenForeach(
+  state: WorkflowExecutionState,
+  stackFrames: readonly StackFrame[] | undefined
+): boolean {
+  if (!stackFrames?.length) return false;
+  const executionId = state.getWorkflowExecutionId();
+  let scopeStack = WorkflowScopeStack.fromStackFrames([...stackFrames]);
+  while (!scopeStack.isEmpty()) {
+    const topFrame = scopeStack.getCurrentScope();
+    scopeStack = scopeStack.exitScope();
+    const execution = state.getStepExecution(
+      buildStepExecutionId(executionId, topFrame.stepId, scopeStack.stackFrames)
+    );
+    if (execution?.stepType === 'foreach' || execution?.stepType === 'parallel') {
+      const input = state.getStepIo(execution.id, 'input');
+      if (
+        input !== null &&
+        typeof input === 'object' &&
+        !Array.isArray(input) &&
+        typeof input.foreach === 'string' &&
+        !Array.isArray(input.items)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Resolves the set of step execution IDs whose outputs must be in the LRU
  * cache before the upcoming context build for `node`. Combines:
  *
@@ -51,9 +84,10 @@ import { isSerializedError } from '../utils/errors';
  *    reference `variables`.
  *
  * Open scope frames (the workflow timeout zone, an in-progress foreach) are not
- * included. They have no output until they leave the stack, and their inputs and
- * state are already on the execution. Fetching them re-reads Elasticsearch for a
- * document that has nothing to rehydrate.
+ * fetched themselves. They have no output until they leave the stack, and their inputs and
+ * state are already on the execution. The exception is a legacy foreach that never
+ * snapshotted `input.items`: its expression is re-evaluated, so all predecessor outputs
+ * and `data.set` outputs are pre-warmed for it.
  */
 export function resolveRehydrationTargets(
   node: GraphNodeUnion,
@@ -76,10 +110,20 @@ export function resolveRehydrationTargets(
     }
   }
 
+  // A legacy foreach (no `input.items` snapshot) re-evaluates its expression against the
+  // rendering context, which may read any predecessor output or `variables`.
+  const needsLegacyForeachContext = hasLegacyOpenForeach(state, stackFrames);
+  if (needsLegacyForeachContext) {
+    for (const pred of predecessors) {
+      const latestExec = state.getLatestStepExecution(pred.stepId, stackFrames);
+      if (latestExec) neededIds.add(latestExec.id);
+    }
+  }
+
   // `getVariables()` reads every `data.set` output, so those must be resident when the
   // node can read `variables`. Skipping them otherwise avoids re-fetching (and thrashing
   // the LRU with) a potentially huge set of outputs on every node run.
-  if (nodeMayReferenceVariables(node)) {
+  if (needsLegacyForeachContext || nodeMayReferenceVariables(node)) {
     for (const step of state.getDataSetStepExecutions()) {
       neededIds.add(step.id);
     }
