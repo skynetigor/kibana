@@ -20,7 +20,11 @@ import { isTerminalStatus } from '@kbn/workflows';
 import { areParallelBranchesCompatible, getParallelBranchScopes } from './parallel_branch_scope';
 import type { StepExecutionRepository } from '../repositories/step_execution_repository';
 import type { WorkflowExecutionRepository } from '../repositories/workflow_execution_repository';
+import { safeOutputSize } from '../step/errors';
 import { sumTokenUsage } from '../utils';
+
+/** Total bytes of flushed `data.set` outputs kept in the live IO map; the rest is re-fetched on demand. */
+const DATA_SET_RETAINED_MAX_BYTES = 1024 * 1024;
 
 /** Context for the step that failed during this run; used to build workflow_execution_failed event. */
 export interface FailedStepContext {
@@ -80,6 +84,9 @@ export class WorkflowExecutionState {
 
   /** Execution IDs of `data.set` steps in creation order. Avoids scanning every execution. */
   private dataSetExecutionIds = new Set<string>();
+  /** Byte sizes of `data.set` outputs currently retained in `stepIo` after flush. */
+  private retainedDataSetBytes = new Map<string, number>();
+  private retainedDataSetTotalBytes = 0;
   private stepIoVersion = 0;
 
   constructor(
@@ -270,15 +277,20 @@ export class WorkflowExecutionState {
    * always dropped. The `input` is kept only while the step is still running, so
    * foreach context re-evaluation across loop iterations keeps working; once the step
    * is finished its input is dropped too and re-fetched on demand by `StepIoService`.
-   * Outputs of `data.set` steps are kept: they are small variable maps that every later
-   * node reads through `variables`, so dropping them would force a refetch per node run.
+   * Outputs of `data.set` steps are kept while their total stays within
+   * `DATA_SET_RETAINED_MAX_BYTES`: they are small variable maps that every later node reads
+   * through `variables`, so dropping them would force a refetch per node run. Beyond that
+   * budget they are dropped and re-fetched by `StepIoService` like any other output.
    */
   public clearFlushedOutputs(ids: ReadonlyArray<string>): void {
     for (const id of ids) {
       const io = this.stepIo.get(id);
       if (io) {
         const keepInput = io.input !== undefined && !this.isStepFinished(id);
-        const keepOutput = io.output !== undefined && this.dataSetExecutionIds.has(id);
+        const keepOutput =
+          io.output !== undefined &&
+          this.dataSetExecutionIds.has(id) &&
+          this.reserveDataSetRetention(id, io.output);
         if (io.input !== undefined && !keepInput) this.evictedInputIds.add(id);
         if (keepInput || keepOutput) {
           this.stepIo.set(id, {
@@ -290,6 +302,23 @@ export class WorkflowExecutionState {
         }
       }
     }
+  }
+
+  /** Accounts a `data.set` output against the retention budget; false when it does not fit. */
+  private reserveDataSetRetention(id: string, output: JsonValue | null): boolean {
+    const previous = this.retainedDataSetBytes.get(id) ?? 0;
+    const size = safeOutputSize(output);
+    if (
+      size === null ||
+      this.retainedDataSetTotalBytes - previous + size > DATA_SET_RETAINED_MAX_BYTES
+    ) {
+      this.retainedDataSetTotalBytes -= previous;
+      this.retainedDataSetBytes.delete(id);
+      return false;
+    }
+    this.retainedDataSetTotalBytes += size - previous;
+    this.retainedDataSetBytes.set(id, size);
+    return true;
   }
 
   private isStepFinished(stepExecutionId: string): boolean {
