@@ -49,6 +49,7 @@ export type {
   WorkflowStatsDto,
   WorkflowStepExecutionListDto,
   WorkflowMgetResponseDto,
+  WorkflowTemplateOrigin,
   ChildWorkflowExecutionItem,
   WorkflowExecutionCollapseField,
   WorkflowExecutionSortField,

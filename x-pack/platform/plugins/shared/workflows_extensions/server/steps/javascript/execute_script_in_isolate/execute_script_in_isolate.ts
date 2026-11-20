@@ -7,7 +7,6 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import ivm from 'isolated-vm';
 import { CONSOLE_BRIDGE_SCRIPT } from './console_bridge_script';
 import { createAbortError } from './create_abort_error';
 import { createIsolateWithCatastrophicHandler } from './create_isolate_with_catastrophic_handler';
@@ -30,7 +29,11 @@ export const executeScriptInIsolate = async ({
     throw createAbortError();
   }
 
+  // Loaded lazily so the native module is only required when a script actually runs.
+  const { default: ivm } = await import('isolated-vm');
+
   const { isolate, catastrophicPromise } = createIsolateWithCatastrophicHandler({
+    ivmModule: ivm,
     memoryLimitMb,
     logger,
   });
@@ -42,6 +45,8 @@ export const executeScriptInIsolate = async ({
     isolate,
     executionTimeoutMs
   );
+  // Same as above: the timer can fire during setup, before wallClockTimeout is raced.
+  wallClockTimeout.catch(() => {});
 
   try {
     const ivmContext = await isolate.createContext();
