@@ -34,6 +34,7 @@ export type {
   WorkflowExecutionDto,
   WorkflowExecutionLogEntry,
   WorkflowExecutionEngineModel,
+  WorkflowExecutionExecutedByUser,
   WorkflowExecutionHistoryModel,
   WorkflowExecutionListDto,
   WorkflowExecutionListItemDto,

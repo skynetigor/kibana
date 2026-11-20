@@ -19,6 +19,7 @@ project:
 dependsOn:
   - '@kbn/core'
   - '@kbn/inference-common'
+  - '@kbn/management-settings-ids'
   - '@kbn/actions-plugin'
   - '@kbn/triggers-actions-ui-plugin'
   - '@kbn/config-schema'
@@ -42,6 +43,7 @@ dependsOn:
   - '@kbn/alerting-plugin'
   - '@kbn/securitysolution-ecs'
   - '@kbn/cases-components'
+  - '@kbn/code-editor'
   - '@kbn/code-editor-mock'
   - '@kbn/utility-types'
   - '@kbn/task-manager-plugin'
@@ -71,6 +73,7 @@ tags:
   - group-platform
   - shared
   - jest-unit-tests
+  - scout-tests
 fileGroups:
   src:
     - __mocks__/**/*
@@ -79,6 +82,4 @@ fileGroups:
     - common/**/*
     - public/**/*
     - '!target/**/*'
-  jest-config:
-    - jest.config.js
 tasks: {}

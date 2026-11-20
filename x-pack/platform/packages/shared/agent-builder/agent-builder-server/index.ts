@@ -11,6 +11,11 @@ export type {
   ProcessedRoundInput,
 } from './processed_input';
 export type {
+  ProcessedStandaloneEvent,
+  ProcessedTimelineEvent,
+  ProcessedUserMessageEvent,
+} from './processed_timeline';
+export type {
   ToolProvider,
   ToolProviderHasOptions,
   ToolProviderGetOptions,
@@ -21,6 +26,7 @@ export type {
   LLmDescriptionHandlerParams,
   LlmDescriptionHandler,
   ModelProvider,
+  ModelSource,
   ScopedModel,
   ScopedRunner,
   ScopedRunToolFn,
@@ -49,6 +55,7 @@ export type {
   ToolHandlerContext,
   ToolHandlerResult,
   BuiltinToolDefinition,
+  DynamicSchemaBuiltinToolDefinition,
   InternalBuiltinToolDefinition,
   StaticToolRegistration,
   StaticEsqlTool,
@@ -58,6 +65,7 @@ export type {
   ToolAvailabilityHandler,
   ToolAvailabilityResult,
   ToolAvailabilityConfig,
+  ToolSchemaContext,
   InternalToolAvailabilityHandler,
   InternalToolDefinition,
   ToolReturnSummarizerFn,
@@ -77,6 +85,7 @@ export {
 export type {
   AgentHandlerParams,
   AgentHandlerContext,
+  ExecutionConversationAccess,
   AgentHandlerReturn,
   AgentHandlerFn,
   RunAgentFn,
@@ -110,6 +119,17 @@ export type {
   AfterExecutionHookContext,
 } from './hooks/types';
 export { HookLifecycle, HookExecutionMode } from './hooks/types';
+export type {
+  CycleContext,
+  CycleHandler,
+  CycleHookApi,
+  CycleHookDefinition,
+  CycleHookExecutionContext,
+  CycleTrigger,
+  ExecutionSummary,
+  InjectedContextInput,
+} from './hooks/cycle';
+export { DEFAULT_CYCLE_HOOK_TIMEOUT_MS, MAX_CYCLE_HOOK_TIMEOUT_MS } from './hooks/cycle';
 export {
   applyHookResultByLifecycle,
   applyBeforeAgentResult,
@@ -118,7 +138,12 @@ export {
   applyAfterExecutionResult,
 } from './hooks/apply_result';
 export { chatSystemIndex, chatSystemIndexPrefix } from './indices';
-export type { AgentBuilderAnalytics, AgentBuilderTracking, SkillInvokedEvent } from './telemetry';
+export type {
+  AgentBuilderAnalytics,
+  AgentBuilderTracking,
+  CompactionTriggeredEvent,
+  SkillInvokedEvent,
+} from './telemetry';
 export { toHashedId } from './telemetry';
 export type {
   BuiltInPluginDefinition,
@@ -130,6 +155,8 @@ export type {
 export type {
   AgentExecutionParams,
   AgentExecution,
+  ConversationAgentExecution,
+  StoredConversationExecutionParams,
   ExecuteAgentParams,
   ExecuteAgentResult,
   FindExecutionsFilter,
@@ -172,7 +199,10 @@ export type {
   PluginsSetup,
   PluginsStart,
   RuntimeStart,
+  ConversationsSetup,
+  ConversationUpdatedOptIn,
   ConversationsStart,
+  CallbacksSetup,
   ConversationTemplatesSetup,
   ConversationTemplatesStart,
   AttachmentsStart,
@@ -185,6 +215,7 @@ export type {
   GetAttachmentArgs,
   UpdateAttachmentArgs,
   DeleteAttachmentArgs,
+  RestoreAttachmentArgs,
   ListAttachmentsArgs,
   BulkCreateAttachmentInput,
   BulkCreateAttachmentError,
@@ -197,6 +228,20 @@ export type {
   ConversationUpdatePublicRequest,
   ConversationAddEventsRequest,
 } from './conversations';
+export type {
+  OnBeforeNewConversationHook,
+  OnBeforeNewConversationContext,
+  OnBeforeNewConversationRelease,
+  CallbackConversationResolver,
+  CallbackConversationResolverContext,
+  CallbackTransportDefinition,
+} from './callbacks';
+export {
+  CallbackDeliveryError,
+  isCallbackDeliveryError,
+  parseRetryAfterMs,
+  throwIfNotDelivered,
+} from './callbacks';
 export { describeZodSchema, formatSchemaForLlm } from './tools';
 export type {
   AvailabilityContext,
@@ -209,4 +254,8 @@ export type {
   ConnectorSubActionDetail,
   ConnectorDetail,
 } from './agent_connectors';
-export { listAgentConnectors, getAgentConnectorDetail } from './agent_connectors';
+export {
+  listAgentConnectors,
+  getAgentConnectorDetail,
+  resolveAllowedConnectorIds,
+} from './agent_connectors';

@@ -543,6 +543,7 @@ export function ServiceFlyoutOverview() {
                 latencyAggregationType={latencyAggregationType}
                 onChange={setLatencyAggregationType}
                 ebt={{ element: SERVICE_FLYOUT_EBT_ELEMENTS.CHART_CONTROLS }}
+                compact
               />
             ),
             projectRouting,
@@ -679,7 +680,7 @@ export function ServiceFlyoutOverview() {
           historyKey={flyoutHistoryKey}
           preferDocumentBasedCharts={preferDocumentBasedCharts}
           schema={selectedTransaction.schema}
-          indices={indices}
+          indicesSource={{ indices }}
           alertsCount={selectedTransaction.alertsCount}
         />
       )}

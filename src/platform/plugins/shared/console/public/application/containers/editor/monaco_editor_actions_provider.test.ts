@@ -55,7 +55,7 @@ jest.mock('../../hooks', () => ({
 import { MonacoEditorActionsProvider } from './monaco_editor_actions_provider';
 import type { monaco } from '@kbn/monaco';
 import { monaco as monacoRuntime } from '@kbn/monaco';
-import { createParser } from '@kbn/monaco/src/languages/console/parser';
+import { createParser } from '@kbn/monaco/src/languages/definitions/console/parser';
 import { sendRequest } from '../../hooks';
 import { serviceContextMock } from '../../contexts/services_context.mock';
 import { _test as kbTest } from '../../../lib/kb';
@@ -1756,6 +1756,7 @@ describe('Editor actions provider', () => {
 
   describe('provideCompletionItems', () => {
     const mockModel = {
+      getLineMaxColumn: () => 1,
       getWordAtPosition: () => {
         return {
           word: 'GET',
@@ -2638,6 +2639,33 @@ describe('Editor actions provider', () => {
 
         expect(suggestions).toHaveLength(1);
         expect(suggestions[0].label).toBe('false');
+      });
+
+      it('computes body suggestions against the text after the cursor at request time', async () => {
+        let resolveParsedRequests: (requests: typeof unterminatedRequest) => void = () => {};
+        mockGetParsedRequests.mockReturnValue(
+          new Promise<typeof unterminatedRequest>((resolve) => {
+            resolveParsedRequests = resolve;
+          })
+        );
+        mockPopulateContext.mockImplementation((...args) => {
+          const context = args[0][1];
+          context.autoCompleteSet = [{ name: 'aggs', template: {} }];
+        });
+        const lines = ['GET _search', '{', '  ""'];
+        const model = setup(lines, 3, 4);
+
+        const pending = provideCompletionItems(model, { lineNumber: 3, column: 4 });
+        // keystrokes typed while the parser worker is answering
+        lines[2] = '  "ag"';
+        resolveParsedRequests(unterminatedRequest);
+
+        const { suggestions } = await pending;
+
+        expect(suggestions).toHaveLength(1);
+        // the template is still expanded and only the auto-closed quote is replaced
+        expect(suggestions[0].insertText).toContain('aggs": {');
+        expect((suggestions[0].range as monaco.IRange).endColumn).toBe(5);
       });
 
       it('still returns method completion items on an empty line outside triple quotes', async () => {

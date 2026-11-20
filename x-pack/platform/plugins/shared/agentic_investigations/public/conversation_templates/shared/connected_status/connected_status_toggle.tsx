@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@kbn/react-query';
 import { useKibana } from '@kbn/kibana-react-plugin/public';
 import type { CoreStart } from '@kbn/core/public';
@@ -29,8 +29,10 @@ import type {
 import { useCanManageInvestigations } from '../../../investigations/hooks/use_can_manage_investigations';
 import { useCanManageEscalations } from '../../../escalations/hooks/use_escalation_privileges';
 import { statusSignal } from './status_signal';
+import { useSettleDeclinedProposals } from './use_settle_declined_proposals';
 import { getCloseErrorCode, isKnownCloseError, isPartialCloseError } from './close_error_codes';
 import { CloseInvestigationModal } from '../close_confirmation/close_investigation_modal';
+import { useSkipCloseConfirmation } from '../close_confirmation/use_skip_close_confirmation';
 import { CloseEscalationModal } from '../close_confirmation/close_escalation_modal';
 import * as i18n from '../close_confirmation/translations';
 
@@ -49,17 +51,26 @@ interface InvestigationCloseContainerProps {
     rationale?: string;
     preview: InvestigationClosePreviewResponse;
   }) => Promise<void> | void;
+  /**
+   * Called when a close that asked the user nothing failed anyway. The callouts the modal would
+   * have shown have nowhere to appear, so the host reports the failure and ends the attempt —
+   * leaving it silent would also leave the trigger stuck mid-close.
+   */
+  onSkippedCloseFailed: () => void;
 }
 
 /**
  * Mounts the close preview hook and renders the investigation modal.
- * Rendered only when the modal is open, so every open starts a fresh fetch.
+ * Rendered only when the close is triggered, so every trigger starts a fresh fetch. The modal
+ * itself only appears when the close needs something from the user — see
+ * `useSkipCloseConfirmation`.
  */
 const InvestigationCloseContainer: React.FC<InvestigationCloseContainerProps> = ({
   conversationId,
   isMutating,
   onClose,
   onConfirm,
+  onSkippedCloseFailed,
 }) => {
   const [targetsChanged, setTargetsChanged] = useState(false);
   const [closeError, setCloseError] = useState<{
@@ -67,41 +78,67 @@ const InvestigationCloseContainer: React.FC<InvestigationCloseContainerProps> = 
     count: number;
   } | null>(null);
 
-  const preview = useInvestigationClosePreview(conversationId, { enabled: true });
+  const {
+    data: previewData,
+    isFetching,
+    isError,
+    refetch,
+  } = useInvestigationClosePreview(conversationId, {
+    enabled: true,
+  });
+
+  // Set by `confirmWithoutReason` so the catch below knows no modal is on screen to report into.
+  const wasSkipped = useRef(false);
 
   const handleConfirm = useCallback(
     async (params: { dismissReason?: DismissReason; rationale?: string }) => {
-      if (!preview.data) return;
+      if (!previewData) return;
       setCloseError(null);
       try {
-        await onConfirm({ ...params, preview: preview.data });
+        await onConfirm({ ...params, preview: previewData });
       } catch (err) {
+        if (wasSkipped.current) {
+          onSkippedCloseFailed();
+          return;
+        }
         const code = getCloseErrorCode(err);
         if (code === 'close_targets_changed') {
           setTargetsChanged(true);
-          void preview.refetch();
+          refetch();
         } else if (code === 'proposal_dismiss_failed') {
           const ids =
             (err as unknown as { body?: { attributes?: { failed_proposal_ids?: string[] } } }).body
               ?.attributes?.failed_proposal_ids ?? [];
           setCloseError({ kind: 'dismiss_failed', count: ids.length });
-          void preview.refetch();
+          refetch();
         }
         // Other known codes (escalation_close_incomplete, linked_investigation_unavailable)
         // are not expected here (investigation-only container), but we still re-throw so
         // the outer onError in executeCloseInvestigation can handle them.
       }
     },
-    [onConfirm, preview]
+    [onConfirm, onSkippedCloseFailed, previewData, refetch]
   );
+
+  const confirmWithoutReason = useCallback(() => {
+    wasSkipped.current = true;
+    void handleConfirm({});
+  }, [handleConfirm]);
+  const { isSkipped } = useSkipCloseConfirmation({
+    preview: previewData,
+    loadError: isError && !previewData,
+    confirm: confirmWithoutReason,
+  });
+
+  if (isSkipped) return null;
 
   return (
     <CloseInvestigationModal
-      preview={preview.data}
-      isRefreshing={preview.isFetching}
+      preview={previewData}
+      isRefreshing={isFetching}
       targetsChanged={targetsChanged}
-      loadError={preview.isError && !preview.data}
-      onRetry={() => void preview.refetch()}
+      loadError={isError && !previewData}
+      onRetry={() => void refetch()}
       closeErrorKind={closeError?.kind}
       closeErrorCount={closeError?.count}
       onClose={onClose}
@@ -142,19 +179,24 @@ const EscalationCloseContainer: React.FC<EscalationCloseContainerProps> = ({
     count: number;
   } | null>(null);
 
-  const preview = useEscalationClosePreview(conversationId, { enabled: true });
+  const {
+    data: previewData,
+    isFetching,
+    isError,
+    refetch,
+  } = useEscalationClosePreview(conversationId, { enabled: true });
 
   const handleConfirm = useCallback(
     async (params: { dismissReason?: DismissReason; rationale?: string }) => {
-      if (!preview.data) return;
+      if (!previewData) return;
       setCloseError(null);
       try {
-        await onConfirm({ ...params, preview: preview.data });
+        await onConfirm({ ...params, preview: previewData });
       } catch (err) {
         const code = getCloseErrorCode(err);
         if (code === 'close_targets_changed') {
           setTargetsChanged(true);
-          void preview.refetch();
+          refetch();
         } else if (code === 'escalation_close_incomplete') {
           const attrs = (
             err as unknown as { body?: { attributes?: { skipped_investigation_ids?: string[] } } }
@@ -163,32 +205,32 @@ const EscalationCloseContainer: React.FC<EscalationCloseContainerProps> = ({
             kind: 'escalation_incomplete',
             count: attrs?.skipped_investigation_ids?.length ?? 1,
           });
-          void preview.refetch();
+          refetch();
         } else if (code === 'proposal_dismiss_failed') {
           const ids =
             (err as unknown as { body?: { attributes?: { failed_proposal_ids?: string[] } } }).body
               ?.attributes?.failed_proposal_ids ?? [];
           setCloseError({ kind: 'dismiss_failed', count: ids.length });
-          void preview.refetch();
+          refetch();
         } else if (code === 'linked_investigation_unavailable') {
           // The preview will now surface unavailable_investigation_ids.
-          void preview.refetch();
+          refetch();
         }
       }
     },
-    [onConfirm, preview]
+    [onConfirm, previewData, refetch]
   );
 
   return (
     <CloseEscalationModal
-      preview={preview.data}
-      isRefreshing={preview.isFetching}
+      preview={previewData}
+      isRefreshing={isFetching}
       targetsChanged={targetsChanged}
-      loadError={preview.isError && !preview.data}
-      onRetry={() => void preview.refetch()}
+      loadError={isError && !previewData}
+      onRetry={() => void refetch()}
       closeErrorKind={closeError?.kind}
       closeErrorCount={closeError?.count}
-      unavailableInvestigationIds={preview.data?.unavailable_investigation_ids}
+      unavailableInvestigationIds={previewData?.unavailable_investigation_ids}
       onClose={onClose}
       onConfirm={handleConfirm}
       isLoading={isMutating}
@@ -231,11 +273,20 @@ export const ConnectedStatusToggle: React.FC<ConnectedStatusToggleProps> = ({
     void queryClient.invalidateQueries({ queryKey: platformQueryKeys.proposals.all });
   }, [queryClient]);
 
+  const settleDeclinedProposals = useSettleDeclinedProposals();
+
   const handleSuccess = useCallback(
-    (failedProposalIds: string[]) => {
-      invalidateAll();
-      statusSignal.bump();
-      void refetchConversation?.();
+    (failedProposalIds: string[], dismissedProposalIds: string[] = []) => {
+      if (dismissedProposalIds.length > 0) {
+        // Proposals are refreshed once their declines land, so the cards read `Declining`
+        // rather than flipping back to pending on an early refetch.
+        queryClient.invalidateQueries({ queryKey: escalationQueryKeys.all });
+        settleDeclinedProposals(dismissedProposalIds);
+      } else {
+        invalidateAll();
+        statusSignal.bump();
+      }
+      refetchConversation?.();
 
       const isClosing = status !== 'closed';
       const successMsg = isClosing
@@ -252,7 +303,15 @@ export const ConnectedStatusToggle: React.FC<ConnectedStatusToggleProps> = ({
         services.notifications?.toasts.addWarning(i18n.PARTIAL_PROPOSAL_DISMISS_WARNING);
       }
     },
-    [invalidateAll, refetchConversation, services, status, templateId]
+    [
+      invalidateAll,
+      queryClient,
+      refetchConversation,
+      services,
+      settleDeclinedProposals,
+      status,
+      templateId,
+    ]
   );
 
   const handleError = useCallback(() => {
@@ -283,7 +342,7 @@ export const ConnectedStatusToggle: React.FC<ConnectedStatusToggleProps> = ({
           {
             onSuccess: (result) => {
               setShowCloseModal(false);
-              handleSuccess(result.failed_proposal_ids);
+              handleSuccess(result.failed_proposal_ids, result.dismissed_proposal_ids);
               resolve();
             },
             onError: (err) => {
@@ -293,7 +352,7 @@ export const ConnectedStatusToggle: React.FC<ConnectedStatusToggleProps> = ({
                 if (isPartialCloseError(err)) {
                   invalidateAll();
                   statusSignal.bump();
-                  void refetchConversation?.();
+                  refetchConversation?.();
                 }
                 reject(err);
               } else {
@@ -346,7 +405,7 @@ export const ConnectedStatusToggle: React.FC<ConnectedStatusToggleProps> = ({
           {
             onSuccess: (result) => {
               setShowCloseModal(false);
-              handleSuccess(result.failed_proposal_ids);
+              handleSuccess(result.failed_proposal_ids, result.dismissed_proposal_ids);
               resolve();
             },
             onError: (err) => {
@@ -356,7 +415,7 @@ export const ConnectedStatusToggle: React.FC<ConnectedStatusToggleProps> = ({
                 if (isPartialCloseError(err)) {
                   invalidateAll();
                   statusSignal.bump();
-                  void refetchConversation?.();
+                  refetchConversation?.();
                 }
                 reject(err);
               } else {
@@ -431,6 +490,10 @@ export const ConnectedStatusToggle: React.FC<ConnectedStatusToggleProps> = ({
           isMutating={isMutating}
           onClose={() => setShowCloseModal(false)}
           onConfirm={executeCloseInvestigation}
+          onSkippedCloseFailed={() => {
+            setShowCloseModal(false);
+            handleError();
+          }}
         />
       )}
 

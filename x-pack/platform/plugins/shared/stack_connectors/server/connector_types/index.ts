@@ -22,7 +22,10 @@ import { getConnectorType as getIndexConnectorType } from './es_index';
 import { getConnectorType as getOpenAIConnectorType } from './openai';
 import { getConnectorType as getBedrockConnectorType } from './bedrock';
 import { getConnectorType as getGeminiConnectorType } from './gemini';
-import { getConnectorType as getInferenceConnectorType } from './inference';
+import {
+  getConnectorType as getInferenceConnectorType,
+  type InferenceConnectorDependencies,
+} from './inference';
 import { getConnectorType as getPagerDutyConnectorType } from './pagerduty';
 import { getConnectorType as getSwimlaneConnectorType } from './swimlane';
 import { getConnectorType as getServerLogConnectorType } from './server_log';
@@ -42,8 +45,9 @@ import { getOpsgenieConnectorType } from './opsgenie';
 import { getSentinelOneConnectorType } from './sentinelone';
 import { getCrowdstrikeConnectorType } from './crowdstrike';
 import { getMcpConnectorType } from './mcp';
-import { getSshHostConnectorType } from './ssh_host';
 import type { ExperimentalFeatures } from '../../common/experimental_features';
+import type { ConfigSchema } from '../config';
+import { getSshHostConnectorType } from './ssh_host';
 
 export { getConnectorType as getSwimlaneConnectorType } from './swimlane';
 
@@ -51,12 +55,18 @@ export function registerConnectorTypes({
   actions,
   publicBaseUrl,
   experimentalFeatures,
+  config,
   isElasticCloudTrial,
+  getUiSettingsClient,
+  getInternalEsClient,
 }: {
   actions: ActionsPluginSetupContract;
   publicBaseUrl?: string;
   experimentalFeatures: ExperimentalFeatures;
+  config: ConfigSchema;
   isElasticCloudTrial?: () => Promise<boolean>;
+  getUiSettingsClient?: InferenceConnectorDependencies['getUiSettingsClient'];
+  getInternalEsClient?: InferenceConnectorDependencies['getInternalEsClient'];
 }) {
   actions.registerType(getEmailConnectorType({ publicBaseUrl, isElasticCloudTrial }));
   actions.registerType(getIndexConnectorType());
@@ -98,8 +108,14 @@ export function registerConnectorTypes({
     actions.registerSubActionConnectorType(getCrowdstrikeConnectorType(experimentalFeatures));
   }
   if (!experimentalFeatures.inferenceConnectorOff) {
-    actions.registerSubActionConnectorType(getInferenceConnectorType());
+    actions.registerSubActionConnectorType(
+      getInferenceConnectorType({ getUiSettingsClient, getInternalEsClient })
+    );
   }
   actions.registerSubActionConnectorType(getMicrosoftDefenderEndpointConnectorType());
-  actions.registerSubActionConnectorType(getSshHostConnectorType());
+  actions.registerSubActionConnectorType(
+    getSshHostConnectorType({
+      allowLegacyAlgorithms: config.sshHost.allowLegacyAlgorithms,
+    })
+  );
 }

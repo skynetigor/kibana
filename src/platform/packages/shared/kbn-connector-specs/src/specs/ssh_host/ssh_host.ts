@@ -17,7 +17,7 @@
  */
 
 import { i18n } from '@kbn/i18n';
-import { z } from '@kbn/zod/v4';
+import { z, lazySchema } from '@kbn/zod/v4';
 import type { ConnectorSpec } from '../../connector_spec';
 
 const SCRIPT_MAX_LENGTH = 1048576;
@@ -25,38 +25,48 @@ const REMOTE_PATH_MAX_LENGTH = 4096;
 const UPLOAD_CONTENT_MAX_LENGTH = 104857600;
 const DOWNLOAD_MAX_BYTES = 1024 * 1024 * 1024;
 
-const ExecInputSchema = z.object({
-  script: z
-    .string()
-    .min(1)
-    .max(SCRIPT_MAX_LENGTH)
-    .describe('Shell script to run on the remote host. One call is one new shell.'),
-});
+const ExecInputSchema = lazySchema(() =>
+  z.object({
+    script: z
+      .string()
+      .min(1)
+      .max(SCRIPT_MAX_LENGTH)
+      .describe('Shell script to run on the remote host. One call is one new shell.'),
+  })
+);
 
-const UploadFileInputSchema = z.object({
-  remotePath: z
-    .string()
-    .min(1)
-    .max(REMOTE_PATH_MAX_LENGTH)
-    .describe('Absolute or relative path of the file to write on the remote host.'),
-  content: z.string().min(1).max(UPLOAD_CONTENT_MAX_LENGTH).describe('File bytes, base64-encoded.'),
-  encoding: z.literal('base64').describe('Must be the literal "base64".'),
-});
+const UploadFileInputSchema = lazySchema(() =>
+  z.object({
+    remotePath: z
+      .string()
+      .min(1)
+      .max(REMOTE_PATH_MAX_LENGTH)
+      .describe('Absolute or relative path of the file to write on the remote host.'),
+    content: z
+      .string()
+      .min(1)
+      .max(UPLOAD_CONTENT_MAX_LENGTH)
+      .describe('File bytes, base64-encoded.'),
+    encoding: z.literal('base64').describe('Must be the literal "base64".'),
+  })
+);
 
-const DownloadFileInputSchema = z.object({
-  remotePath: z
-    .string()
-    .min(1)
-    .max(REMOTE_PATH_MAX_LENGTH)
-    .describe('Absolute or relative path of the file to read on the remote host.'),
-  maxBytes: z
-    .number()
-    .int()
-    .positive()
-    .max(DOWNLOAD_MAX_BYTES)
-    .optional()
-    .describe('Maximum file size in bytes. Defaults to 10 MiB when omitted.'),
-});
+const DownloadFileInputSchema = lazySchema(() =>
+  z.object({
+    remotePath: z
+      .string()
+      .min(1)
+      .max(REMOTE_PATH_MAX_LENGTH)
+      .describe('Absolute or relative path of the file to read on the remote host.'),
+    maxBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(DOWNLOAD_MAX_BYTES)
+      .optional()
+      .describe('Maximum file size in bytes. Defaults to 10 MiB when omitted.'),
+  })
+);
 
 const catalogOnly = async (): Promise<never> => {
   throw new Error(
@@ -82,7 +92,7 @@ export const SshHost: ConnectorSpec = {
       scope: 'destroy',
       description:
         'Run one shell script on the remote host and wait until it exits. Returns stdout, stderr, and code. ' +
-        'A non-zero code is the script exit code. code 255 is also what the SSH client returns when it cannot run the script (unreachable host, authentication, or host key); read stderr to tell those apart. ' +
+        'A non-zero code is the script exit code. code 255 means the connector could not run the script (unreachable host, authentication, or host key); read stderr to tell those apart. ' +
         'Each call starts a new shell.',
       input: ExecInputSchema,
       handler: catalogOnly,
@@ -122,7 +132,7 @@ export const SshHost: ConnectorSpec = {
     '',
     '## exec result',
     'The result is { stdout, stderr, code }. A non-zero code is the script exit code, not a failed tool call. Read stderr before retrying.',
-    'code 255 is what the SSH client returns when it cannot run the script: the host was unreachable, authentication failed, or the host key was rejected. ' +
+    'code 255 means the connector could not run the script: the host was unreachable, authentication failed, or the host key was rejected. ' +
       'A script can also exit 255, so read stderr before deciding which one happened.',
     "The call is rejected before connecting when the host is not on Kibana's allowed hosts list.",
     '',

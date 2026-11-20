@@ -62,6 +62,12 @@ export const registerWorkflowSteps = (
   );
 
   workflowsExtensions.registerStepDefinition(() =>
+    import('./build_exception_entries_filter_step/build_exception_entries_filter_step').then(
+      (m) => m.buildExceptionEntriesFilterStepDefinition
+    )
+  );
+
+  workflowsExtensions.registerStepDefinition(() =>
     import('./create_exception_list_item_step/create_exception_list_item_step').then(
       (m) => m.createExceptionListItemStepDefinition
     )
@@ -94,6 +100,12 @@ export const registerWorkflowSteps = (
   workflowsExtensions.registerStepDefinition(() =>
     import('./get_alert_entities_step/get_alert_entities_step').then(
       (m) => m.getAlertEntitiesStepDefinition
+    )
+  );
+
+  workflowsExtensions.registerStepDefinition(() =>
+    import('./match_attack_fingerprints/match_attack_fingerprints_step').then(
+      (m) => m.matchAttackFingerprintsStepDefinition
     )
   );
 };
