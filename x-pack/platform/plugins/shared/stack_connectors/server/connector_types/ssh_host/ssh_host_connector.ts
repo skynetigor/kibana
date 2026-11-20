@@ -5,14 +5,9 @@
  * 2.0.
  */
 
-import { createHash } from 'crypto';
-import { execFile } from 'child_process';
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 import type { ServiceParams } from '@kbn/actions-plugin/server';
 import { SubActionConnector } from '@kbn/actions-plugin/server';
-import { AUTH_TYPE, SUB_ACTION } from '@kbn/connector-schemas/ssh_host';
+import { AUTH_TYPE, parsePinnedHostKey, SUB_ACTION } from '@kbn/connector-schemas/ssh_host';
 import type {
   Config,
   Secrets,
@@ -25,30 +20,19 @@ import {
   DownloadFileParamsSchema,
   UploadFileParamsSchema,
 } from '@kbn/connector-schemas/ssh_host';
+import type { RemoteExecResult, SshTarget } from './ssh_host_session';
+import {
+  downloadRemote,
+  execRemote,
+  isSshClientFailure,
+  normalizeClientError,
+  SshLocalFailure,
+  uploadRemote,
+} from './ssh_host_session';
 
-const MAX_BUFFER_BYTES = 100 * 1024 * 1024;
 const DEFAULT_SSH_PORT = 22;
 const DEFAULT_DOWNLOAD_MAX_BYTES = 10 * 1024 * 1024;
-const CONTROL_PERSIST = '10s';
-
-interface CommandTarget {
-  bin: string;
-  prefixArgs: string[];
-}
-
-interface ResolvedCredentials {
-  ssh: CommandTarget;
-  scp: CommandTarget;
-  authArgs: string[];
-  env: NodeJS.ProcessEnv;
-  cleanup: () => void;
-}
-
-interface ExecFileResult {
-  stdout: string;
-  stderr: string;
-  code: number;
-}
+const SSH_CLIENT_FAILURE_CODE = 255;
 
 export const parseHost = (host: string): { hostname: string; port: number } => {
   if (host.startsWith('[')) {
@@ -82,50 +66,21 @@ export const parseHost = (host: string): { hostname: string; port: number } => {
   return { hostname: host.slice(0, lastColon), port };
 };
 
-const sshDestination = (username: string, hostname: string): string => `${username}@${hostname}`;
-
-const scpDestination = (username: string, hostname: string, remotePath: string): string => {
-  const host = hostname.includes(':') ? `[${hostname}]` : hostname;
-  return `${username}@${host}:${remotePath}`;
+const rethrowLocalFailure = (error: unknown): void => {
+  if (error instanceof SshLocalFailure) {
+    throw error;
+  }
 };
 
-const runExecFile = (
-  bin: string,
-  args: string[],
-  env: NodeJS.ProcessEnv
-): Promise<ExecFileResult> =>
-  new Promise((resolve, reject) => {
-    execFile(bin, args, { env, maxBuffer: MAX_BUFFER_BYTES }, (error, stdout, stderr) => {
-      if (!error) {
-        resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code: 0 });
-        return;
-      }
-
-      if (error.code === 'ENOENT') {
-        reject(
-          new Error(
-            `${bin} is not installed on the Kibana host. The SSH Host connector requires ssh, scp, and (for password auth) sshpass.`
-          )
-        );
-        return;
-      }
-
-      if (typeof error.code === 'number') {
-        resolve({
-          stdout: (error.stdout ?? stdout).toString().trim(),
-          stderr: (error.stderr ?? stderr).toString().trim(),
-          code: error.code,
-        });
-        return;
-      }
-
-      reject(error);
-    });
-  });
-
 export class SshHostConnector extends SubActionConnector<Config, Secrets> {
-  constructor(params: ServiceParams<Config, Secrets>) {
+  private readonly allowLegacyAlgorithms: boolean;
+
+  constructor(
+    params: ServiceParams<Config, Secrets>,
+    options: { allowLegacyAlgorithms?: boolean } = {}
+  ) {
     super(params);
+    this.allowLegacyAlgorithms = options.allowLegacyAlgorithms ?? false;
 
     this.registerSubAction({ name: SUB_ACTION.Exec, method: 'exec', schema: ExecParamsSchema });
     this.registerSubAction({
@@ -144,246 +99,120 @@ export class SshHostConnector extends SubActionConnector<Config, Secrets> {
     return (error.response?.data as { message?: string })?.message ?? error.message;
   }
 
-  public async exec(params: ExecParams): Promise<{ stdout: string; stderr: string; code: number }> {
-    this.assertHostAllowed();
-    return this.execCommand(params);
+  public async exec(params: ExecParams): Promise<RemoteExecResult> {
+    const target = this.prepare();
+    try {
+      return await execRemote(target, params.script);
+    } catch (error) {
+      rethrowLocalFailure(error);
+      if (isSshClientFailure(error)) {
+        return {
+          stdout: '',
+          stderr: normalizeClientError(error).message,
+          code: SSH_CLIENT_FAILURE_CODE,
+        };
+      }
+      throw error;
+    }
   }
 
   public async downloadFile(
     params: DownloadFileParams
   ): Promise<{ content: string; encoding: 'base64' }> {
-    this.assertHostAllowed();
-    const { remotePath } = params;
+    const target = this.prepare();
     const maxBytes =
       params.maxBytes && params.maxBytes > 0 ? params.maxBytes : DEFAULT_DOWNLOAD_MAX_BYTES;
-    const { hostname, port } = parseHost(this.config.host);
-    const { username } = this.secrets;
-    const tempDir = mkdtempSync(join(tmpdir(), 'ssh_host_download_'));
-    const tempDownloadPath = join(tempDir, 'file');
-    const { ssh, scp, authArgs, env, cleanup } = await this.resolveCredentials();
-
-    const args = [
-      ...scp.prefixArgs,
-      ...this.getTransportArgs('-P', port, authArgs),
-      scpDestination(username, hostname, remotePath),
-      tempDownloadPath,
-    ];
-
     try {
-      const remoteStat = await runExecFile(
-        ssh.bin,
-        [
-          ...ssh.prefixArgs,
-          ...this.getTransportArgs('-p', port, authArgs),
-          sshDestination(username, hostname),
-          `wc -c < ${JSON.stringify(remotePath)}`,
-        ],
-        env
-      );
-      if (remoteStat.code !== 0) {
-        throw new Error(remoteStat.stderr || `Failed to stat remote file ${remotePath}`);
+      const bytes = await downloadRemote(target, params.remotePath, maxBytes);
+      return { content: bytes.toString('base64'), encoding: 'base64' };
+    } catch (error) {
+      rethrowLocalFailure(error);
+      if (isSshClientFailure(error)) {
+        throw normalizeClientError(error);
       }
-      const remoteSize = parseInt(remoteStat.stdout, 10);
-      if (!Number.isNaN(remoteSize) && remoteSize > maxBytes) {
-        throw new Error(
-          `Remote file exceeds max-step-size (${remoteSize} bytes > ${maxBytes} bytes). Increase max-step-size on this step or download a smaller file.`
-        );
-      }
-
-      const { stderr, code } = await runExecFile(scp.bin, args, env);
-      if (code !== 0) {
-        throw new Error(stderr || `scp exited with code ${code}`);
-      }
-      const { size } = statSync(tempDownloadPath);
-      if (size > maxBytes) {
-        throw new Error(
-          `Remote file exceeds max-step-size (${size} bytes > ${maxBytes} bytes). Increase max-step-size on this step or download a smaller file.`
-        );
-      }
-      return { content: readFileSync(tempDownloadPath).toString('base64'), encoding: 'base64' };
-    } finally {
-      cleanup();
-      rmSync(tempDir, { recursive: true, force: true });
+      throw error;
     }
   }
 
   public async uploadFile(params: UploadFileParams): Promise<void> {
+    const target = this.prepare();
+    try {
+      await uploadRemote(target, params.remotePath, Buffer.from(params.content, 'base64'));
+    } catch (error) {
+      rethrowLocalFailure(error);
+      if (isSshClientFailure(error)) {
+        throw normalizeClientError(error);
+      }
+      throw error;
+    }
+  }
+
+  private prepare(): SshTarget {
     this.assertHostAllowed();
-    const { remotePath, content } = params;
+    this.assertCredentials();
+    const hostKey = this.resolveHostKey();
     const { hostname, port } = parseHost(this.config.host);
-    const { username } = this.secrets;
-    const tempDir = mkdtempSync(join(tmpdir(), 'ssh_host_upload_'));
-    const localPath = join(tempDir, 'payload');
-    const { ssh, scp, authArgs, env, cleanup } = await this.resolveCredentials();
-
-    const bytes = Buffer.from(content, 'base64');
-    const fd = openSync(localPath, 'w', 0o600);
-    writeSync(fd, bytes);
-    closeSync(fd);
-
-    const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
-
-    try {
-      if (remoteDir) {
-        const mkdir = await runExecFile(
-          ssh.bin,
-          [
-            ...ssh.prefixArgs,
-            ...this.getTransportArgs('-p', port, authArgs),
-            sshDestination(username, hostname),
-            `mkdir -p -- ${JSON.stringify(remoteDir)}`,
-          ],
-          env
-        );
-        if (mkdir.code !== 0) {
-          throw new Error(`Failed to create remote directory ${remoteDir}: ${mkdir.stderr}`);
-        }
-      }
-
-      const { stderr, code } = await runExecFile(
-        scp.bin,
-        [
-          ...scp.prefixArgs,
-          ...this.getTransportArgs('-P', port, authArgs),
-          localPath,
-          scpDestination(username, hostname, remotePath),
-        ],
-        env
-      );
-      if (code !== 0) {
-        throw new Error(`Failed to upload file to ${remotePath}: ${stderr}`);
-      }
-    } finally {
-      cleanup();
-      rmSync(tempDir, { recursive: true, force: true });
-    }
+    const { username, password, sshPrivateKey } = this.secrets;
+    return {
+      connectorId: this.connector.id,
+      hostname,
+      port,
+      username,
+      authType: this.config.authType,
+      password: password ?? undefined,
+      privateKey: sshPrivateKey ?? undefined,
+      skipHostKeyVerification: this.config.skipHostKeyVerification,
+      hostKey,
+      allowLegacyAlgorithms: this.allowLegacyAlgorithms,
+      logger: this.logger,
+    };
   }
 
-  // Resolves auth credentials once. The returned cleanup() must be called in a finally block.
-  private async resolveCredentials(): Promise<ResolvedCredentials> {
+  private resolveHostKey(): string | undefined {
+    const hostKey = parsePinnedHostKey(this.config.hostKey);
+    if (this.config.skipHostKeyVerification) {
+      if (this.config.authType === AUTH_TYPE.Password) {
+        throw new Error('Password authentication requires a pinned host key');
+      }
+      return hostKey;
+    }
+    if (hostKey) {
+      return hostKey;
+    }
+    if (this.config.hostKey?.trim()) {
+      throw new Error('Host key must be an OpenSSH public key line or a base64 key');
+    }
+    throw new Error('A host key is required unless host key verification is skipped');
+  }
+
+  private assertCredentials(): void {
     const { authType } = this.config;
-
-    switch (authType) {
-      case AUTH_TYPE.Password: {
-        const { password } = this.secrets;
-
-        if (!password) {
-          throw new Error('Password is required for password authentication');
-        }
-
-        return {
-          ssh: { bin: 'sshpass', prefixArgs: ['-e', 'ssh'] },
-          scp: { bin: 'sshpass', prefixArgs: ['-e', 'scp'] },
-          authArgs: ['-o', 'PasswordAuthentication=yes'],
-          env: { ...process.env, SSHPASS: password },
-          cleanup: () => {},
-        };
+    if (authType === AUTH_TYPE.Password) {
+      if (!this.secrets.password) {
+        throw new Error('Password is required for password authentication');
       }
-      case AUTH_TYPE.PrivateKey: {
-        const { sshPrivateKey } = this.secrets;
-
-        if (!sshPrivateKey) {
-          throw new Error('SSH private key is required for key-based authentication');
-        }
-
-        const tempDir = mkdtempSync(join(tmpdir(), 'ssh_host_key_'));
-        const tempKeyPath = join(tempDir, 'id');
-        // Strip \r so CRLF-pasted keys don't corrupt OpenSSH parsing; ensure trailing newline.
-        const keyContent = `${sshPrivateKey.replace(/\r/g, '').trimEnd()}\n`;
-        // Write with restricted permissions (writeFileSync is ESLint-restricted)
-        const fd = openSync(tempKeyPath, 'w', 0o600);
-        writeSync(fd, keyContent);
-        closeSync(fd);
-
-        return {
-          ssh: { bin: 'ssh', prefixArgs: [] },
-          scp: { bin: 'scp', prefixArgs: [] },
-          authArgs: ['-i', tempKeyPath, '-o', 'PasswordAuthentication=no'],
-          env: process.env,
-          cleanup: () => {
-            rmSync(tempDir, { recursive: true, force: true });
-          },
-        };
+      return;
+    }
+    if (authType === AUTH_TYPE.PrivateKey) {
+      if (!this.secrets.sshPrivateKey) {
+        throw new Error('SSH private key is required for key-based authentication');
       }
-      default:
-        throw new Error(`Unsupported authType: ${authType}`);
+      return;
     }
-  }
-
-  private async execCommand(
-    params: ExecParams
-  ): Promise<{ stdout: string; stderr: string; code: number }> {
-    const { script } = params;
-    const { hostname, port } = parseHost(this.config.host);
-    const { username } = this.secrets;
-
-    // One argv to ssh. The remote shell decodes the payload and runs it with bash.
-    const encodedScript = Buffer.from(script).toString('base64');
-    const remoteCmd = `printf '%s' '${encodedScript}' | openssl base64 -d -A | bash`;
-
-    const { ssh, authArgs, env, cleanup } = await this.resolveCredentials();
-    const args = [
-      ...ssh.prefixArgs,
-      ...this.getTransportArgs('-p', port, authArgs),
-      sshDestination(username, hostname),
-      remoteCmd,
-    ];
-
-    try {
-      return await runExecFile(ssh.bin, args, env);
-    } finally {
-      cleanup();
-    }
-  }
-
-  private getTransportArgs(portFlag: '-p' | '-P', port: number, authArgs: string[]): string[] {
-    return [
-      ...authArgs,
-      ...this.getHostKeyArgs(),
-      '-o',
-      'ConnectTimeout=10',
-      '-o',
-      'ControlMaster=auto',
-      '-o',
-      `ControlPath=${this.getControlPath()}`,
-      '-o',
-      `ControlPersist=${CONTROL_PERSIST}`,
-      portFlag,
-      String(port),
-    ];
+    throw new Error(`Unsupported authType: ${authType}`);
   }
 
   private assertHostAllowed(): void {
     const { hostname } = parseHost(this.config.host);
     this.configurationUtilities.ensureHostnameAllowed(hostname);
-  }
 
-  private getHostKeyArgs(): string[] {
-    if (this.config.skipHostKeyVerification) {
-      return ['-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null'];
-    }
-
-    return [
-      '-o',
-      'StrictHostKeyChecking=accept-new',
-      '-o',
-      `UserKnownHostsFile=${this.getKnownHostsPath()}`,
-    ];
-  }
-
-  private getKnownHostsPath(): string {
-    const id = createHash('sha256').update(this.connector.id).digest('hex').slice(0, 16);
-    return join(tmpdir(), `kbn_ssh_kh_${id}`);
-  }
-
-  private getControlPath(): string {
-    const { hostname, port } = parseHost(this.config.host);
+    // A leading '-' would be an option if this were passed to a local ssh argv.
     const { username } = this.secrets;
-    const id = createHash('sha256')
-      .update(`${this.connector.id}\0${username}\0${hostname}\0${port}`)
-      .digest('hex')
-      .slice(0, 12);
-    // OpenSSH ControlPath is capped around 104 chars; keep this under /tmp.
-    return join('/tmp', `kbn_cm_${id}`);
+    if (username.startsWith('-') || /\s/.test(username)) {
+      throw new Error('Invalid SSH username');
+    }
+    if (hostname.startsWith('-')) {
+      throw new Error('Invalid SSH host');
+    }
   }
 }
