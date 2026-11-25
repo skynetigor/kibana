@@ -602,4 +602,107 @@ describe('on_failure graph', () => {
       ]);
     });
   });
+
+  describe('step-level continue: false', () => {
+    const workflowFallback = {
+      settings: {
+        'on-failure': {
+          fallback: [
+            {
+              name: 'sendFailureSlack',
+              type: 'console',
+              with: {
+                message: 'failed',
+              },
+            } as ConnectorStep,
+          ],
+        } as WorkflowOnFailure,
+      },
+    };
+
+    const runQueryStep = {
+      name: 'runQuery',
+      type: 'console',
+      with: {
+        message: 'query',
+      },
+    } as ConnectorStep;
+
+    const sortedNodes = (workflow: Partial<WorkflowYaml>) =>
+      convertToWorkflowGraph(workflow as WorkflowYaml)
+        .nodes()
+        .slice()
+        .sort();
+
+    it('does not suppress the workflow-level fallback', () => {
+      const withExplicitDefault = {
+        ...workflowFallback,
+        steps: [
+          {
+            ...runQueryStep,
+            'on-failure': {
+              continue: false,
+            },
+          } as ConnectorStep,
+        ],
+      };
+      const withNoStepOnFailure = {
+        ...workflowFallback,
+        steps: [runQueryStep],
+      };
+
+      expect(sortedNodes(withExplicitDefault)).toEqual(sortedNodes(withNoStepOnFailure));
+      expect(sortedNodes(withExplicitDefault)).toEqual(
+        expect.arrayContaining([
+          'workflow-level-on-failure_runQuery_sendFailureSlack',
+          'enterTryBlock_runQuery',
+          'exitTryBlock_runQuery',
+        ])
+      );
+    });
+
+    it('still lets continue: true replace the workflow-level handler', () => {
+      const executionGraph = convertToWorkflowGraph({
+        ...workflowFallback,
+        steps: [
+          {
+            ...runQueryStep,
+            'on-failure': {
+              continue: true,
+            },
+          } as ConnectorStep,
+        ],
+      } as WorkflowYaml);
+
+      expect(executionGraph.nodes().sort()).toEqual([
+        'enterContinue_runQuery',
+        'exitContinue_runQuery',
+        'runQuery',
+      ]);
+    });
+
+    it('still lets retry replace the workflow-level handler when continue is false', () => {
+      const executionGraph = convertToWorkflowGraph({
+        ...workflowFallback,
+        steps: [
+          {
+            ...runQueryStep,
+            'on-failure': {
+              retry: {
+                'max-attempts': 2,
+                delay: '1s',
+              },
+              continue: false,
+            },
+          } as ConnectorStep,
+        ],
+      } as WorkflowYaml);
+
+      expect(executionGraph.nodes().sort()).toEqual([
+        'enterRetry_runQuery',
+        'exitRetry_runQuery',
+        'runQuery',
+      ]);
+    });
+  });
 });

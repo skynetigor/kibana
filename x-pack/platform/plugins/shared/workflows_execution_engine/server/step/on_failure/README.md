@@ -30,7 +30,7 @@ steps:
     type: http
 ```
 
-**Note:** Step-level `on-failure` takes precedence over workflow-level configuration.
+**Note:** A step-level `on-failure` that changes failure behavior takes precedence over the workflow-level configuration. `retry`, `fallback`, `continue: true`, and a `continue` expression all count. `continue: false` is the default, so a step that sets only that still uses the workflow-level handler.
 
 ## Options
 

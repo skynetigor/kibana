@@ -124,9 +124,27 @@ function getStepId(node: BaseStep, context: GraphBuildContext): string {
   return parts.join('_');
 }
 
+/**
+ * Step-level `on-failure` replaces the workflow handler only when it changes
+ * failure behavior. `continue: false` is the default and must not suppress
+ * `settings.on-failure`.
+ */
+function hasEffectiveStepOnFailure(step: BaseStep): boolean {
+  const onFailure = (step as StepWithOnFailure)['on-failure'];
+  if (!onFailure) {
+    return false;
+  }
+
+  if (onFailure.retry || onFailure.fallback?.length) {
+    return true;
+  }
+
+  return onFailure.continue === true || typeof onFailure.continue === 'string';
+}
+
 function visitAbstractStep(originalStep: BaseStep, context: GraphBuildContext): WorkflowGraphType {
   const currentStep = originalStep;
-  if ((currentStep as StepWithOnFailure)['on-failure']) {
+  if (hasEffectiveStepOnFailure(currentStep)) {
     const stepLevelOnFailureGraph = handleStepLevelOnFailure(currentStep, context);
 
     if (stepLevelOnFailureGraph) {
